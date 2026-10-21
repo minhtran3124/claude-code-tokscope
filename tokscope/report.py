@@ -18,8 +18,8 @@ from .pricing import API_EQ_NOTE, COSTS_DOC
 TOKENS = "(input + cache_read + cache_write_5m + cache_write_1h + output)"
 
 CSS = """
-:root{--page:#f6f6f3;--surface:#ffffff;--ink:#1d1d1b;--ink2:#3e3e3a;--muted:#62625c;--grid:#e3e3dc;--edge:#c6c6bc;--mark:#0086b9;--agent:#e49921;--mark-ink:#00749f;--agent-ink:#9a5f00;
---tint:#e2f5ff;--track:#ecece6;--c1:var(--mark);--c2:var(--agent);--c3:#1baf7a;--c4:#6250d6;--c5:#e87ba4;--c0:#c4c4bc;--chip:#efefea;--hl:#ffe9a8;--pass:#1f7a3d;--fail:#b3261e;
+:root{--page:#f2efe7;--surface:#fbf9f4;--ink:#231e16;--ink2:#4a4337;--muted:#665e51;--grid:#ddd6c8;--edge:#bfb6a6;--mark:#76a0e2;--agent:#f4b829;--mark-ink:#2f5aa8;--agent-ink:#8a5a00;
+--tint:#e4ebf7;--track:#ebe6db;--c1:var(--mark);--c2:var(--agent);--c3:#d9708c;--c4:#4a4337;--c5:#8a8172;--c0:#bdb4a4;--chip:#ebe6db;--hl:#fbe6a6;--pass:#1a6934;--fail:#a33a23;
 --sans:SANS;--mono:MONO;--ease:cubic-bezier(0.22,1,0.36,1);--ease-expo:cubic-bezier(0.16,1,0.3,1);interpolate-size:allow-keywords;color-scheme:light}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){DARK}}
 :root[data-theme=dark]{DARK}
@@ -31,7 +31,7 @@ pre.diff .add{color:var(--pass)}pre.diff .del{color:var(--fail)}pre.diff .hunk{c
 details.vdiff>summary{cursor:pointer;font-size:13px;margin:6px 0}.few{font-size:10px;font-weight:600;text-transform:uppercase;color:var(--muted);border:1px solid var(--edge);border-radius:4px;padding:0 4px;margin-left:4px}
 code.ver{font-size:11px;color:var(--muted);background:var(--chip);border-radius:4px;padding:0 4px;margin-left:2px}
 .privacy{border:1px solid var(--edge);border-left:3px solid var(--mark);border-radius:8px;padding:8px 12px;margin:0 0 12px;font-size:13px;color:var(--ink2);background:var(--surface)}.privacy b{color:var(--mark-ink);text-transform:uppercase;font-size:11px;letter-spacing:.04em;margin-right:6px}.note{color:var(--muted);font-size:12px;margin:0 0 10px}.usd{color:var(--muted);font-size:12px}
-:focus-visible{outline:2px solid var(--mark);outline-offset:2px;border-radius:4px}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:4px}
 .hero{position:relative;overflow:hidden;border:1px solid color-mix(in oklch,var(--mark) 30%,var(--edge));border-radius:14px;padding:20px 22px;margin:12px 0 16px;
 background:radial-gradient(120% 160% at 0% 0%,color-mix(in oklch,var(--mark) 16%,transparent),transparent 55%),
 radial-gradient(70% 140% at 100% 100%,color-mix(in oklch,var(--agent) 12%,transparent),transparent 60%),var(--surface)}
@@ -82,7 +82,7 @@ pre.answer{white-space:pre-wrap;font:12px/1.5 var(--mono);background:var(--page)
 mark{background:var(--hl);color:inherit;border-radius:2px}
 .tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px}
 .tools input[type=search],.tools select{font:inherit;padding:6px 10px;border:1px solid var(--edge);border-radius:8px;background:var(--page);color:var(--ink);transition:border-color .15s var(--ease),box-shadow .15s var(--ease)}
-.tools input[type=search]:focus,.tools select:focus{outline:none;border-color:var(--mark);box-shadow:0 0 0 3px color-mix(in oklch,var(--mark) 22%,transparent)}
+.tools input[type=search]:focus,.tools select:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 3px color-mix(in oklch,var(--ink) 22%,transparent)}
 .tools input[type=search]{flex:1;min-width:180px}
 .srow{border:1px solid var(--edge);border-radius:10px;background:var(--surface);margin-bottom:8px;
 transition:border-color .2s var(--ease),box-shadow .2s var(--ease),transform .2s var(--ease),background .2s var(--ease)}
@@ -95,7 +95,7 @@ box-shadow:0 8px 26px -14px color-mix(in oklch,var(--mark) 60%,transparent)}
 .srow[open]:hover{transform:none}
 .srow.picked{border-color:var(--mark);box-shadow:0 0 0 2px color-mix(in oklch,var(--mark) 22%,transparent)}
 .srow>summary{display:grid;grid-template-columns:22px 92px 1fr 90px 74px 92px 150px 14px;gap:8px;align-items:center;padding:9px 10px;cursor:pointer;list-style:none;border-radius:10px}
-.srow>summary:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+.srow>summary:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .srow>summary input{accent-color:var(--mark);cursor:pointer}
 .srow>summary .t{transition:color .15s var(--ease)}.srow:hover>summary .t{color:var(--mark-ink)}
 .srow>summary .split{transition:transform .2s var(--ease);transform-origin:left}.srow:hover>summary .split{transform:scaleY(1.35)}
@@ -113,7 +113,7 @@ box-shadow:0 8px 26px -14px color-mix(in oklch,var(--mark) 60%,transparent)}
 font-size:14px;transition:background .15s var(--ease),color .15s var(--ease),transform .15s var(--ease)}
 .toc a:hover{background:color-mix(in oklch,var(--mark) 10%,transparent);color:var(--ink);transform:translateX(2px)}
 .toc a.on{background:color-mix(in oklch,var(--mark) 15%,transparent);color:var(--mark-ink);font-weight:600}
-.toc a:focus-visible{outline:2px solid var(--mark);outline-offset:1px}
+.toc a:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
 .sub-toc{display:flex;flex-direction:column;gap:1px;margin:2px 0 4px 14px;padding-left:6px;border-left:1px solid var(--grid)}
 .sub-toc a{font-size:13px;padding:4px 10px}
 .cnt{font-size:11px;font-weight:400;color:var(--muted);font-variant-numeric:tabular-nums;background:var(--chip);padding:1px 7px;border-radius:999px}
@@ -123,8 +123,8 @@ border:1px solid color-mix(in oklch,var(--mark) 40%,var(--edge));background:var(
 opacity:0;visibility:hidden;transform:translateY(10px);
 transition:opacity .2s var(--ease),transform .2s var(--ease),visibility .2s,bottom .2s var(--ease),background .15s var(--ease),color .15s var(--ease)}
 .totop.show{opacity:1;visibility:visible;transform:none}
-.totop.show:hover{background:var(--mark);color:#fff;transform:translateY(-2px)}
-.totop:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+.totop.show:hover{background:var(--ink);color:var(--page);transform:translateY(-2px)}
+.totop:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 body.picking .totop{bottom:92px}  /* clear the sticky Compare bar */
 @media (max-width:900px){.layout{display:block}
 .side{height:auto;padding:8px 16px;border-right:0;border-bottom:1px solid var(--edge);overflow-x:auto;overflow-y:hidden;scrollbar-width:none}.side::-webkit-scrollbar{display:none}
@@ -136,10 +136,10 @@ a,summary,label,select,button:not(:disabled),input[type=checkbox],svg [data-chan
 padding:10px 14px;border:1px solid color-mix(in oklch,var(--mark) 45%,var(--edge));border-radius:12px;background:var(--surface);
 box-shadow:0 10px 30px -12px #0005;animation:pop .25s var(--ease) both}
 .pickbar[hidden]{display:none}.pickbar .acts{display:flex;gap:8px;align-items:center}
-.primary{all:unset;cursor:pointer;font-weight:600;font-size:13px;padding:6px 14px;border-radius:8px;background:var(--mark);color:#fff;
+.primary{all:unset;cursor:pointer;font-weight:600;font-size:13px;padding:6px 14px;border-radius:8px;background:var(--ink);color:var(--page);
 transition:transform .15s var(--ease),box-shadow .15s var(--ease),opacity .15s var(--ease)}
 .primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 16px -6px var(--mark)}.primary:active:not(:disabled){transform:none}
-.primary:focus-visible{outline:2px solid var(--mark);outline-offset:2px}.primary:disabled{opacity:.45;cursor:not-allowed}
+.primary:focus-visible{outline:2px solid var(--ink);outline-offset:2px}.primary:disabled{opacity:.45;cursor:not-allowed}
 .srow>summary::-webkit-details-marker{display:none}
 .srow>summary .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.srow>summary .r{text-align:right;font-variant-numeric:tabular-nums}
 .srow>summary .n{white-space:nowrap;color:var(--ink2);font-size:13px}
@@ -191,7 +191,7 @@ transition:transform .35s var(--ease-expo),width .35s var(--ease-expo),height .3
 .side-foot{display:flex;gap:6px;margin:18px 0 0 4px}
 .chip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);padding:5px 10px;border:1px solid var(--edge);border-radius:999px;
 transition:border-color .15s var(--ease),color .15s var(--ease),background .15s var(--ease)}
-.chip:hover{border-color:var(--mark);color:var(--mark-ink)}.chip:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+.chip:hover{border-color:var(--mark);color:var(--mark-ink)}.chip:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .chip kbd,.keys kbd{font:600 11px var(--mono);padding:1px 6px;border-radius:5px;border:1px solid var(--edge);border-bottom-width:2px;background:var(--surface);color:var(--ink)}
 ::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
 /* chart: 7-day average draws itself in; a guide follows the pointer */
@@ -211,7 +211,8 @@ dialog.keys{border:1px solid var(--edge);border-radius:14px;background:var(--sur
 dialog.keys[open]{animation:pop-in .3s var(--ease-expo) both}@keyframes pop-in{from{opacity:0;transform:translateY(8px) scale(.97)}}
 dialog.keys::backdrop{background:#0005;backdrop-filter:blur(3px)}
 dialog.keys dl{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;margin:10px 0 0}dialog.keys dd{margin:0;color:var(--ink2)}
-/* breakdown charts: categorical slots validated in both modes (blue, amber, aqua, violet, magenta); --c0 is "Other" */
+/* breakdown charts: categorical slots in both modes (cobalt, mustard, blush, dark ink tint, mid ink tint); --c0 is "Other",
+the palest tint; neighbours in the share bar differ by at least 1.5:1 in luminance */
 .viz{margin:4px 0 16px}.viz svg{display:block;overflow:visible}.viz svg text.ax,.viz svg text.name{fill:var(--ink2)}
 .viz svg text.val{fill:var(--ink2);font-weight:600;font-variant-numeric:tabular-nums}.viz svg text.lbl{fill:var(--ink);font-size:11.5px;paint-order:stroke;stroke:var(--surface);stroke-width:3px}
 .legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--ink2);margin:8px 0 10px}.legend .key{margin:0}
@@ -245,7 +246,7 @@ table:has(td[data-label]:nth-child(5)) td:first-child{font-weight:600}table:has(
 table:has(td[data-label]:nth-child(5)) td:empty{display:none}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after,::details-content{animation:none!important;transition:none!important}
 .js .reveal{opacity:1;transform:none}html{scroll-behavior:auto}}
-""".replace("SANS", fonts.SANS).replace("MONO", fonts.MONO).replace("DARK", "--page:#151514;--surface:#1f1f1d;--ink:#ecece8;--ink2:#c9c9c3;--muted:#a5a59e;--grid:#34342f;--edge:#34342f;--mark:#0398cd;--agent:#c68206;--mark-ink:#0398cd;--agent-ink:#e0a030;--tint:#102635;--track:#2b2b28;--chip:#2b2b28;--hl:#5a4b00;--pass:#5cc183;--fail:#f08a80;--c3:#199e70;--c4:#9085e9;--c5:#d55181;--c0:#55554f;color-scheme:dark")
+""".replace("SANS", fonts.SANS).replace("MONO", fonts.MONO).replace("DARK", "--page:#1d1a15;--surface:#27231c;--ink:#f2efe7;--ink2:#d6cfc2;--muted:#b0a796;--grid:#3b3529;--edge:#4f4739;--mark:#76a0e2;--agent:#f4b829;--mark-ink:#8fb3ec;--agent-ink:#f4b829;--tint:#25304a;--track:#332e25;--chip:#332e25;--hl:#5a4500;--pass:#93d3b0;--fail:#f08a70;--c3:#c4607d;--c4:#d6cfc2;--c5:#8f8676;--c0:#5e5649;color-scheme:dark")
 
 # the page script in parts: every page takes JS_CORE; the report takes them all, a dashboard page only its own
 JS_CORE = """
@@ -1011,7 +1012,7 @@ Sessions do different work, so a comparison describes them; for a controlled bef
 {bench_head}
 {_more("Benchmark details", "per-variant spread, main vs subagent tokens, every answer", bench_detail)}</section>
 
-{_more("Daily trend", "tokens per day; the amber line is the 7-day average; a dashed line marks a config change", _daily_chart(days, changes), "trend")}
+{_more("Daily trend", "tokens per day; the mustard line is the 7-day average; a dashed line marks a config change", _daily_chart(days, changes), "trend")}
 {_more("Config changes", f"{len(changes)} recorded; before/after medians per run", _change_cards(conn, changes), "changes")}
 {_more("Skill versions", f"{n_changed} skill{'' if n_changed == 1 else 's'} changed. A version is a hash of the skill's folder; each row is the median tokens of one "
        f"prompt's requests while that version was loaded. Few loads = fewer than {FEW_LOADS}: watch, do not judge. "

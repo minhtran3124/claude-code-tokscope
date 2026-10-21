@@ -242,7 +242,7 @@ def page_overview(conn, f):
         f'<h3>Subagent types</h3>{_movers(conn, f, "r.agent_type", "subagent type")}'
         f'<h3>New skill versions</h3>{_new_versions(conn, f)}</div></section>',
         "</div>",
-        f'<section class="card" id="trend"><h2>Daily tokens</h2><p class="note">{f.label()}; the amber line is the 7-day average</p>'
+        f'<section class="card" id="trend"><h2>Daily tokens</h2><p class="note">{f.label()}; the mustard line is the 7-day average</p>'
         f'<div data-region="trend">{_daily_chart(_days(conn, f), list_changes(conn))}</div></section>',
         f'<h2 class="sec">Top spenders</h2><div data-region="top">{_top(conn, f)}</div>',
     ])
