@@ -15,6 +15,13 @@ Sessions:
   session started (for example a web app calling `claude -p`) stay top-level. `showing N of M` now counts groups.
 - A parent's totals do not include its children's tokens; each child keeps its own row.
 - A database from an earlier version gains the new columns on the next ingest and is parsed again once.
+- Upgrading: after this version has opened the database, an older tokscope can no longer ingest into it (it fails with
+  `table sessions has 11 columns but 9 values were supplied`). Stop old `tokscope serve` processes before upgrading.
+  The data is unharmed; the new version parses it again on its next ingest.
+- Limit: two sessions that run `claude -p` at the same time in the same folder can swap children when the output is
+  not JSON (the latest call wins). `--output-format json` avoids it.
+- On the dashboard, "from <parent>" links to that session (all time). The static report shows it as text. "Show fewer"
+  folds an expanded parent back to its first 3 children.
 
 ## 0.1.0 - 2026-10-21
 

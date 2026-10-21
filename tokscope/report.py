@@ -311,6 +311,8 @@ const S=JSON.parse(document.getElementById('sessions-data').textContent);
 const list=document.getElementById('session-list'),q=document.getElementById('s-q'),sortSel=document.getElementById('s-sort');
 const picked=new Set();let limit=15;
 // a headless session (claude -p) sits under the session whose Bash call started it, indented by depth
+// only the dashboard serves /sessions; the static report keeps the parent's name as text
+const DASH=!!document.body.dataset.page;
 const byId=new Map(S.map(s=>[s.id,s])),kids=new Map(),openKids=new Set();
 S.forEach(s=>{if(s.parent&&byId.has(s.parent)&&s.parent!==s.id){if(!kids.has(s.parent))kids.set(s.parent,[]);kids.get(s.parent).push(s)}});
 kids.forEach(k=>k.sort((a,b)=>a.start.localeCompare(b.start)));
@@ -326,7 +328,7 @@ function row(s){
   const by=s.parent_title||s.parent?.slice(0,8)||'',from=s.parent?`\nstarted by ${by}${byId.has(s.parent)?'':' (outside this range)'}`:'';
   // a parent outside the range has no row to sit under, so the child names it
   d.innerHTML=`<summary><input type=checkbox aria-label="compare" ${picked.has(s.id)?'checked':''}>
-    <span class=d>${s.start.slice(0,10)}</span><span class="t${/^session [0-9a-f]{8}$/.test(s.title||'')?' sid':''}" title="${esc(s.title+from)}"><span class=tt>${s.title?hl(s.title,q.value.trim()):'(untitled)'}</span>${s.parent&&!byId.has(s.parent)?`<small class=from>from ${esc(by)}</small>`:''}</span>
+    <span class=d>${s.start.slice(0,10)}</span><span class="t${/^session [0-9a-f]{8}$/.test(s.title||'')?' sid':''}" title="${esc(s.title+from)}"><span class=tt>${s.title?hl(s.title,q.value.trim()):'(untitled)'}</span>${s.parent&&!byId.has(s.parent)?`<small class=from>from ${DASH&&s.parent?`<a href="/sessions?range=all&amp;q=${encodeURIComponent(s.parent)}" title="show the session that started this one (all time)">${esc(by)}</a>`:esc(by)}</small>`:''}</span>
     <span class=r><b>${fmt(s.tokens)}</b></span>${split(s.main,s.agents)}<span class="r n">${s.prompts} prompts</span><span class=sk>${esc(s.top_skill||'')}</span><span class=cv aria-hidden=true>›</span></summary><div class=body></div>`;
   const cb=d.querySelector('input');
   cb.addEventListener('click',e=>e.stopPropagation());
@@ -373,13 +375,13 @@ function group(root,match){const out=[],seen=new Set();
     let down=false;const spans=[];
     (kids.get(s.id)||[]).forEach(k=>{const from=out.length;down=walk(k,d+1,up||me)||down;if(out.length>from)spans.push(from)});
     if(!(me||up||down)){out.splice(at);return false}
-    if(spans.length>3&&!openKids.has(s.id)){out.splice(spans[3]);out.push({more:s,n:spans.length-3,d:d+1})}
+    if(spans.length>3){const open=openKids.has(s.id);if(!open)out.splice(spans[3]);out.push({more:s,n:spans.length-3,d:d+1,open})}
     e.dim=!(me||up);return me||down};
   walk(root,0,false);return out}
 function moreBtn(e){let el=nodes.get('more:'+e.more.id);
   if(!el){el=document.createElement('button');el.type='button';el.className='btn kids-more';el.dataset.id='more:'+e.more.id;
-    el.addEventListener('click',()=>{openKids.add(e.more.id);render()});nodes.set('more:'+e.more.id,el)}
-  el.textContent=`+${e.n} more started by this session`;el.style.setProperty('--depth',e.d);return el}
+    el.addEventListener('click',()=>{const id=e.more.id;openKids.has(id)?openKids.delete(id):openKids.add(id);render()});nodes.set('more:'+e.more.id,el)}
+  el.textContent=e.open?'Show fewer':`+${e.n} more started by this session`;el.setAttribute('aria-expanded',e.open?'true':'false');el.style.setProperty('--depth',e.d);return el}
 function render(){
   const needle=q.value.toLowerCase();
   const match=s=>!needle||(s.title||'').toLowerCase().includes(needle)||s.id.startsWith(needle)||(s.top_skill||'').includes(needle);
