@@ -1197,8 +1197,6 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 
 def api(conn, name, qs, stamp):
     f = Filters(qs)
-    if name == "version":
-        return {"stamp": stamp}
     if name == "summary":
         cond, params = f.cond()
         t = _totals(conn, cond, params)
@@ -1380,6 +1378,9 @@ def handler(db, live, port, level, token=None):
                 out.update(steps=shown, nsteps=total, idle=idle,
                            files=[[rel, kind] for rel, kind, _ in optimize.changes(m.group(1))] if data["state"] == "running" else [])
                 return self._send(200, json.dumps(out), "application/json")
+            if name == "api/version":
+                # pages poll this every 2 s: answer before the database (a redacted copy is a full backup)
+                return self._send(200, json.dumps({"stamp": live.stamp}), "application/json")
             conn = privacy.redacted_copy(db, level) if level != "full" else connect(db)
             try:
                 if name.startswith("api/"):

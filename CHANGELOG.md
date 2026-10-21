@@ -10,6 +10,7 @@ Design:
   them. The choice is kept per browser. Light/dark (`t`) works in both.
 - Pages check for new data every 2 seconds (was 5), so "New data · reload" and the live numbers show sooner.
   New transcripts are still read every 10 seconds; `tokscope serve --interval N` changes that.
+  At a redacted or numbers level the check no longer copies the database first, so it costs the same at every level.
 
 Sessions:
 - A headless session (`claude -p`) that another session started from its Bash tool shows under that session,
