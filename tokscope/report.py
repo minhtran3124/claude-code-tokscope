@@ -232,6 +232,16 @@ table:has(td[data-label]:nth-child(5)) td{display:flex;justify-content:space-bet
 table:has(td[data-label]:nth-child(5)) td::before{content:attr(data-label);color:var(--muted);font-size:12px;text-align:left;flex:none}
 table:has(td[data-label]:nth-child(5)) td:first-child{font-weight:600}table:has(td[data-label]:nth-child(5)) td:first-child::before{content:none}
 table:has(td[data-label]:nth-child(5)) td:empty{display:none}}
+/* type: mono for labels, controls and scannable values; sans for sentences and card titles. Weights 400 / 500 heads / 600 emphasis */
+.kpi>span:first-child,.today-nums span,.ck,.ids dt,.fm dt,th{font:500 11px/1.45 var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.kpi>span:first-child,.today-nums span,.ck,.ids dt,.fm dt{font-weight:600}.ck.agents{color:var(--agent-ink)}.ck.mcp{color:var(--mark-ink)}
+th .usd{font-family:var(--mono);text-transform:none;letter-spacing:0}
+#compare th,.md th{font:500 12px/1.45 var(--sans);text-transform:none;letter-spacing:0;color:var(--ink2)}
+td:not(:first-child):not(.runs-row td),td[data-label="#"],td.u,.est,.run .usd,.cnt,.few,.trend,time,.srow>summary :is(.d,.r,.n,.sk),.note [data-count],.srow>summary .t.sid,.ids dd{font-family:var(--mono)}
+td:not(:first-child):not(.l):not(.lm):not(.u):not(:is(.runs-row,table.sbs) td){font-size:13px}td.l,td.lm,td.calls,.md td{font-family:var(--sans)}
+.run .rt{font-family:var(--mono);font-weight:600}.today-nums b,.pnums b{font-family:var(--mono);font-weight:600}
+.btn,.primary,.chip,.tools select,.tools input[type=search]{font-family:var(--mono)}.btn,.chip{font-weight:500}.primary{font-size:12px;font-weight:500}
+.tools select,.tools input[type=search]{font-size:12px;font-weight:400}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after,::details-content{animation:none!important;transition:none!important}
 .srow:hover,a.sk:hover,.totop.show:hover,.toc a:hover,.srow:hover .cv,.srow:hover>summary .split{transform:none!important}
 .js .reveal{opacity:1;transform:none}html{scroll-behavior:auto}}
@@ -297,7 +307,7 @@ function split(main,ag){const t=Math.max(main+ag,1);return `<span class=split ti
 function row(s){
   const d=document.createElement('details');d.className='srow'+(picked.has(s.id)?' picked':'');d.dataset.id=s.id;
   d.innerHTML=`<summary><input type=checkbox aria-label="compare" ${picked.has(s.id)?'checked':''}>
-    <span class=d>${s.start.slice(0,10)}</span><span class=t title="${esc(s.title)}">${s.title?hl(s.title,q.value.trim()):'(untitled)'}</span>
+    <span class=d>${s.start.slice(0,10)}</span><span class="t${/^session [0-9a-f]{8}$/.test(s.title||'')?' sid':''}" title="${esc(s.title)}">${s.title?hl(s.title,q.value.trim()):'(untitled)'}</span>
     <span class=r><b>${fmt(s.tokens)}</b></span>${split(s.main,s.agents)}<span class="r n">${s.prompts} prompts</span><span class=sk>${esc(s.top_skill||'')}</span><span class=cv aria-hidden=true>›</span></summary><div class=body></div>`;
   const cb=d.querySelector('input');
   cb.addEventListener('click',e=>e.stopPropagation());
