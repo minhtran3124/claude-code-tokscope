@@ -376,6 +376,7 @@ class HeadlessLinkTest(Fixture):
             'claude -p "review /home/u/projX please"': set(),
             "claude -p hi <<'EOF'\nsee /home/u/projY\nEOF": set(),
             "cat > r.sh <<'EOF'\ncd /x/proj && claude -p hi\nEOF\nbash r.sh": {"/x/proj"},
+            "cat > r.sh <<'EOF'\ncd /x/proj && claude -p hi\nEOF\nclaude -p yo": set(),
         }
         for command, dirs in cases.items():
             with self.subTest(command=command):

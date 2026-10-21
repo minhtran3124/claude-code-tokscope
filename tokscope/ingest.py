@@ -117,8 +117,10 @@ def command_dirs(command, cwd):
     """The folders a Bash command may start `claude -p` in: its own cwd and every absolute path it names as a shell
     word (`cd /x && claude -p`, `cd "/a b"`, `cd $'/x'`, `` cd `pwd` ``), with simple `X=/path` variables filled in. A
     path inside prompt text (a quoted string that does not start with a path, a heredoc body) is not a folder the
-    command runs in; a heredoc script written to a file that runs `claude -p` is, as in `is_headless`."""
-    command = HEREDOC_RE.sub(lambda m: "\n" + m.group(4) if m.group(1) and is_headless(m.group(4)) else "", command)
+    command runs in; a heredoc script written to a file, run later, that runs `claude -p` is, as in `is_headless`."""
+    rest = HEREDOC_RE.sub("", command)
+    command = HEREDOC_RE.sub(lambda m: "\n" + m.group(4) if m.group(1) and m.group(1) in rest
+                             and is_headless(m.group(4)) else "", command)
     command = QUOTED_RE.sub(_shell_word, command)
     command = re.sub(r"\$(?=[/~])", "", command)  # what is left of $'/x'
     for name, value in ASSIGN_RE.findall(command):
