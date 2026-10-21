@@ -604,14 +604,17 @@ def _loads(n):
     return (f"{n}{FEW_TAG if n and n < FEW_LOADS else ''}", "raw")
 
 
-def _skill_versions(conn, level="full"):
+def _skill_versions(conn, level="full", where=None, skill=None):
     """(skills with two or more tracked versions, HTML). A changed skill gets a card: each version's loads and median
     tokens per load, the change from the version before, and the diff between them. A skill with one tracked version
-    and loads from before tracking goes in one table that compares the two. Diffs read kept files: full report only."""
+    and loads from before tracking goes in one table that compares the two. Diffs read kept files: full report only.
+    `where` (the dashboard's filters) counts only the loads it matches and drops versions with none."""
     by_skill = {}
-    for r in skills.versions(conn):
-        if r["loads"] or r["version"]:
+    for r in skills.versions(conn, skill, where=where):
+        if r["loads"] or (r["version"] and not where):
             by_skill.setdefault(r["skill"], []).append(r)
+    if not by_skill and where:
+        return 0, "<p class='note'>No skill loads match these filters.</p>"
     if not by_skill:
         return 0, ("<p class='note'>No skill versions yet. They are recorded when the mod sees a Skill call and on each "
                    "<code>tokscope ingest</code>.</p>")

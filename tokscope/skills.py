@@ -301,13 +301,16 @@ def load_versions(conn):
     return out
 
 
-def versions(conn, skill=None, bench_project="%tokscope%-bench-%"):
-    """Per skill and version: label, first seen, loads, and median tokens per load (one prompt's requests)."""
+def versions(conn, skill=None, bench_project="%tokscope%-bench-%", where=None):
+    """Per skill and version: label, first seen, loads, and median tokens per load (one prompt's requests).
+    `where` is a (WHERE clause, params) over requests r and sessions s, such as the dashboard's filters; it replaces
+    the bench exclusion, so it must exclude bench sessions itself."""
     # one unit per prompt and skill; a prompt that loaded the skill twice counts the version of its last load
     units = {(sid, i, sk): (version, exact) for sid, i, sk, _, version, exact in sorted(load_versions(conn), key=lambda r: r[3] or "")}
+    cond, params = where or ("WHERE s.project NOT LIKE ?", (bench_project,))
     tokens = {(sid, i, sk): t for sid, i, sk, t in conn.execute(
         f"SELECT r.session_id, r.prompt_idx, r.skill, sum({TOKENS}) FROM requests r JOIN sessions s USING (session_id) "
-        f"WHERE r.skill IS NOT NULL AND s.project NOT LIKE ? GROUP BY 1, 2, 3", (bench_project,))}
+        f"{cond} AND r.skill IS NOT NULL GROUP BY 1, 2, 3", params)}
     per = {}
     for key, (version, exact) in units.items():
         if key in tokens:

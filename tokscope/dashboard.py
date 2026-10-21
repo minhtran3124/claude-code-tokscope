@@ -266,8 +266,9 @@ def page_sessions(conn, f, qs):
 
 
 def page_skills(conn, f, level):
-    _, inner = _skill_versions(conn, level)
-    return f'<section class="card" id="skill-versions"><p class="note">Every skill version tokscope has seen, all time.</p>{inner}</section>'
+    _, inner = _skill_versions(conn, level, f.cond(), f.skill or None)
+    return (f'<section class="card" id="skill-versions"><p class="note">Skill versions loaded over {"the " * bool(f.days)}{f.label()}; '
+            f'loads and tokens count only what the filters match.</p>{inner}</section>')
 
 
 def _ste_counts(findings):
@@ -1115,10 +1116,10 @@ document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',(
 """
 
 DASH_JS = """
-// a filter change keeps only the filters set, so the URL reads like the view (range=30 is the default)
-document.querySelectorAll('.filters select').forEach(s=>s.addEventListener('change',()=>{const q=new URLSearchParams();
-  s.form.querySelectorAll('select').forEach(x=>{if(x.value&&!(x.name==='range'&&x.value==='30'))q.set(x.name,x.value)});
-  location.href=s.form.getAttribute('action')+(q.toString()?'?'+q:'')}));
+// Apply keeps only the filters set, so the URL reads like the view (range=30 is the default)
+document.querySelectorAll('form.filters').forEach(fm=>fm.addEventListener('submit',e=>{e.preventDefault();const q=new URLSearchParams();
+  fm.querySelectorAll('select').forEach(x=>{if(x.value&&!(x.name==='range'&&x.value==='30'))q.set(x.name,x.value)});
+  location.href=fm.getAttribute('action')+(q.toString()?'?'+q:'')}));
 const freshEl=document.getElementById('fresh'),page=document.body.dataset.page;let stamp=document.body.dataset.stamp,seenAt=Date.now();
 const ago=t=>{const s=Math.round((Date.now()-t)/1000);return s<60?'just now':s<3600?Math.round(s/60)+' min ago':Math.round(s/3600)+' h ago'};
 function fresh(ok){freshEl.classList.toggle('stale',!ok);freshEl.lastChild.textContent=ok?' live · updated '+ago(seenAt):' offline · '+ago(seenAt)}
@@ -1186,7 +1187,7 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 <div class="side-foot"><button type="button" class="chip" id="theme">Theme</button>
 <button type="button" class="chip" id="keys-btn" aria-label="Keyboard shortcuts"><kbd>?</kbd></button>{SKIN_BUTTON}</div></aside><main>
 <header class="dash-head"><h1>{PAGES[name]}</h1><span class="fresh" id="fresh"><span class="dot"></span> live</span>
-{"" if name in ("library", "projects") else f'<form class="filters" method="get" action="/{name}">{_options(conn, f)}{reset}</form>'}</header>{note}
+{"" if name in ("library", "projects") else f'<form class="filters" method="get" action="/{name}">{_options(conn, f)}<button type="submit" class="chip">Apply</button>{reset}</form>'}</header>{note}
 {body}
 </main></div><div id="tip"></div><div id="toast" role="status" aria-live="polite"></div>
 <dialog class="keys" id="keys"><h3 style="margin:0">Keyboard shortcuts</h3><dl>
