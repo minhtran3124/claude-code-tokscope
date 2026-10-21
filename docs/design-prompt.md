@@ -6,6 +6,7 @@ A reusable prompt for designing a tokscope screen (dashboard page or the HTML re
 - Changed on purpose: Claude Bot Local's swatches mean a project's state. tokscope has no states; its colours mean data. So the swatches are remapped to series and results below, and "no accent that isn't a state" becomes "no accent that isn't data".
 - Changed on purpose: tokscope pages are dense tables and numbers. Shadows go on one card per page, not every card, and tables keep thin rules.
 - Text colours were checked for WCAG AA on paper, sheet and chip in both themes (contrast in brackets, the lowest). Light-theme swatch fills are below 3:1 on sheet, so every filled mark carries an ink outline.
+- The colours below are the live palette: the `:root` and DARK blocks of `CSS` in `tokscope/report.py` (since #6).
 - The dashboard and the report share one stylesheet (`CSS` in `tokscope/report.py`). A design applies to both.
 
 ```text
@@ -44,8 +45,8 @@ Type
   and subagent names, labels, buttons, dates, code.
 - Sans = Be Vietnam Pro (--sans): sentences: subtitles, notes, empty states, help.
 - Labels: mono 11px, uppercase, letter-spacing .08em, muted.
-- The main number of a block is its largest text (KPI 22-28px mono 700); weights stay
-  400 text, 500 table heads, 600 labels and emphasis, 700 big numbers only.
+- The main number of a block is its largest text (KPI 22-28px mono 600); weights stay
+  400 text, 500 table heads, 600 labels, emphasis and big mono numbers; 700 only for sans (mono ships 400-600).
 - Table numbers right-aligned with tabular figures.
 
 Shapes
