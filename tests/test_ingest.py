@@ -331,18 +331,32 @@ class HeadlessLinkTest(Fixture):
         self.run_ingest()
         self.assertEqual(self.parents(), {PARENT: None, CHILD: PARENT, "late": None, "other-cwd": None, "typed": None})
 
-    def test_a_background_call_holds_until_its_session_ends_and_nested_runs_link_each_level(self):
+    def test_a_background_call_ends_at_its_task_notification_and_nested_runs_link_each_level(self):
+        done = notification("<task-notification>\n<task-id>b1</task-id>\n<tool-use-id>t1</tool-use-id>\n"
+                            "<status>completed</status>\n</task-notification>")
         self.write(PARENT, [at(human("go"), "2026-10-01T00:00:00Z"),
                             bash("r1", "t1", "claude -p 'hi'", "2026-10-01T00:00:01Z", run_in_background=True),
-                            at(result("t1", "Command running in background"), "2026-10-01T00:00:02Z"),
-                            at(human("later"), "2026-10-01T00:30:00Z")])
+                            at(result("t1", "Command running in background with ID: b1"), "2026-10-01T00:00:02Z"),
+                            at(done, "2026-10-01T00:20:00Z"),
+                            at(human("later"), "2026-10-01T08:00:00Z")])
         self.write(CHILD, [*headless("2026-10-01T00:10:00Z"),
                            bash("r9", "t9", "claude -p 'deeper'", "2026-10-01T00:10:05Z"),
                            at(result("t9", "ok"), "2026-10-01T00:12:00Z")])
         self.write(GRANDCHILD, headless("2026-10-01T00:10:06Z", req="h2"))
+        # after the notification, while the parent session is still open: not its child
+        self.write("after-done", headless("2026-10-01T03:00:00Z", req="h3"))
         self.run_ingest()
         # the grandchild started inside both calls: the latest one is its parent
-        self.assertEqual(self.parents(), {PARENT: None, CHILD: PARENT, GRANDCHILD: CHILD})
+        self.assertEqual(self.parents(), {PARENT: None, CHILD: PARENT, GRANDCHILD: CHILD, "after-done": None})
+
+    def test_a_background_call_with_no_notification_links_no_window_child(self):
+        self.write(PARENT, [at(human("go"), "2026-10-01T00:00:00Z"),
+                            bash("r1", "t1", "claude -p 'hi'", "2026-10-01T00:00:01Z", run_in_background=True),
+                            at(result("t1", "Command running in background with ID: b1"), "2026-10-01T00:00:02Z"),
+                            at(human("later"), "2026-10-01T08:00:00Z")])
+        self.write(CHILD, headless("2026-10-01T02:00:00Z"))
+        self.run_ingest()
+        self.assertEqual(self.parents(), {PARENT: None, CHILD: None})
 
     def test_child_links_in_a_folder_the_command_names_or_the_parents_scratchpad(self):
         pad = f"/tmp/claude-1000/-repo/{PARENT}/scratchpad/probe"
@@ -364,6 +378,15 @@ class HeadlessLinkTest(Fixture):
             self.assertTrue(HEADLESS_RE.search(cmd), cmd)
         for cmd in ("ls ~/.claude -p", "cd claude-code-tokscope && ls -p", "claude --resume x", "grep claude -r . | head -p"):
             self.assertFalse(HEADLESS_RE.search(cmd), cmd)
+        # quoted words and heredoc bodies are text the command passes along, not a run
+        from tokscope.ingest import is_headless
+        self.assertTrue(is_headless("cd /x && claude -p \"do it\" --output-format json"))
+        # a script written by a heredoc and run in the same command
+        self.assertTrue(is_headless("cat > $S/run.sh <<'EOF'\ncd /x && claude -p hi\nEOF\nbash $S/run.sh $S"))
+        self.assertFalse(is_headless("cat > $S/run.sh <<'EOF'\nclaude -p hi\nEOF\necho saved"))
+        for cmd in ('git commit -m "Run claude -p in CI"', "gh pr create --body 'A (`claude -p`) run'",
+                    "git commit -F - <<'EOF'\nshow claude -p runs\nEOF\ngit push"):
+            self.assertFalse(is_headless(cmd), cmd)
 
     def test_session_list_names_the_parent_and_an_old_database_gains_the_columns(self):
         from tokscope.ingest import connect

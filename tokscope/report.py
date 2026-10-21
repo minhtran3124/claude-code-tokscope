@@ -139,9 +139,12 @@ transition:background .15s var(--ease),color .15s var(--ease),opacity .15s var(-
 .srow.child{margin-left:calc(var(--depth)*24px);position:relative;overflow:visible}
 .srow.child::before{content:'';position:absolute;left:-15px;top:-10px;height:calc(10px + 1.3em);width:10px;
 border-left:var(--line-w) solid var(--grid);border-bottom:var(--line-w) solid var(--grid);border-bottom-left-radius:6px}
-.srow.child>summary .t::before,.srow.orphan>summary .t::before{content:'↳ ';color:var(--muted)}
+.srow.child>summary .t::before,.srow.orphan>summary .tt::before{content:'↳ ';color:var(--muted)}
+.srow.child.ghost{position:absolute}
 .srow.dim:not(:hover):not([open]){opacity:.6}
-.btn.kids-more{margin:0 0 8px calc(var(--depth)*24px)}
+.btn.kids-more{margin:0 0 8px calc(var(--depth)*24px);padding:7px 14px}
+.srow.orphan>summary .t{display:flex;gap:8px;align-items:baseline}.srow>summary .tt{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.srow>summary .from{flex:none;max-width:45%;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:12px}
 .srow>summary .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.srow>summary .r{text-align:right;font-variant-numeric:tabular-nums}
 .srow>summary .n{white-space:nowrap;color:var(--ink2);font-size:13px}
 .srow>summary .sk{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -166,7 +169,8 @@ background:var(--surface);border:var(--line-w) solid var(--ink);border-radius:12
 .btn{all:unset;cursor:pointer;display:inline-block;font-size:12px;line-height:1.45;color:var(--ink);padding:5px 12px;border:var(--line-w) solid var(--ink);border-radius:999px;background:var(--surface);transition:background .15s var(--ease),color .15s var(--ease)}
 .btn:hover{background:var(--ink);color:var(--page)}
 @media (max-width:640px){.srow>summary{grid-template-columns:22px 1fr 80px 14px}.srow>summary .d,.srow>summary .sk,.srow>summary .n,.srow>summary .split{display:none}
-.srow.child{margin-left:calc(var(--depth)*14px)}.srow.child::before{left:-10px;width:6px}.btn.kids-more{margin-left:calc(var(--depth)*14px)}}
+.srow.child{margin-left:calc(var(--depth)*14px)}.srow.child::before{left:-10px;width:6px}.btn.kids-more{margin-left:calc(var(--depth)*14px)}
+.srow.orphan>summary .t{flex-direction:column;align-items:stretch;gap:0}.srow>summary .from{max-width:100%}}
 /* motion layer: entrance, scroll reveal; all of it off under reduced motion */
 html{scroll-behavior:smooth}body{transition:background-color .35s var(--ease),color .35s var(--ease)}
 #progress{position:fixed;inset:0 0 auto 0;height:3px;z-index:40;transform-origin:0 50%;transform:scaleX(0);
@@ -309,9 +313,10 @@ const hl=(text,needle)=>{if(!needle)return esc(text);const lo=text.toLowerCase()
 function split(main,ag){const t=Math.max(main+ag,1);return `<span class=split title="main ${fmt(main)} · subagents ${fmt(ag)}"><u style="width:${(100*main/t).toFixed(1)}%"></u>${ag?`<u class=a style="width:${(100*ag/t).toFixed(1)}%"></u>`:''}</span>`}
 function row(s){
   const d=document.createElement('details');d.className='srow'+(picked.has(s.id)?' picked':'')+(s.parent&&!byId.has(s.parent)?' orphan':'');d.dataset.id=s.id;
-  const from=s.parent?`\nstarted by ${s.parent_title||s.parent.slice(0,8)}${byId.has(s.parent)?'':' (outside this range)'}`:'';
+  const by=s.parent_title||s.parent?.slice(0,8)||'',from=s.parent?`\nstarted by ${by}${byId.has(s.parent)?'':' (outside this range)'}`:'';
+  // a parent outside the range has no row to sit under, so the child names it
   d.innerHTML=`<summary><input type=checkbox aria-label="compare" ${picked.has(s.id)?'checked':''}>
-    <span class=d>${s.start.slice(0,10)}</span><span class=t title="${esc(s.title+from)}">${s.title?hl(s.title,q.value.trim()):'(untitled)'}</span>
+    <span class=d>${s.start.slice(0,10)}</span><span class=t title="${esc(s.title+from)}"><span class=tt>${s.title?hl(s.title,q.value.trim()):'(untitled)'}</span>${s.parent&&!byId.has(s.parent)?`<small class=from>from ${esc(by)}</small>`:''}</span>
     <span class=r><b>${fmt(s.tokens)}</b></span>${split(s.main,s.agents)}<span class="r n">${s.prompts} prompts</span><span class=sk>${esc(s.top_skill||'')}</span><span class=cv aria-hidden=true>›</span></summary><div class=body></div>`;
   const cb=d.querySelector('input');
   cb.addEventListener('click',e=>e.stopPropagation());
@@ -362,7 +367,7 @@ function group(root,match){const out=[],seen=new Set();
     e.dim=!(me||up);return me||down};
   walk(root,0,false);return out}
 function moreBtn(e){let el=nodes.get('more:'+e.more.id);
-  if(!el){el=document.createElement('button');el.type='button';el.className='btn kids-more';
+  if(!el){el=document.createElement('button');el.type='button';el.className='btn kids-more';el.dataset.id='more:'+e.more.id;
     el.addEventListener('click',()=>{openKids.add(e.more.id);render()});nodes.set('more:'+e.more.id,el)}
   el.textContent=`+${e.n} more started by this session`;el.style.setProperty('--depth',e.d);return el}
 function render(){
@@ -370,13 +375,13 @@ function render(){
   const match=s=>!needle||(s.title||'').toLowerCase().includes(needle)||s.id.startsWith(needle)||(s.top_skill||'').includes(needle);
   let rows=S.filter(isRoot).map(s=>group(s,match)).filter(g=>g.length);
   rows.sort(sortSel.value==='tokens'?(a,b)=>b[0].s.tokens-a[0].s.tokens:(a,b)=>b[0].s.start.localeCompare(a[0].s.start));
-  const shown=rows.slice(0,limit).flat(),keep=new Set(shown.filter(e=>e.s).map(e=>e.s.id)),anim=smoothOk(),before=new Map();
+  const shown=rows.slice(0,limit).flat(),keep=new Set(shown.map(e=>e.s?e.s.id:'more:'+e.more.id)),anim=smoothOk(),before=new Map();
   let top=list.getBoundingClientRect().top;
-  if(anim)list.querySelectorAll(':scope>.srow:not(.ghost)').forEach(el=>{before.set(el.dataset.id,el.getBoundingClientRect().top-top);el.getAnimations().forEach(a=>a.cancel())});
+  if(anim)list.querySelectorAll(':scope>.srow:not(.ghost),:scope>.kids-more').forEach(el=>{before.set(el.dataset.id,el.getBoundingClientRect().top-top);el.getAnimations().forEach(a=>a.cancel())});
   const els=shown.map(e=>{if(e.more)return moreBtn(e);const s=e.s;let el=nodes.get(s.id);
     if(!el){el=row(s);nodes.set(s.id,el)}
     else{el.getAnimations().forEach(a=>a.cancel());el.classList.remove('ghost');el.style.top='';
-      el.querySelector('.t').innerHTML=s.title?hl(s.title,q.value.trim()):'(untitled)';
+      el.querySelector('.tt').innerHTML=s.title?hl(s.title,q.value.trim()):'(untitled)';
       el.classList.toggle('picked',picked.has(s.id));el.querySelector('input').checked=picked.has(s.id)}
     el.classList.toggle('child',e.d>0);el.classList.toggle('dim',e.dim);el.style.setProperty('--depth',e.d);
     return el});
@@ -392,7 +397,8 @@ function render(){
       if(was==null)el.animate([{opacity:0,transform:'translateY(10px) scale(.985)'},{opacity:1,transform:'none'}],
         {duration:420,delay:wait+Math.min(k++,24)*22,easing:EXPO,fill:'backwards'});
       else if(Math.abs(was-now)>1)el.animate([{transform:`translateY(${was-now}px)`},{transform:'none'}],{duration:480,easing:EXPO})});
-    before.forEach((y,id)=>{if(keep.has(id)||!seen(y))return;const el=nodes.get(id);
+    // a "+N more" button that leaves just goes; only rows fade out as ghosts
+    before.forEach((y,id)=>{if(keep.has(id)||id.startsWith('more:')||!seen(y))return;const el=nodes.get(id);
       el.classList.add('ghost');el.style.top=y+'px';list.append(el);
       el.animate([{opacity:1},{opacity:0,transform:'scale(.97)'}],{duration:160,easing:'ease-out',fill:'forwards'})
         .finished.then(()=>{if(el.classList.contains('ghost'))el.remove()},()=>{})})}

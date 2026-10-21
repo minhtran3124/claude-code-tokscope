@@ -74,7 +74,29 @@ PARSER_VERSION = 10
 ARGS_RE = re.compile(r"<command-args>(.*?)</command-args>", re.S)
 PROMPT_CHARS = 160
 # a Bash command that starts a headless Claude Code session
-HEADLESS_RE = re.compile(r"(?:^|[\s;&|(`/])claude(?:\s[^;&|\n]*)?\s(?:-p|--print)(?=\s|$)")
+HEADLESS_RE = re.compile(r"(?:^|[\s;&|(/])claude(?:\s[^;&|\n]*)?\s(?:-p|--print)(?=\s|$)")
+# text a command only passes along (a commit message, a PR body): quoted strings and heredoc bodies
+QUOTED_RE = re.compile(r"""'[^']*'|"(?:[^"\\]|\\.)*"|`[^`]*`""")
+# group 1: the file a heredoc is written to (`cat > run.sh <<'EOF'`), group 4: its body
+HEREDOC_RE = re.compile(r"""(?:>\s*(\S+)\s*)?<<-?\s*(['"]?)(\w+)\2[^\n]*\n(.*?)^\s*\3\s*$""", re.S | re.M)
+# a background call's end: the task notification that names its tool call
+TASK_DONE_RE = re.compile(r"<tool-use-id>([^<]+)</tool-use-id>(?:(?!</task-notification>).)*?<status>(?!running)[^<]*</status>",
+                          re.S)
+
+
+def is_headless(command):
+    """True when a Bash command runs `claude -p` itself, not when it only quotes the words. A heredoc body counts
+    when the command writes it to a file and names that file again (`cat > run.sh <<'EOF' ... EOF; bash run.sh`)."""
+    scripts = []
+
+    def drop(m):
+        if m.group(1) and is_headless(m.group(4)):
+            scripts.append(m.group(1))
+        return ""
+    rest = HEREDOC_RE.sub(drop, command)
+    return bool(HEADLESS_RE.search(QUOTED_RE.sub("''", rest))) or any(path in rest for path in scripts)
+
+
 SESSION_ID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 ASSIGN_RE = re.compile(r"""(?:^|[\s;&|(])(\w+)=["']?([^\s"';&|)]+)""")
 PATH_RE = re.compile(r"""(?:^|[\s=;&|("'])((?:~|/)[^\s"';&|)]*)""")
@@ -208,6 +230,7 @@ class SessionParser:
                     self._on_assistant(rec, agent_id, agent_type, state)
                 elif kind == "user":
                     self._on_tool_results(rec)
+                    self._on_task_done(rec)
                     self._on_command_skill_text(rec)
                     if is_main:
                         self._on_user(rec, state)
@@ -257,9 +280,17 @@ class SessionParser:
                 self.result_chars[block["tool_use_id"]] = len(_text(block.get("content")))
                 call = self.headless.get(block["tool_use_id"])
                 if call is not None:
-                    # a background run returns at once, so its child can start after the result: no end
+                    # a background run returns at once; its end is the task notification (_on_task_done)
                     call["end_ts"] = None if call["background"] else rec.get("timestamp")
                     call["child_ids"] = " ".join(dict.fromkeys(SESSION_ID_RE.findall(_text(block.get("content")))))
+
+    def _on_task_done(self, rec):
+        content = (rec.get("message") or {}).get("content")
+        text = _text(content) if "<task-notification>" in str(content) else ""
+        for tid in TASK_DONE_RE.findall(text):
+            call = self.headless.get(tid)
+            if call is not None and call["background"] and call["end_ts"] is None:
+                call["end_ts"] = rec.get("timestamp")
 
     def _on_skill_blob(self, line):
         try:
@@ -306,7 +337,7 @@ class SessionParser:
             self.tool_ctx[block.get("id")] = (state["prompt_idx"], state["skill"], state["phase"], agent_id)
             self.tool_calls[block.get("id")] = (state["prompt_idx"], agent_id, block.get("name"))
             command = (block.get("input") or {}).get("command")
-            if block.get("name") == "Bash" and isinstance(command, str) and HEADLESS_RE.search(command):
+            if block.get("name") == "Bash" and isinstance(command, str) and is_headless(command):
                 self.headless[block.get("id")] = {"cwds": command_dirs(command, rec.get("cwd") or self.meta["cwd"]),
                                                   "start_ts": rec.get("timestamp"),
                                                   "end_ts": None, "child_ids": "",
@@ -347,12 +378,11 @@ def link_sessions(conn):
 
     The child's transcript does not name its parent, so the link comes from the parent's side. First choice: the
     call's result names the child's session id (`--output-format json` prints it). Else: the child started while the
-    call ran (a background call runs until its session ends), in a folder the call names (its cwd or a path in the
+    call ran (a background call until its task notification; with none, it has no window), in a folder the call names (its cwd or a path in the
     command) or in the calling session's own folder (a scratchpad path holds its session id). The call must start
     before the child; of several, the latest wins. A session that no call matches keeps no parent."""
     calls = conn.execute(
-        "SELECT h.session_id, h.cwds, h.start_ts, COALESCE(h.end_ts, s.last_ts), h.child_ids "
-        "FROM headless_calls h JOIN sessions s USING (session_id) WHERE h.start_ts IS NOT NULL").fetchall()
+        "SELECT session_id, cwds, start_ts, end_ts, child_ids FROM headless_calls WHERE start_ts IS NOT NULL").fetchall()
     links = []
     for sid, cwd, first_ts in conn.execute(
             "SELECT session_id, cwd, first_ts FROM sessions WHERE entrypoint LIKE 'sdk%' AND first_ts IS NOT NULL"):
