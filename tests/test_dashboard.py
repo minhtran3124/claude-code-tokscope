@@ -133,6 +133,11 @@ class ServerTest(unittest.TestCase):
         self.assertIn('<option value="-home-u-app" selected>app</option>', body)
         self.assertNotIn('name="range"', body)
         self.assertIn('<button type="submit" class="chip">Apply</button>', body)
+        _, body = self.get("/library?skill=xia2")                  # a skill name, not an id: the list, with the bar
+        self.assertIn('<form class="filters"', body)
+        _, body = self.get("/overview?skill=xia2")
+        self.assertIn('<a href="/library">Library</a>', body)       # the name filter does not follow into the Library
+        self.assertIn("catch(_){}", dashboard.LIB_JS)               # a malformed #v- hash leaves the rest of the script running
 
     def test_no_percentage_when_history_covers_less_than_half_the_range_before(self):
         _, body = self.get("/overview?range=7")                  # 7 days before: data starts 50 days ago, fine

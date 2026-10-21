@@ -1001,7 +1001,7 @@ function libFilter(){const q=(libFind?.value||'').trim().toLowerCase(),all=libIn
   document.querySelectorAll('a.sk').forEach(a=>{const ok=(all||a.dataset.origin==='mine')&&(!q||a.dataset.find.includes(q));a.hidden=!ok;shown+=ok});
   document.querySelectorAll('.libgroup').forEach(g=>g.hidden=!g.querySelector('a.sk:not([hidden])'));
   const none=document.getElementById('lib-none');if(none)none.hidden=shown>0}
-const vHash=location.hash.startsWith('#v-')&&document.querySelector(`a.sk[data-dir="${CSS.escape(decodeURIComponent(location.hash.slice(3)))}"]`);
+let vHash=null;try{vHash=location.hash.startsWith('#v-')&&document.querySelector(`a.sk[data-dir="${CSS.escape(decodeURIComponent(location.hash.slice(3)))}"]`)}catch(_){}  // a malformed hash: stay on the list
 if(vHash)location.replace(vHash.href+location.hash);
 libFind?.addEventListener('input',libFilter);libInst?.addEventListener('change',libFilter);if(libFind)libFilter();
 document.getElementById('lib-sort')?.addEventListener('change',e=>{const by=e.target.value;
@@ -1185,9 +1185,10 @@ def render(conn, name, qs, stamp, level="full", token=""):
                + (LIB_JS if name in ("library", "projects") else "") + DASH_JS)
     # on the Library, ?skill= is a skill's id, not the filter bar's skill name: other pages must not get it
     navf = Filters({**qs, "skill": [""]}) if name == "library" else f
-    nav = "".join(f'<a href="{navf.link(p)}"{" class=on aria-current=page" if p == name else ""}>{t}</a>' for p, t in PAGES.items())
+    nav = "".join(f'<a href="{navf.link(p, **({"skill": ""} if p == "library" else {}))}"{" class=on aria-current=page" if p == name else ""}>{t}</a>' for p, t in PAGES.items())
     reset = f' <a href="/{name}">clear filters</a>' if (f.project if name == "library" else f.query()) else ""
-    bar = ("" if name == "projects" or (name == "library" and qs.get("skill")) else
+    # a skill page or an optimize run has its own header; a ?skill= that matches no skill falls back to the list, with the bar
+    bar = ("" if name == "projects" or (name == "library" and 'class="card libhead"' in body) else
            f'<form class="filters" method="get" action="/{name}">{_options(conn, f, "project" if name == "library" else None)}'
            f'<button type="submit" class="chip">Apply</button>{reset}</form>')
     note = "" if level == "full" else f'<p class="privacy" role="note"><b>{level}</b> names and text follow the {level} level.</p>'
