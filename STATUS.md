@@ -9,14 +9,14 @@ updated_by: claude   # claude | manual
 # claude-code-tokscope — Status
 
 ## Summary
-Version 0.1.0 is on `main` (PR #1 folded deleted worktrees into their repository). A design PR is open: darker light-mode borders, text-safe colours, one weight scale, and Be Vietnam Pro + IBM Plex Mono bundled.
+Version 0.1.0 and the design update (borders, colours, weights, Be Vietnam Pro + IBM Plex Mono) are on `main`. A PR adds redacted screenshots to the README.
 
 ## Next step
-Review and merge the design PR, then fix the CI billing block (GitHub says the account's payments failed) so the workflow can run.
+Merge the README screenshots PR, then fix the CI billing block (GitHub says the account's payments failed) so the workflow can run.
 
 ## Blockers
 - GitHub Actions jobs do not start: account payment or spending limit (see Settings > Billing).
 
 ## Recent
-- 2026-10-21: released 0.1.0, merged the worktree-folding fix (#1), setup.sh, repo About and topics, design update (borders, colours, weights, fonts); fixed the review findings (amber text, mono weights)
+- 2026-10-21: released 0.1.0, merged the worktree-folding fix (#1), setup.sh, repo About and topics, design update (borders, colours, weights, fonts); fixed the review findings (amber text, mono weights); README screenshots (redacted)
 - 2026-10-19: created STATUS.md
