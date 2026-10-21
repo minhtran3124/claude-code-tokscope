@@ -1,4 +1,10 @@
-"""TEMPORARY: the stylesheet of branch main, for the Classic/Ink comparison switch. Delete this file and the switch after v1 merges into main."""
+"""TEMPORARY: the stylesheet of branch main, for the Classic/Ink comparison switch. Delete it after v1 merges into main.
+
+Every part of the switch carries the word TEMPORARY or "skin"; remove them together (`grep -rn -i "skin\|TEMPORARY" tokscope
+tests`): this file; in report.py and dashboard.py the import, the skin-ink/skin-classic style tags, {SKIN_APPLY} and
+{SKIN_BUTTON}; the skin block and the `s` key in report.py's JS_CORE; the `s` rows of both shortcut dialogs; the
+.side-foot flex-wrap; the skin tests in tests/test_dashboard.py. Leaving the JS block without the button throws and
+stops the rest of the page script."""
 from . import fonts
 
 CLASSIC_CSS = """

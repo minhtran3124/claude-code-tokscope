@@ -187,7 +187,7 @@ background:var(--mark)}
 background:color-mix(in oklch,var(--mark) 15%,transparent);box-shadow:inset 3px 0 0 var(--mark);
 transition:transform .35s var(--ease-expo),width .35s var(--ease-expo),height .35s var(--ease-expo),opacity .2s}
 .has-pill .toc a.on{background:transparent}
-.side-foot{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0 0 4px}
+.side-foot{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0 0 4px}/* flex-wrap: TEMPORARY skin button row */
 .chip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);padding:5px 12px;border:var(--line-w) solid var(--ink);border-radius:999px;background:var(--surface);
 transition:color .15s var(--ease),background .15s var(--ease)}
 .chip:hover,.chip.on,.chip[aria-pressed=true]{background:var(--ink);color:var(--page)}.chip:focus-visible{outline:2px solid var(--ink);outline-offset:2px}

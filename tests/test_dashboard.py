@@ -181,10 +181,6 @@ class ScriptTest(unittest.TestCase):
         self.assertIn("openKids.delete(id)", js)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class SkinSwitchReportTest(unittest.TestCase):
     """TEMPORARY Classic/Ink switch: remove with tokscope/classic.py."""
 
@@ -199,3 +195,7 @@ class SkinSwitchReportTest(unittest.TestCase):
         self.assertIn('<style id="skin-ink">', page)
         self.assertIn('<style id="skin-classic" media="not all">', page)
         self.assertIn('id="skin"', page)
+
+
+if __name__ == "__main__":
+    unittest.main()
