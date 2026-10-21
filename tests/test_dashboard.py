@@ -109,6 +109,15 @@ class ServerTest(unittest.TestCase):
         _, body = self.get("/api/summary?range=7&skill=other")
         self.assertEqual(json.loads(body)["tokens"], 0)
 
+    def test_the_skills_page_follows_the_filters_and_has_an_apply_button(self):
+        _, body = self.get("/skills?range=all")
+        self.assertIn('<button type="submit" class="chip">Apply</button>', body)
+        self.assertIn("xia2", body)
+        _, body = self.get("/skills?range=all&skill=other")
+        self.assertIn("No skill loads match these filters.", body)
+        _, body = self.get("/skills?range=all&project=-home-u-none")
+        self.assertIn("No skill loads match these filters.", body)
+
     def test_no_percentage_when_history_covers_less_than_half_the_range_before(self):
         _, body = self.get("/overview?range=7")                  # 7 days before: data starts 50 days ago, fine
         self.assertNotIn("too short to compare", body)
