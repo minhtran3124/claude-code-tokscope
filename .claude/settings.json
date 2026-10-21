@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "deny": ["Read(./.env)", "Edit(./.env)"]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(gh pr create *)",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pr-opened.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
