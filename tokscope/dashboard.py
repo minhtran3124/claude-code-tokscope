@@ -871,7 +871,7 @@ a.sk:hover{border-color:var(--mark);transform:translateY(-1px)}a.sk b{font-size:
 a.sk p{margin:0;color:var(--ink2);font-size:12.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 a.sk .meta{margin-top:auto;font-size:11.5px;color:var(--muted)}
 .badge{font-size:11px;font-weight:500;padding:1px 7px;border-radius:999px;background:var(--chip);color:var(--ink2);margin-left:8px;vertical-align:1px}
-.badge.inst{color:var(--agent)}
+.badge.inst{color:var(--agent-ink)}
 .libview{display:grid;grid-template-columns:minmax(150px,230px) minmax(0,1fr);gap:14px;align-items:start}
 @media (max-width:860px){.libview{grid-template-columns:minmax(0,1fr)}.files{position:static;max-height:190px}}
 .files{position:sticky;top:12px;padding:8px;max-height:calc(100vh - 24px);overflow:auto}
@@ -916,7 +916,7 @@ background:var(--chip);color:var(--ink2);border:1px solid transparent}
 table.mcp tbody tr{transition:background .15s var(--ease)}
 table.mcp tbody tr:hover{background:color-mix(in oklch,var(--mark) 8%,transparent)}
 table.mcp tbody tr:hover td:first-child{color:var(--mark-ink)}
-.badge.flag{color:var(--agent)}.badge{white-space:nowrap}code.login{display:block;margin-top:2px;font-size:11.5px;color:var(--ink2);overflow-wrap:anywhere}
+.badge.flag{color:var(--agent-ink)}.badge{white-space:nowrap}code.login{display:block;margin-top:2px;font-size:11.5px;color:var(--ink2);overflow-wrap:anywhere}
 #mcp-add{margin-top:14px}#mcp-find{margin-top:14px}#reg-form{margin:6px 0}#reg-form input{flex:1 1 20em;font:inherit;font-size:13px;
 padding:6px 10px;border:1px solid var(--edge);border-radius:8px;background:var(--page);color:var(--ink)}
 .sk.reg{cursor:default}.sk.reg:hover{transform:none}.sk.reg .acts{display:flex;flex-wrap:wrap;gap:4px}.sk.reg .meta a{margin-right:8px}#mcp-form label.wide{display:flex;flex-direction:column;gap:4px;font-size:13px;margin:0 0 8px}
@@ -934,11 +934,11 @@ border-radius:50%;animation:spin .8s linear infinite}
 .runbar{height:4px;border-radius:2px;background:var(--track);overflow:hidden;margin:14px 0 10px}
 .runbar i{display:block;width:35%;height:100%;border-radius:2px;background:var(--mark);animation:slide 1.6s var(--ease) infinite}
 @keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(290%)}}.runline{margin:0 0 8px}.runline b{font-variant-numeric:tabular-nums}
-p.warn{color:var(--agent);font-size:13px}
+p.warn{color:var(--agent-ink);font-size:13px}
 ol.steps{list-style:none;margin:6px 0 0;padding:0;max-height:360px;overflow-y:auto;font-size:12.5px}
 ol.steps li{display:flex;gap:10px;padding:4px 0;border-bottom:1px solid var(--grid)}ol.steps span{min-width:0;overflow-wrap:anywhere}
 ol.steps time{flex:none;width:5.5em;color:var(--muted);font:12px var(--mono)}ol.steps li.sub span{padding-left:16px;color:var(--ink2)}
-ol.steps li.say span{color:var(--ink2);font-style:italic}ol.steps li:is(.error,.denied) span{color:var(--fail)}ol.steps li.retry span{color:var(--agent)}
+ol.steps li.say span{color:var(--ink2);font-style:italic}ol.steps li:is(.error,.denied) span{color:var(--fail)}ol.steps li.retry span{color:var(--agent-ink)}
 ol.steps li.start span,ol.steps li.end span{font-weight:600}
 .outcome{display:flex;flex-direction:column;gap:4px;margin:12px 0 6px;padding:12px 14px;border:1px solid var(--edge);border-radius:10px;
 animation:reveal .3s var(--ease) both}.outcome b{font-size:15px}.outcome span{overflow-wrap:anywhere}
