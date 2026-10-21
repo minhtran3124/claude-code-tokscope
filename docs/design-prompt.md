@@ -41,13 +41,15 @@ Theme: light, dark and System via html[data-theme] and prefers-color-scheme (the
 DARK blocks in tokscope/report.py). Every colour has both values and passes WCAG AA.
 
 Type
-- Mono = IBM Plex Mono (--mono): numbers, KPI values, token counts, costs, session ids, skill
-  and subagent names, labels, buttons, dates, code.
+- Mono = IBM Plex Mono (--mono): numbers, KPI values, token counts, costs, session ids,
+  labels, buttons, dates, code; skill and subagent names only outside tables (meta lines).
 - Sans = Be Vietnam Pro (--sans): sentences: subtitles, notes, empty states, help.
 - Labels: mono 11px, uppercase, letter-spacing .08em, muted.
 - The main number of a block is its largest text (KPI 22-28px mono 600); weights stay
   400 text, 500 table heads, 600 labels, emphasis and big mono numbers; 700 only for sans (mono ships 400-600).
-- Table numbers right-aligned with tabular figures.
+- Table numbers right-aligned with tabular figures, in mono 13px; text cells (names, prompts, notes,
+  subagent run lines) stay sans, and headers that hold content (compare titles, markdown) keep their case.
+- Buttons, pills, selects and search boxes: mono 12px, weight 400-500. Sentences inside a tile (the "history starts" line) stay sans.
 
 Shapes
 - Outlines: 1.5px solid ink on cards, tiles and pills; tables use 1px rule lines inside.

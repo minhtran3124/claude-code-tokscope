@@ -9,14 +9,14 @@ updated_by: claude   # claude | manual
 # claude-code-tokscope — Status
 
 ## Summary
-Ink redesign continues on `v1`. PR #11 (headless `claude -p` child sessions shown indented under their parent, #8) is open to `v1`; all review findings are fixed.
+Ink redesign is complete on branch `v1`: brand mark (#4), palette (#6), design-prompt fixes (#5), shapes (#7) and type (#9) are merged, and the README screenshots show the new look. #11 (headless `claude -p` child sessions indented under their parent) is merged to `v1` too. `main` still has the old design.
 
 ## Next step
-Merge PR #11 to `v1` (review findings fixed), then restart `tokscope serve` so it re-ingests with the new schema.
+Owner review of `v1`, then merge `v1` into `main`. Restart `tokscope serve` so it re-ingests with the #11 schema. CI is still blocked by GitHub billing.
 
 ## Blockers
 - GitHub Actions jobs do not start: account payment or spending limit (see Settings > Billing).
 
 ## Recent
-- 2026-10-21: released 0.1.0, merged the worktree-folding fix (#1), setup.sh, repo About and topics, design update (borders, colours, weights, fonts); fixed the review findings (amber text, mono weights); README screenshots (redacted); docs/design-prompt.md: ink style adapted for tokscope; brand mark and favicon redrawn in ink (PR opened); #4 and #6 (ink palette) merged to v1; design-prompt fixes (#5) rebased onto them; ink shapes PR to v1; investigated headless `claude -p` child sessions and filed #8 (indent them under their parent session) and implemented it (PR #11 to v1; review: 0 findings ≥80, security: 0); fixed all review findings (background-call window, quoted `claude -p`, ghost fade, +N more, orphan label)
+- 2026-10-21: released 0.1.0, merged the worktree-folding fix (#1), setup.sh, repo About and topics, design update (borders, colours, weights, fonts); fixed the review findings (amber text, mono weights); README screenshots (redacted); docs/design-prompt.md: ink style adapted for tokscope; brand mark and favicon redrawn in ink (PR opened); #4 and #6 (ink palette) merged to v1; design-prompt fixes (#5) rebased onto them; ink shapes PR to v1; ink type PR to v1; #7 shapes and #9 type merged to v1; README screenshots retaken in the ink style; filed #8 (headless child sessions) and merged it to v1 as #11 after fixing all review findings
 - 2026-10-19: created STATUS.md

@@ -979,6 +979,14 @@ details.more#optimize-panel{margin:-4px 0 14px}.optform{display:flex;flex-direct
 .state.failed,.state.interrupted{color:var(--fail)}.state.running{color:var(--mark-ink)}#job table{margin:10px 0}
 .fm{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;font-size:12.5px;background:var(--page);border:var(--line-w) solid var(--ink);
 border-radius:8px;padding:10px 12px;margin:0 0 16px}.fm dt{color:var(--muted)}.fm dd{margin:0}
+/* type: the controls and values of the dashboard pages (see the type block in report.CSS) */
+.filters select,.libtools select,.libtools input[type=search],#bench-form select,.optrow select,.optrow input,#reg-form input,#mcp-form select{font-family:var(--mono);font-size:12px;font-weight:400}
+.filters a,.fresh,.kpi .dl .trend,.state,.st .pill,.badge{font-family:var(--mono)}.filters a,.fresh{font-size:12px}.kpi .dl .trend{font-weight:600}
+.st .pill,.state,.badge{font-weight:500}.badge,.state{font-size:11px}.st .pill{font-size:12px}
+table.sbs th{font:500 11px/1.45 var(--mono)}a.sk .meta,.libview .ste-n{font-family:var(--mono)}
+table.mcp td:is(:nth-child(2),:nth-child(3),:nth-child(7)),table.bres td:last-child,table.bres td:first-child{font-family:var(--sans)}table.mcp td.st{font-family:var(--mono)}
+.runline b{font-family:var(--mono);font-weight:600}
+.latest>.note:first-child{font:600 11px/1.45 var(--mono);text-transform:uppercase;letter-spacing:.08em}.latest>.note:first-child time{font-weight:400}
 """
 
 LIB_JS = """
