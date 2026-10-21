@@ -33,7 +33,9 @@ Data colours, one meaning each, never decoration (fill · text light · text dar
         subagents    = mustard #f4b829 · #8a5a00 (4.8) · #f4b829 (7.5)
         pass / down  = mint    #93d3b0 · #1a6934 (5.4) · #93d3b0 (7.8)
         fail / up    = tomato  #ef6a4c · #a33a23 (5.3) · #f08a70 (5.5)
-        more series  = blush #f3a6bb, then ink tints; never more than 5 in one chart
+        more series  = blush #d9708c (dark #c4607d), then a dark and a mid ink tint;
+                       "Other" is the palest tint; never more than 5 in one chart.
+                       Neighbouring series differ by at least 1.5:1 in luminance.
 Theme: light, dark and System via html[data-theme] and prefers-color-scheme (the :root and
 DARK blocks in tokscope/report.py). Every colour has both values and passes WCAG AA.
 
