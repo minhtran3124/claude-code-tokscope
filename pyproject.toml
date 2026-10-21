@@ -24,4 +24,4 @@ packages = ["tokscope"]
 version = { attr = "tokscope.__version__" }
 
 [tool.setuptools.package-data]
-tokscope = ["phases.json"]
+tokscope = ["phases.json", "fonts/*.woff2"]
