@@ -1,0 +1,13 @@
+{
+  "_comment": "skill name -> workflow phase. Plugin skills match on the part after ':'. Unlisted skills report as other:<skill>.",
+  "intake": ["feature-intake"],
+  "research": ["xia2", "explore-codebase", "ce-sessions", "ce-slack-research"],
+  "design": ["brainstorming", "ce-brainstorm", "decision-probe", "ce-ideate", "impeccable", "frontend-design", "ce-frontend-design"],
+  "plan": ["writing-plans", "visual-planner", "ce-plan", "ce-doc-review"],
+  "implement": ["subagent-driven-development", "test-driven-development", "ce-work", "using-git-worktrees", "ce-worktree", "lfg"],
+  "debug": ["systematic-debugging", "ce-debug", "debug-issue", "sentry-debug-issue"],
+  "review": ["correctness-review", "intent-review", "codex-lens", "code-review", "review-changes", "review-diff", "ce-code-review", "requesting-code-review", "simplify", "ce-simplify-code", "context-propagation-audit"],
+  "verify": ["uat", "verify-edgeful", "run", "ce-test-browser"],
+  "ship": ["finishing-a-development-branch", "create-pr", "ce-commit-push-pr", "ce-commit", "ce-resolve-pr-feedback"],
+  "learn": ["compound", "ce-compound", "ce-compound-refresh"]
+}

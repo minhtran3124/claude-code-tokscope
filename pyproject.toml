@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-code-tokscope"
+dynamic = ["version"]
+description = "Token usage per skill, subagent and phase for Claude Code, with an HTML report and benchmarks."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Minh Tran" }]
+keywords = ["claude-code", "claude", "anthropic", "tokens", "usage", "cost", "skills", "subagents", "mcp", "dashboard"]
+dependencies = []
+
+[project.scripts]
+tokscope = "tokscope.cli:main"
+
+[tool.setuptools]
+packages = ["tokscope"]
+
+[tool.setuptools.dynamic]
+version = { attr = "tokscope.__version__" }
+
+[tool.setuptools.package-data]
+tokscope = ["phases.json"]

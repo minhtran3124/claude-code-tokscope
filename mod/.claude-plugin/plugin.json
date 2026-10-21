@@ -1,0 +1,10 @@
+{
+  "name": "tokscope",
+  "version": "0.1.0",
+  "description": "Token usage per skill, subagent and phase: /tokscope, an optional live pane (/tokscope pane on|off), /tokscope open for the HTML report, marks for Skill/Agent calls, ingest on session end.",
+  "author": {
+    "name": "Minh Tran"
+  },
+  "license": "Apache-2.0",
+  "types": "./types/index.d.ts"
+}

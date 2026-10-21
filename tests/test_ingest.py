@@ -1,0 +1,288 @@
+import json
+import os
+import sqlite3
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+from tokscope import paths
+from tokscope.ingest import ingest
+from tokscope.skills import canonical_name, loaded_text_hash
+from tokscope.pricing import cost_usd
+
+PHASES = paths.PACKAGE / "phases.json"
+SID = "s1"
+
+
+def human(text, ts="2026-10-01T00:00:00Z"):
+    return {"type": "user", "turnOrigin": "human", "timestamp": ts, "message": {"role": "user", "content": text}}
+
+
+def result(tool_use_id, content):
+    return {"type": "user", "toolUseResult": {}, "message": {"role": "user", "content": [
+        {"type": "tool_result", "tool_use_id": tool_use_id, "content": content}]}}
+
+
+def notification(text):
+    return {"type": "user", "turnOrigin": "task_notification", "message": {"role": "user", "content": text}}
+
+
+def assistant(req, out=10, tools=(), model="claude-opus-5-5", cw5=0, cw1=0):
+    content = [{"type": "tool_use", "id": tid, "name": name, "input": inp} for tid, name, inp in tools]
+    usage = {
+        "input_tokens": 1, "output_tokens": out, "cache_read_input_tokens": 100,
+        "cache_creation_input_tokens": cw5 + cw1,
+        "cache_creation": {"ephemeral_5m_input_tokens": cw5, "ephemeral_1h_input_tokens": cw1},
+    }
+    return {"type": "assistant", "requestId": req, "timestamp": "2026-10-01T00:00:01Z",
+            "message": {"id": "m" + req, "model": model, "content": content, "usage": usage}}
+
+
+class Fixture(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        # skill names resolve against ~/.claude; an empty home keeps the parse the same on every machine
+        home = mock.patch.dict(os.environ, {"HOME": str(self.tmp / "home")})
+        home.start()
+        self.addCleanup(home.stop)
+        canonical_name.cache_clear()
+        self.project = self.tmp / "projects" / "proj"
+        self.project.mkdir(parents=True)
+        self.db = self.tmp / "t.db"
+
+    def write_main(self, records):
+        (self.project / f"{SID}.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
+
+    def write_agent(self, agent_id, meta, records):
+        d = self.project / SID / "subagents"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"agent-{agent_id}.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
+        (d / f"agent-{agent_id}.meta.json").write_text(json.dumps(meta))
+
+    def run_ingest(self):
+        return ingest(self.db, PHASES, projects_dir=self.tmp / "projects", log=lambda *_: None)
+
+    def rows(self, sql):
+        return sqlite3.connect(self.db).execute(sql).fetchall()
+
+
+class IngestTest(Fixture):
+    def test_streamed_lines_of_one_request_count_once(self):
+        # Claude Code writes one line per content block, each repeating the request's usage
+        self.write_main([human("hi"), assistant("r1", out=5), assistant("r1", out=40), assistant("r1", out=40)])
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT count(*), sum(output) FROM requests"), [(1, 40)])
+
+    def test_skill_owns_later_requests_until_next_human_prompt_but_phase_carries(self):
+        self.write_main([
+            human("plan it"),
+            assistant("r1", tools=[("t1", "Skill", {"skill": "writing-plans"})]),
+            assistant("r2"),
+            notification("<task-notification>done</task-notification>"),
+            assistant("r3"),
+            human("ok continue"),
+            assistant("r4"),
+        ])
+        self.run_ingest()
+        got = self.rows("SELECT request_key, skill, phase, prompt_idx FROM requests ORDER BY request_key")
+        self.assertEqual(got, [
+            ("r1", None, None, 1),  # the request that calls Skill ran before the skill loaded
+            ("r2", "writing-plans", "plan", 1),
+            ("r3", "writing-plans", "plan", 1),  # a background notification is not a new human prompt
+            ("r4", None, "plan", 2),
+        ])
+
+    def test_a_load_keeps_the_hash_of_the_skill_text_its_request_blob_carried(self):
+        text = "Base directory for this skill: /x/review\n\n# Review\nRead the diff.\n\n\nARGUMENTS: the PR"
+        blob = {"type": "api-request-blob", "message": {"content": [
+            {"type": "tool_result", "tool_use_id": "t1", "content": "Launching skill: review"}, {"type": "text", "text": text}]}}
+        self.write_main([human("review it"), assistant("r1", tools=[("t1", "Skill", {"skill": "review"})]), blob, assistant("r2")])
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT skill, tool_use_id, text_hash FROM skill_calls"), [("review", "t1", loaded_text_hash(text))])
+        self.assertEqual(loaded_text_hash(text), loaded_text_hash(text.replace("the PR", "another PR")))  # arguments differ, text same
+
+    def test_arguments_put_inside_the_skill_text_do_not_change_its_hash(self):
+        inline = "Base directory for this skill: /x\n\n# Research\n`{}` is the feature to research.\n"
+        placeholder = loaded_text_hash(inline.format("$ARGUMENTS"))
+        for args in ("ENG-1 creds", "ddtrace 2 to 4"):
+            self.assertIn(placeholder, loaded_text_hash(inline.format(args), args).split())
+
+    def test_a_short_argument_that_is_also_a_word_of_the_skill_still_matches_the_plain_text(self):
+        text = "Base directory for this skill: /x\n\n# Wiki\nRun update when the source changed.\n\n\nARGUMENTS: update"
+        plain = loaded_text_hash("Base directory for this skill: /x\n\n# Wiki\nRun update when the source changed.")
+        self.assertIn(plain, loaded_text_hash(text, "update").split())
+
+    def test_a_typed_skill_command_keeps_the_hash_of_the_text_its_meta_message_carried(self):
+        cmd = "<command-message>review</command-message>\n<command-name>/review</command-name>\n<command-args>PR 12</command-args>"
+        text = "Base directory for this skill: /x/review\n\n# Review\nReview $ARGUMENTS.".replace("$ARGUMENTS", "PR 12")
+        meta = {"type": "user", "isMeta": True, "message": {"role": "user", "content": [{"type": "text", "text": text}]}}
+        self.write_main([human(cmd), meta, assistant("r1")])
+        self.run_ingest()
+        (skill, source, text_hash), = self.rows("SELECT skill, source, text_hash FROM skill_calls")
+        self.assertEqual((skill, source), ("review", "command"))
+        self.assertIn(loaded_text_hash("Base directory for this skill: /x\n\n# Review\nReview $ARGUMENTS."), text_hash.split())
+
+    def test_a_plugin_skill_called_by_its_bare_name_is_stored_under_its_full_name(self):
+        install = self.tmp / "home" / "cache" / "ce"
+        (install / "skills" / "simplify").mkdir(parents=True)
+        (install / "skills" / "simplify" / "SKILL.md").write_text("# s")
+        plugins = self.tmp / "home" / ".claude" / "plugins"
+        plugins.mkdir(parents=True)
+        (plugins / "installed_plugins.json").write_text(json.dumps({"plugins": {"ce@m": [{"scope": "user", "installPath": str(install)}]}}))
+        self.write_main([human("go"), assistant("r1", tools=[("t1", "Skill", {"skill": "simplify"})]), assistant("r2"),
+                         human("again"), assistant("r3", tools=[("t2", "Skill", {"skill": "ce:simplify"})]), assistant("r4")])
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT DISTINCT skill FROM skill_calls"), [("ce:simplify",)])
+        self.assertEqual(self.rows("SELECT DISTINCT skill FROM requests WHERE skill IS NOT NULL"), [("ce:simplify",)])
+
+    def test_typed_skill_command_loads_skill_and_builtin_command_is_not_a_prompt(self):
+        self.write_main([
+            human("<command-name>/model</command-name>"),
+            human("<command-message>feature-intake</command-message>\n<command-name>/feature-intake</command-name>"),
+            assistant("r1"),
+        ])
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT skill, phase, prompt_idx FROM requests"), [("feature-intake", "intake", 1)])
+        self.assertEqual(self.rows("SELECT prompts FROM sessions"), [(1,)])
+        self.assertEqual(self.rows("SELECT skill, source FROM skill_calls"), [("feature-intake", "command")])
+
+    def test_subagent_inherits_context_of_spawning_call_and_nested_agent_its_parent(self):
+        self.write_main([
+            human("review"),
+            assistant("r1", tools=[("t1", "Skill", {"skill": "correctness-review"})]),
+            assistant("r2", tools=[("t2", "Agent", {"subagent_type": "reviewer"})]),
+        ])
+        self.write_agent("a1", {"agentType": "reviewer", "toolUseId": "t2", "spawnDepth": 1},
+                         [assistant("r3", tools=[("t3", "Agent", {})])])
+        self.write_agent("a2", {"agentType": "correctness-scorer", "toolUseId": "t3", "spawnDepth": 2},
+                         [assistant("r4")])
+        self.run_ingest()
+        got = self.rows("SELECT request_key, agent_type, skill, phase FROM requests ORDER BY request_key")
+        self.assertEqual(got[2:], [
+            ("r3", "reviewer", "correctness-review", "review"),
+            ("r4", "correctness-scorer", "correctness-review", "review"),
+        ])
+        self.assertEqual(self.rows("SELECT agent_id, parent_agent_id FROM subagents ORDER BY agent_id"),
+                         [("a1", None), ("a2", "a1")])
+
+    def test_prompt_text_is_kept_short_and_commands_show_their_name(self):
+        self.write_main([
+            human("<command-message>uat</command-message>\n<command-name>/uat</command-name>\n<command-args>run it</command-args>"),
+            assistant("r1"),
+            human("fix   the\nbug " + "x" * 300),
+            assistant("r2"),
+        ])
+        self.run_ingest()
+        rows = self.rows("SELECT prompt_idx, text FROM prompts ORDER BY prompt_idx")
+        self.assertEqual(rows[0], (1, "/uat run it"))
+        self.assertTrue(rows[1][1].startswith("fix the bug x"))
+        self.assertEqual(len(rows[1][1]), 160)
+
+    def test_an_interrupt_marker_is_not_a_prompt(self):
+        self.write_main([human("go"), assistant("r1"), human("[Request interrupted by user]"), human("again"), assistant("r2")])
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT prompts FROM sessions"), [(2,)])
+        self.assertEqual(self.rows("SELECT text FROM prompts ORDER BY prompt_idx"), [("go",), ("again",)])
+
+    def test_synthetic_messages_are_not_billed(self):
+        self.write_main([human("x"), assistant("r1", model="<synthetic>")])
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT count(*) FROM requests"), [(0,)])
+
+    def test_one_hour_cache_write_costs_twice_input_rate(self):
+        # matches OTel cost_usd for the 2026-10-20 haiku probe: 2 in, 59128 1h-write, 367 out
+        self.assertAlmostEqual(cost_usd("claude-haiku-5-5", 2, 367, 0, 0, 59128), 0.0120093, places=7)
+        self.assertGreater(cost_usd("claude-opus-5-5", 0, 0, 0, 0, 1000), cost_usd("claude-opus-5-5", 0, 0, 0, 1000, 0))
+
+    def test_sonnet_5_5_cache_read_matches_claude_code_cost(self):
+        # 2026-10-20 bench run 7949b34d, first request: OTel cost_usd 0.0059908
+        self.assertAlmostEqual(cost_usd("claude-sonnet-5-5", 2, 236, 36268, 0, 0), 0.0059908, places=7)
+
+    def test_unknown_model_has_null_cost_not_zero(self):
+        self.write_main([human("x"), assistant("r1", model="claude-future-9")])
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT cost_usd FROM requests"), [(None,)])
+
+    def test_reingest_skips_unchanged_and_replaces_changed_without_duplicates(self):
+        self.write_main([human("x"), assistant("r1")])
+        self.assertEqual(self.run_ingest(), (1, 0))
+        self.assertEqual(self.run_ingest(), (0, 1))
+        self.write_main([human("x"), assistant("r1"), assistant("r2", out=99)])
+        self.assertEqual(self.run_ingest(), (1, 0))
+        self.assertEqual(self.rows("SELECT count(*) FROM requests"), [(2,)])
+
+
+class SessionCommandTest(Fixture):
+    def test_session_breakdown_is_read_fresh_from_the_transcript(self):
+        from tokscope.cli import session_text
+        from tokscope.ingest import ingest_session
+
+        self.write_main([human("x"), assistant("r1", tools=[("t1", "Skill", {"skill": "uat"})]), assistant("r2")])
+        self.assertTrue(ingest_session(self.db, PHASES, SID, projects_dir=self.tmp / "projects"))
+        text = session_text(sqlite3.connect(self.db), SID)
+        self.assertIn("2 requests", text)
+        self.assertIn("uat", text)
+        self.assertIn("verify", text)
+        self.assertFalse(ingest_session(self.db, PHASES, "missing", projects_dir=self.tmp / "projects"))
+
+    def test_session_json_splits_main_and_subagents_and_names_the_last_prompt(self):
+        from tokscope.cli import session_json
+        from tokscope.ingest import ingest_session
+
+        self.write_main([human("first"), assistant("r1"), human("second ask"),
+                         assistant("r2", tools=[("t1", "Agent", {"subagent_type": "Explore"})])])
+        self.write_agent("a1", {"agentType": "Explore", "toolUseId": "t1", "spawnDepth": 1}, [assistant("r3")])
+        ingest_session(self.db, PHASES, SID, projects_dir=self.tmp / "projects")
+        j = session_json(sqlite3.connect(self.db), SID)
+        self.assertEqual((j["runs"], j["prompts"]), (1, 2))
+        self.assertEqual(j["main"] + j["agents"], j["tokens"])
+        self.assertGreater(j["agents"], 0)
+        self.assertEqual((j["last"]["i"], j["last"]["text"]), (2, "second ask"))
+        self.assertTrue(session_json(sqlite3.connect(self.db), "missing")["empty"])
+
+    def test_session_turns_show_in_out_price_and_which_agents_mcp_and_tools_ran(self):
+        from tokscope.cli import session_json
+        from tokscope.ingest import ingest_session
+
+        self.write_main([
+            human("plain question"), assistant("r1"),
+            human("dig in"),
+            assistant("r2", tools=[("t1", "Bash", {}), ("t2", "mcp__plugin_datadog_mcp__search_datadog_logs", {}),
+                                   ("t3", "Agent", {"subagent_type": "Explore"})]),
+            result("t1", "ok" * 4), result("t2", "x" * 800),
+            assistant("r3", tools=[("t4", "Bash", {}), ("t5", "mcp__claude_ai_Linear__get_issue", {})]),
+            human("odd model"), assistant("r5", model="claude-unknown-9"),
+        ])
+        self.write_agent("a1", {"agentType": "Explore", "toolUseId": "t3", "spawnDepth": 1, "description": "find the logs"},
+                         [assistant("r4", tools=[("t6", "mcp__plugin_datadog_mcp__get_datadog_trace", {})]),
+                          result("t6", [{"type": "text", "text": "y" * 400}])])
+        ingest_session(self.db, PHASES, SID, projects_dir=self.tmp / "projects")
+        odd, dig, plain = session_json(sqlite3.connect(self.db), SID)["turns"]
+        self.assertEqual((plain["agents"], plain["mcp"], plain["tools"]), ([], [], []))
+        self.assertEqual((plain["in"], plain["out"]), (101, 10))
+        self.assertAlmostEqual(plain["usd"], cost_usd("claude-opus-5-5", 1, 10, 100, 0, 0))
+        # tool calls made inside the subagent count for the prompt that spawned it
+        self.assertEqual(dig["agents"], [["Explore", 1, 1 + 100 + 10]])
+        self.assertEqual([(r["type"], r["desc"], r["depth"], r["tokens"]) for r in dig["runs"]],
+                         [("Explore", "find the logs", 1, 1 + 100 + 10)])
+        self.assertEqual(plain["runs"], [])
+        self.assertEqual(dig["mcp"], [["datadog", 2, 300], ["Linear", 1, 0]])
+        self.assertEqual(dig["tools"], [["Bash", 2, 2]])
+        self.assertEqual(dig["requests"], 3)
+        self.assertEqual(dig["out"], 30)
+        self.assertIsNone(odd["usd"])
+
+    def test_marks_append_with_a_receive_time_and_skip_blank_lines(self):
+        from tokscope.cli import append_marks
+
+        marks = self.tmp / "marks"
+        self.assertEqual(append_marks(['{"skill": "uat"}\n', "\n"], marks), 1)
+        self.assertEqual(append_marks(['{"skill": "xia2"}\n'], marks), 1)
+        lines = [json.loads(line) for f in marks.iterdir() for line in f.read_text().splitlines()]
+        self.assertEqual([m["skill"] for m in lines], ["uat", "xia2"])
+        self.assertTrue(all("received_at" in m for m in lines))
+
+
+if __name__ == "__main__":
+    unittest.main()

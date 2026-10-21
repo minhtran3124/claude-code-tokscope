@@ -1,0 +1,39 @@
+{
+  "name": "grader-window",
+  "about": "Fixture: a grader whose patterns must match within a window.",
+  "repo": "/path/to/repo",
+  "commit": "HEAD",
+  "paths": [
+    "src"
+  ],
+  "copy": [
+    ".claude/agents/reviewer.md"
+  ],
+  "main_model": "sonnet",
+  "max_budget_usd": 5,
+  "timeout_s": 1200,
+  "allowed_tools": [
+    "Agent",
+    "Read",
+    "Grep",
+    "Glob"
+  ],
+  "prompt": "Use the Agent tool exactly once, with subagent_type \"reviewer\" and model \"{model}\". Give it this task verbatim: \"Review the file for correctness bugs.\" Do not review the code yourself.",
+  "variants": {
+    "fable": {
+      "model": "fable"
+    },
+    "opus": {
+      "model": "opus"
+    }
+  },
+  "grader": {
+    "about": "Fixture: a grader whose patterns must match within a window.",
+    "all": [
+      "expir|lazy|reload|refresh|greenlet|implicit\\w* (load|i/?o|query|sql)|detached",
+      "commit",
+      "customer_data|deactivate_algo_broker_subscriptions|paused user"
+    ],
+    "window": 900
+  }
+}
