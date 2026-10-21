@@ -420,8 +420,11 @@ def link_sessions(conn):
                      and (cwd in (c[1] or "").split("\n") or c[0] in (cwd or ""))])
         if found:
             links.append((max(found, key=lambda c: c[2])[0], sid))
-    conn.execute("UPDATE sessions SET parent_session_id = NULL")
-    conn.executemany("UPDATE sessions SET parent_session_id = ? WHERE session_id = ?", links)
+    want = {sid: parent for parent, sid in links}
+    have = dict(conn.execute("SELECT session_id, parent_session_id FROM sessions WHERE parent_session_id IS NOT NULL"))
+    # write only the rows whose parent changed
+    conn.executemany("UPDATE sessions SET parent_session_id = ? WHERE session_id = ?",
+                     [(want.get(sid), sid) for sid in have.keys() | want.keys() if have.get(sid) != want.get(sid)])
     return len(links)
 
 
@@ -509,6 +512,8 @@ def ingest(db_path, phases_path, projects_dir=PROJECTS_DIR, project_filter=None,
             store(conn, project_dir.name, parser, signature)
             conn.commit()
             parsed += 1
+    # every run, so a run that stopped after storing sessions but before linking is repaired by the next; when the
+    # links are already right it only reads
     link_sessions(conn)
     conn.commit()
     log(f"ingest: {parsed} sessions parsed, {skipped} unchanged")
