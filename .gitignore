@@ -21,3 +21,7 @@ privacy.key
 bench/tasks/
 # your own project settings (projects.json): which folders are not projects
 projects.json
+# browser-automation screenshots, page dumps and logs
+.playwright-mcp/
+# temporary agent worktrees
+.claude/worktrees/
