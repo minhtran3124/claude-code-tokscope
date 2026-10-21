@@ -3,33 +3,6 @@
 Versions follow [semver](https://semver.org). Before 1.0 a minor bump may break things; each break is listed.
 The version lives in `tokscope/__init__.py`; `mod/.claude-plugin/plugin.json` must carry the same number.
 
-## Unreleased
-
-Design:
-- Two designs, Classic and Ink: the sidebar button (or key `s`) switches the dashboard and the HTML report between
-  them. The choice is kept per browser. Light/dark (`t`) works in both.
-- Pages check for new data every 2 seconds (was 5), so "New data · reload" and the live numbers show sooner.
-  New transcripts are still read every 10 seconds; `tokscope serve --interval N` changes that.
-  At a redacted or numbers level the check no longer copies the database first, so it costs the same at every level.
-
-Sessions:
-- A headless session (`claude -p`) that another session started from its Bash tool shows under that session,
-  indented by depth. The link comes from the parent's side: the session id the call printed, or a child that started
-  while the call ran, in a folder the call names or in the parent's scratchpad. A background call runs until its task
-  notification. A command that only quotes `claude -p` (a commit message, a PR body) is not a run; a heredoc script
-  that the command then runs is. Sorting and the filter keep a child with its parent; a parent shows 3 children until
-  "+N more" is pressed. A child whose parent is outside the filter shows "from <parent>". Headless runs that no
-  session started (for example a web app calling `claude -p`) stay top-level. `showing N of M` now counts groups.
-- A parent's totals do not include its children's tokens; each child keeps its own row.
-- A database from an earlier version gains the new columns on the next ingest and is parsed again once.
-- Upgrading: after this version has opened the database, an older tokscope can no longer ingest into it (it fails with
-  `table sessions has 11 columns but 9 values were supplied`). Stop old `tokscope serve` processes before upgrading.
-  The data is unharmed; the new version parses it again on its next ingest.
-- Limit: two sessions that run `claude -p` at the same time in the same folder can swap children when the output is
-  not JSON (the latest call wins). `--output-format json` avoids it.
-- On the dashboard, "from <parent>" links to that session (all time). The static report shows it as text. "Show fewer"
-  folds an expanded parent back to its first 3 children.
-
 ## 0.1.0 - 2026-10-21
 
 First public release.
@@ -61,9 +34,26 @@ Report:
   last 7 days against the 7 before) and "Skill versions" (a card and diff per changed skill).
 - `--privacy redacted|numbers` builds a report safe to share from a redacted copy of the database.
 
+Sessions:
+- A headless session (`claude -p`) that another session started from its Bash tool shows under that session,
+  indented by depth. The link comes from the parent's side: the session id the call printed, or a child that started
+  while the call ran, in a folder the call names or in the parent's scratchpad. A background call runs until its task
+  notification. A command that only quotes `claude -p` (a commit message, a PR body) is not a run; a heredoc script
+  that the command then runs is. Sorting and the filter keep a child with its parent; a parent shows 3 children until
+  "+N more" is pressed ("Show fewer" folds it back). A child whose parent is outside the filter shows "from <parent>"
+  (a link on the dashboard, text in the static report). Headless runs that no session started (for example a web app
+  calling `claude -p`) stay top-level. `showing N of M` counts groups.
+- A parent's totals do not include its children's tokens; each child keeps its own row.
+- Limit: two sessions that run `claude -p` at the same time in the same folder can swap children when the output is
+  not JSON (the latest call wins). `--output-format json` avoids it.
+
 Dashboard (`tokscope serve`):
-- A live dashboard on 127.0.0.1: Overview, Sessions, Skills, Projects, Library, Benchmarks and Breakdowns, with one
-  filter bar (range, project, model, skill) kept in the URL. New transcripts are ingested in the background.
+- A live dashboard on 127.0.0.1: Overview, Projects, Sessions, Library, Benchmarks and Breakdowns, with one filter bar
+  (range, project, model, skill; an Apply button runs it) kept in the URL. New transcripts are ingested in the
+  background (every 10 seconds; `--interval N` changes that), and each page checks for new data every 2 seconds.
+  At a redacted or numbers level the check makes no copy of the database.
+- Two designs, Classic and Ink: the sidebar button (or key `s`) switches the dashboard and the HTML report between
+  them. The choice is kept per browser. Light/dark (`t`) works in both.
   /api/summary, /api/sessions, /api/projects, /api/library and /api/version return JSON. Requests with another Host
   name are refused; writes need the dashboard's origin, a page token and a JSON body.
 - Projects: each project from your sessions (worktrees and subfolders folded into their repository) with sessions,
@@ -74,7 +64,9 @@ Dashboard (`tokscope serve`):
 - Find a server in the official MCP Registry (npm, PyPI, OCI or a remote URL) and fill the add-server form from it.
   Only the search words leave the machine.
 - Library: the skills you wrote (personal and per project), each file rendered or as source, with the version, loads
-  and a token estimate. Installed skills are hidden by default; `library.json` corrects a wrong guess.
+  and a token estimate. Pick a project to see its skills and your personal ones, whatever the date range. A skill that
+  changed shows a Versions card with the loads, median tokens per load and the diff. Installed skills are hidden by
+  default; `library.json` corrects a wrong guess.
 - STE check: STE100 findings per Markdown file by line, from the installed asd-ste100 skill's `ste-lint.py` (or
   `$TOKSCOPE_STE_LINT`).
 - Optimize a skill: `claude -p` rewrites a copy with the guide skills you pick, within a spending cap and with writes
