@@ -831,7 +831,8 @@ main{width:100%;min-width:0}main a{color:var(--mark-ink);text-underline-offset:2
 .filters select{font:inherit;font-size:13px;padding:6px 12px;border:var(--line-w) solid var(--ink);border-radius:999px;background:var(--surface);color:var(--ink);max-width:220px}
 .filters a{font-size:12px;color:var(--muted)}
 .fresh{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--pass);margin-right:8px;animation:pulse 2s infinite}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--pass);margin-right:8px}
+.fresh .dot,h2>.dot{animation:pulse 2s infinite}
 .fresh .dot{margin:0}.fresh.stale .dot{background:var(--muted);animation:none}
 @keyframes pulse{50%{opacity:.35}}
 /* the report's .kpis is a content-sized flex row; here the six tiles fill the width, edge to edge with .cols2 below */
@@ -880,7 +881,7 @@ a.sk .meta{margin-top:auto;font-size:11.5px;color:var(--muted)}
 .files a:hover{color:var(--mark-ink)}.files a.on{background:var(--tint);color:var(--mark-ink)}
 .viewer{overflow:visible}.viewer .path{font:600 13px var(--mono);margin:0 0 8px;overflow-wrap:anywhere}
 .viewbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin:0 0 10px}.viewbar .note{margin:0}
-.seg{display:inline-flex;gap:4px}.seg .chip.on b{color:inherit}
+.seg{display:inline-flex;gap:4px}.seg .chip:is(:hover,.on) b{color:inherit}
 .md{font-size:14px;line-height:1.6;max-width:84ch;overflow-wrap:anywhere}.md>:first-child{margin-top:0}
 .md h1{font-size:20px}.md h2{font-size:17px;border-bottom:1px solid var(--grid);padding-bottom:4px}.md h3{font-size:15px}.md h4{font-size:14px}
 .md h1,.md h2,.md h3,.md h4{margin:20px 0 8px}.md p,.md ul,.md ol{margin:0 0 10px}.md ul,.md ol{padding-left:22px}.md li{margin:2px 0}

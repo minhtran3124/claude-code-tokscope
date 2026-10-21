@@ -55,9 +55,9 @@ Shapes
 - Flat offset shadow, no blur, one per page: the card that answers the page's main question
   (Overview: Today) gets 10px 12px. Hover on a clickable card: shift -2px, 5px 6px shadow.
   Plain cards and tiles: outline only.
-- Chart bars, legend swatches and sparklines' end dots: data fill with a 1.5px ink outline.
 - Pills: outline + paper fill; hover or selected = filled ink with paper text.
-- Chart marks (bars, share segments, columns, dots) get a 1px ink edge; thin bars are at least 10px
+- Chart marks: bars, legend swatches, share segments and columns get a 1px ink edge, dots a
+  1.5px one; a hollow dot (paper fill) marks the earlier value. Thin bars are at least 10px
   tall. Lines (sparkline, 7-day average) use the text-safe tokens (--mark-ink, --agent-ink).
 - Selection (picked row) = 2px ink outline, never a ring of tint. Primary button is a filled pill
   that inverts to paper on hover. Pulse = opacity only. Diff gap cells are flat chip colour.
