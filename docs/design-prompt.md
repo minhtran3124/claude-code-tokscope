@@ -5,7 +5,7 @@ A reusable prompt for designing a tokscope screen (dashboard page or the HTML re
 - Kept from the source: paper, sheet, ink and rule colours, ink outlines, pill buttons, the flat navy shadow, mono labels, and the two bundled faces (tokscope already ships them in `tokscope/fonts/`).
 - Changed on purpose: Claude Bot Local's swatches mean a project's state. tokscope has no states; its colours mean data. So the swatches are remapped to series and results below, and "no accent that isn't a state" becomes "no accent that isn't data".
 - Changed on purpose: tokscope pages are dense tables and numbers. Shadows go on one card per page, not every card, and tables keep thin rules.
-- Text colours were checked for WCAG AA on paper and sheet in both themes (contrast in brackets, worst of the two). Light-theme swatch fills are below 3:1 on sheet, so every filled mark carries an ink outline.
+- Text colours were checked for WCAG AA on paper, sheet and chip in both themes (contrast in brackets, the lowest). Light-theme swatch fills are below 3:1 on sheet, so every filled mark carries an ink outline.
 - The dashboard and the report share one stylesheet (`CSS` in `tokscope/report.py`). A design applies to both.
 
 ```text
@@ -25,14 +25,14 @@ show as redacted placeholders.
 
 ## Style: hand-inked catalogue (after colorfigures.vercel.app)
 Light:  paper #f2efe7 (page) · sheet #fbf9f4 (cards) · ink #231e16 (text, outlines)
-        muted #6f675a (4.9) · rule #ddd6c8 · shadow #41538f
-Dark:   paper #1d1a15 · sheet #27231c · ink #f2efe7 · muted #b0a796 (6.6) · rule #3b3529
+        muted #665e51 (5.1) · rule #ddd6c8 · shadow #41538f
+Dark:   paper #1d1a15 · sheet #27231c · ink #f2efe7 · muted #b0a796 (5.7) · rule #3b3529
         shadow #41538f (same as light)
 Data colours, one meaning each, never decoration (fill · text light · text dark):
-        main thread  = cobalt  #76a0e2 · #2f5aa8 (5.8) · #8fb3ec (7.3)
-        subagents    = mustard #f4b829 · #8a5a00 (5.2) · #f4b829 (8.7)
-        pass / down  = mint    #93d3b0 · #1f7a3d (4.7) · #93d3b0 (9.1)
-        fail / up    = tomato  #ef6a4c · #b8432a (4.7) · #f08a70 (6.4)
+        main thread  = cobalt  #76a0e2 · #2f5aa8 (5.4) · #8fb3ec (6.3)
+        subagents    = mustard #f4b829 · #8a5a00 (4.8) · #f4b829 (7.5)
+        pass / down  = mint    #93d3b0 · #1a6934 (5.4) · #93d3b0 (7.8)
+        fail / up    = tomato  #ef6a4c · #a33a23 (5.3) · #f08a70 (5.5)
         more series  = blush #f3a6bb, then ink tints; never more than 5 in one chart
 Theme: light, dark and System via html[data-theme] and prefers-color-scheme (the :root and
 DARK blocks in tokscope/report.py). Every colour has both values and passes WCAG AA.
