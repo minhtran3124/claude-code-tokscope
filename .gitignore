@@ -19,3 +19,5 @@ dist/
 privacy.key
 # client benchmark tasks: they name a private repo and hold its prompts
 bench/tasks/
+# your own project settings (projects.json): which folders are not projects
+projects.json
