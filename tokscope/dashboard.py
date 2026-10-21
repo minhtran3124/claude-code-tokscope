@@ -840,7 +840,7 @@ main{width:100%;min-width:0}main a{color:var(--mark-ink);text-underline-offset:2
 @media (max-width:560px){[data-region=kpis]>.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .kpi{position:relative}.kpi .dl{display:block;font-size:11px;color:var(--muted);margin-top:2px}.kpi .dl .trend{display:inline-block;font-size:11px;padding:0 6px}
 .spark{display:block;margin-top:4px}.spark polyline{fill:none;stroke:var(--mark-ink);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round}
-.cols2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:14px}
+.cols2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:22px}
 /* spender cards share one width: two to a row on a desktop (the third starts the next row), one on a phone;
    wide enough that a long name (compound-engineering:ce-simplify-code) fits on one line, and it wraps whole if not */
 .cols3{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,400px),1fr));gap:14px}
@@ -862,7 +862,7 @@ ul.plain{list-style:none;margin:0;padding:0}ul.plain li{padding:4px 0;border-bot
 #newdata{position:fixed;right:20px;bottom:20px;z-index:40}
 @media (prefers-reduced-motion:reduce){.dot,.flash{animation:none}}
 .libtools{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 14px}.libtools input[type=search]{min-width:min(100%,280px);padding:6px 14px;border:var(--line-w) solid var(--ink);border-radius:999px}
-.live-card{box-shadow:10px 12px 0 var(--shadow)}
+.live-card{box-shadow:10px 12px 0 var(--shadow);margin:0 10px 12px 0}
 .libtools .chip input{margin:0}
 .libgroup{margin:0 0 18px}.libgroup h2 .note{margin:0 0 0 8px;font-weight:400}
 .libgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:12px}

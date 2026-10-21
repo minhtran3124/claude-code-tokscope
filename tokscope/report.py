@@ -32,7 +32,7 @@ details.vdiff>summary{cursor:pointer;font-size:13px;margin:6px 0}.few{font-size:
 code.ver{font-size:11px;color:var(--muted);background:var(--chip);border-radius:4px;padding:0 4px;margin-left:2px}
 .privacy{border:var(--line-w) solid var(--ink);border-radius:12px;padding:8px 12px;margin:0 0 12px;font-size:13px;color:var(--ink2);background:var(--surface)}.privacy b{color:var(--mark-ink);text-transform:uppercase;font-size:11px;letter-spacing:.04em;margin-right:6px}.note{color:var(--muted);font-size:12px;margin:0 0 10px}.usd{color:var(--muted);font-size:12px}
 :focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-.hero{position:relative;overflow:hidden;border:var(--line-w) solid var(--ink);border-radius:14px;padding:20px 22px;margin:12px 0 16px;
+.hero{position:relative;overflow:hidden;border:var(--line-w) solid var(--ink);border-radius:14px;padding:20px 22px;margin:12px 10px 28px 0;
 background:var(--surface);box-shadow:10px 12px 0 var(--shadow)}
 .hero .big{font-size:28px;font-weight:700;letter-spacing:-0.01em;margin:0 0 6px;font-variant-numeric:tabular-nums}.hero p{margin:2px 0;color:var(--ink2)}
 .hero .big em{font-style:normal;font-weight:600;color:var(--mark-ink)}.hero a{color:var(--mark-ink);text-underline-offset:2px}
@@ -203,11 +203,11 @@ the palest tint; neighbours in the share bar differ by at least 1.5:1 in luminan
 .viz{margin:4px 0 16px}.viz svg{display:block;overflow:visible}.viz svg text.ax,.viz svg text.name{fill:var(--ink2)}
 .viz svg text.val{fill:var(--ink2);font-weight:600;font-variant-numeric:tabular-nums}.viz svg text.lbl{fill:var(--ink);font-size:11.5px;paint-order:stroke;stroke:var(--surface);stroke-width:3px}
 .legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--ink2);margin:8px 0 10px}.legend .key{margin:0}
-.legend .key i.was,.viz .dot.was{background:color-mix(in oklch,var(--c1) 40%,var(--muted));fill:color-mix(in oklch,var(--c1) 40%,var(--muted))}
+.legend .key i.was{background:var(--surface);border-radius:50%}
 .legend b{color:var(--ink);font-weight:600}
 .share{display:flex;gap:2px;height:16px;border-radius:4px;overflow:hidden;margin-top:6px}.share i{display:block;min-width:3px;box-shadow:inset 0 0 0 1px var(--ink);transform-origin:left;transition:filter .15s}
 .share:hover i{filter:saturate(.35) opacity(.55)}.share i:hover{filter:none}
-.viz .dot{fill:var(--c1);stroke:var(--ink);stroke-width:1.5px;transition:r .15s var(--ease)}.viz .dot:not(.hi){fill:color-mix(in oklch,var(--c1) 55%,var(--surface))}
+.viz .dot{fill:var(--c1);stroke:var(--ink);stroke-width:1.5px;transition:r .15s var(--ease)}.viz .dot:not(.hi){fill:color-mix(in oklch,var(--c1) 55%,var(--surface))}.viz .dot.was{fill:var(--surface)}
 .viz circle.hit,.viz rect.hit{fill:transparent}.viz g[data-tip]:hover .dot{r:7px}
 .viz .span{stroke:color-mix(in oklch,var(--c1) 45%,var(--surface));stroke-width:2px;stroke-linecap:round}
 .viz g.rg:hover rect.hit,.viz g.db:hover rect.hit{fill:color-mix(in oklch,var(--mark) 6%,transparent)}
