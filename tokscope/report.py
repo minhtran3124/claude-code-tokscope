@@ -1037,8 +1037,8 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 <a href="#breakdowns">Breakdowns</a>
 <div class="sub-toc"><a href="#by-week">Week over week</a><a href="#by-mcp">By MCP server</a><a href="#by-tool">By tool</a><a href="#by-phase">By phase</a>
 <a href="#by-owner">By owner</a><a href="#by-skill">By skill</a><a href="#agent-types">Subagent types</a></div>
-</nav><div class="side-foot"><button type="button" class="chip" id="theme">Theme</button>{SKIN_BUTTON}
-<button type="button" class="chip" id="keys-btn" aria-label="Keyboard shortcuts"><kbd>?</kbd></button></div></aside><main>
+</nav><div class="side-foot"><button type="button" class="chip" id="theme">Theme</button>
+<button type="button" class="chip" id="keys-btn" aria-label="Keyboard shortcuts"><kbd>?</kbd></button>{SKIN_BUTTON}</div></aside><main>
 <div id="overview">
 <h1>Claude Code token usage</h1>
 {f'<p class="privacy" role="note"><b>{level}</b> {PRIVACY_NOTE[level]}</p>' if level != "full" else ""}

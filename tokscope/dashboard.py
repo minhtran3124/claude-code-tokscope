@@ -1183,8 +1183,8 @@ def render(conn, name, qs, stamp, level="full", token=""):
 try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElement.dataset.theme=t}}catch(_){{}}</script>
 <style>{fonts.face_css(False)}</style><style id="skin-ink">{CSS}{DASH_CSS}</style><style id="skin-classic" media="not all">{CLASSIC_CSS}{CLASSIC_DASH_CSS}</style>{SKIN_APPLY}</head><body data-page="{name}" data-stamp="{html.escape(stamp)}"><div id="progress"></div><div class="layout">
 <aside class="side" aria-label="Pages"><div class="brand">{MARK}tokscope</div><nav class="toc">{nav}</nav>
-<div class="side-foot"><button type="button" class="chip" id="theme">Theme</button>{SKIN_BUTTON}
-<button type="button" class="chip" id="keys-btn" aria-label="Keyboard shortcuts"><kbd>?</kbd></button></div></aside><main>
+<div class="side-foot"><button type="button" class="chip" id="theme">Theme</button>
+<button type="button" class="chip" id="keys-btn" aria-label="Keyboard shortcuts"><kbd>?</kbd></button>{SKIN_BUTTON}</div></aside><main>
 <header class="dash-head"><h1>{PAGES[name]}</h1><span class="fresh" id="fresh"><span class="dot"></span> live</span>
 {"" if name in ("library", "projects") else f'<form class="filters" method="get" action="/{name}">{_options(conn, f)}{reset}</form>'}</header>{note}
 {body}
