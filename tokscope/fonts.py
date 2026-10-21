@@ -1,4 +1,5 @@
-"""The two typefaces of the report and the dashboard: Be Vietnam Pro for text, IBM Plex Mono for code and big numbers.
+"""The two typefaces of the report and the dashboard: IBM Plex Mono for labels, controls,
+numbers and code; Be Vietnam Pro for sentences and names.
 
 Both are SIL Open Font License 1.1. The latin and vietnamese subsets ship in tokscope/fonts/, so no page asks another
 site for a font. The report embeds them (one file that works offline and when shared); the dashboard serves them from

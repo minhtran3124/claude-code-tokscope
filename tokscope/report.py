@@ -236,8 +236,9 @@ table:has(td[data-label]:nth-child(5)) td:empty{display:none}}
 .kpi>span:first-child,.today-nums span,.ck,.ids dt,.fm dt,th{font:500 11px/1.45 var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .kpi>span:first-child,.today-nums span,.ck,.ids dt,.fm dt{font-weight:600}.ck.agents{color:var(--agent-ink)}.ck.mcp{color:var(--mark-ink)}
 th .usd{font-family:var(--mono);text-transform:none;letter-spacing:0}
-td:not(:first-child),td[data-label="#"],td.u,.est,.run .usd,.cnt,.few,.trend,time,.srow>summary :is(.d,.r,.n,.sk),.note [data-count],.srow>summary .t.sid,.ids dd{font-family:var(--mono)}
-td:not(:first-child):not(.l):not(.lm):not(.u){font-size:13px}td.l,td.lm,td.calls,.md td{font-family:var(--sans)}
+#compare th,.md th{font:500 12px/1.45 var(--sans);text-transform:none;letter-spacing:0;color:var(--ink2)}
+td:not(:first-child):not(.runs-row td),td[data-label="#"],td.u,.est,.run .usd,.cnt,.few,.trend,time,.srow>summary :is(.d,.r,.n,.sk),.note [data-count],.srow>summary .t.sid,.ids dd{font-family:var(--mono)}
+td:not(:first-child):not(.l):not(.lm):not(.u):not(:is(.runs-row,table.sbs) td){font-size:13px}td.l,td.lm,td.calls,.md td{font-family:var(--sans)}
 .run .rt{font-family:var(--mono);font-weight:600}.today-nums b,.pnums b{font-family:var(--mono);font-weight:600}
 .btn,.primary,.chip,.tools select,.tools input[type=search]{font-family:var(--mono)}.btn,.chip{font-weight:500}.primary{font-size:12px;font-weight:500}
 .tools select,.tools input[type=search]{font-size:12px;font-weight:400}
