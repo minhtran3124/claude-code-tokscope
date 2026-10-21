@@ -1212,9 +1212,8 @@ def skills_moved(conn, qs):
     """Where an old /skills link goes: the Library, or a skill's page there when ?skill= names one."""
     f = Filters(qs)
     k = next((k for k in library.discover(conn, f.project or None) if k["dir"] == f.skill), None) if f.skill else None
-    if k:
-        return f"/library?skill={k['id']}#v-{quote(k['dir'])}"
-    return "/library" + (f"?{urlencode({'project': f.project})}" if f.project else "")
+    q = urlencode({a: v for a, v in (("skill", k["id"] if k else ""), ("project", f.project)) if v})
+    return "/library" + (f"?{q}" if q else "") + (f"#v-{quote(k['dir'])}" if k else "")
 
 
 def api(conn, name, qs, stamp):
