@@ -82,6 +82,12 @@ class ServerTest(unittest.TestCase):
             self.assertIn(f"<title>tokscope · {title}</title>", body)
             self.assertIn(f'href="/{name}" class=on aria-current=page', body)
 
+    def test_pages_carry_both_skins_and_the_switch_button(self):
+        _, page = self.get("/overview")
+        self.assertIn('<style id="skin-ink">', page)
+        self.assertIn('<style id="skin-classic" media="not all">', page)
+        self.assertIn('id="skin"', page)
+
     def test_fonts_are_served_from_the_package_and_nothing_else_is(self):
         _, page = self.get("/overview")
         self.assertIn("url(/fonts/BeVietnamPro-400-latin.woff2)", page)
@@ -172,6 +178,20 @@ class ScriptTest(unittest.TestCase):
         self.assertIn("'Show fewer'", js)
         self.assertIn("setAttribute('aria-expanded'", js)
         self.assertIn("openKids.delete(id)", js)
+
+
+class SkinSwitchReportTest(unittest.TestCase):
+    def test_a_report_carries_both_skins_and_the_switch_button(self):
+        with tempfile.TemporaryDirectory() as d:
+            db = Path(d) / "t.db"
+            connect(db).close()
+            out = Path(d) / "r.html"
+            from tokscope.report import write_report
+            write_report(db, out, tasks_dir=Path(d))
+            page = out.read_text()
+        self.assertIn('<style id="skin-ink">', page)
+        self.assertIn('<style id="skin-classic" media="not all">', page)
+        self.assertIn('id="skin"', page)
 
 
 if __name__ == "__main__":

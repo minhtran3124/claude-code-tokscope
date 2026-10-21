@@ -22,6 +22,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 
 from . import charts, fonts, library, markdown, optimize, paths, privacy, projects, registry, skills
+from .classic import CLASSIC_CSS, CLASSIC_DASH_CSS, SKIN_APPLY, SKIN_BUTTON
 from .brand import FAVICON, MARK, favicon_link
 from .changes import BENCH_PROJECT, list_changes
 from .ingest import PROJECTS_DIR, connect, ingest
@@ -1180,16 +1181,16 @@ def render(conn, name, qs, stamp, level="full", token=""):
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>tokscope · {PAGES[name]}</title>{favicon_link()}<meta name="tokscope-token" content="{token}"><script>document.documentElement.classList.add('js');
 try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElement.dataset.theme=t}}catch(_){{}}</script>
-<style>{fonts.face_css(False)}</style><style>{CSS}{DASH_CSS}</style></head><body data-page="{name}" data-stamp="{html.escape(stamp)}"><div id="progress"></div><div class="layout">
+<style>{fonts.face_css(False)}</style><style id="skin-ink">{CSS}{DASH_CSS}</style><style id="skin-classic" media="not all">{CLASSIC_CSS}{CLASSIC_DASH_CSS}</style>{SKIN_APPLY}</head><body data-page="{name}" data-stamp="{html.escape(stamp)}"><div id="progress"></div><div class="layout">
 <aside class="side" aria-label="Pages"><div class="brand">{MARK}tokscope</div><nav class="toc">{nav}</nav>
 <div class="side-foot"><button type="button" class="chip" id="theme">Theme</button>
-<button type="button" class="chip" id="keys-btn" aria-label="Keyboard shortcuts"><kbd>?</kbd></button></div></aside><main>
+<button type="button" class="chip" id="keys-btn" aria-label="Keyboard shortcuts"><kbd>?</kbd></button>{SKIN_BUTTON}</div></aside><main>
 <header class="dash-head"><h1>{PAGES[name]}</h1><span class="fresh" id="fresh"><span class="dot"></span> live</span>
 {"" if name in ("library", "projects") else f'<form class="filters" method="get" action="/{name}">{_options(conn, f)}{reset}</form>'}</header>{note}
 {body}
 </main></div><div id="tip"></div><div id="toast" role="status" aria-live="polite"></div>
 <dialog class="keys" id="keys"><h3 style="margin:0">Keyboard shortcuts</h3><dl>
-<dt><kbd>t</kbd></dt><dd>Light or dark theme</dd><dt><kbd>g</kbd></dt><dd>Back to the top</dd>
+<dt><kbd>t</kbd></dt><dd>Light or dark theme</dd><dt><kbd>s</kbd></dt><dd>Classic or Ink design</dd><dt><kbd>g</kbd></dt><dd>Back to the top</dd>
 <dt><kbd>/</kbd></dt><dd>Filter sessions (Sessions page)</dd><dt><kbd>?</kbd></dt><dd>Show this list</dd></dl></dialog>
 <script>{scripts}</script></body></html>"""
 

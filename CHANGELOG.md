@@ -5,6 +5,10 @@ The version lives in `tokscope/__init__.py`; `mod/.claude-plugin/plugin.json` mu
 
 ## Unreleased
 
+Design:
+- Two designs, Classic and Ink: the sidebar button (or key `s`) switches the dashboard and the HTML report between
+  them. The choice is kept per browser. Light/dark (`t`) works in both.
+
 Sessions:
 - A headless session (`claude -p`) that another session started from its Bash tool shows under that session,
   indented by depth. The link comes from the parent's side: the session id the call printed, or a child that started
