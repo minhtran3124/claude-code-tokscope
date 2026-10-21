@@ -210,7 +210,7 @@ def change_text(last, this):
 
 
 def dumbbell(rows, what):
-    """rows: [(name, last week, this week)]. Last week's dot (light) to this week's dot (full), change at the right."""
+    """rows: [(name, last week, this week)]. Last week's dot (hollow) to this week's dot (filled), change at the right."""
     if not rows:
         return ""
     w, pl, pr, pt, row_h = 1100, 220, 90, 26, 26
