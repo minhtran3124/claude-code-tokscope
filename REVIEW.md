@@ -35,8 +35,8 @@ Go up one step when the diff is large or a cheaper run missed something on this 
 
 - **The numbers lie:** wrong tokens, cost, dates, phase, skill or subagent attribution for a session, a double-counted transcript, or a session missing from the dashboard or report.
 - **Quota is spent nobody asked for:** something runs `claude -p` (bench, replay, optimize) without the owner starting it, runs several in parallel, or retries in a loop.
-- **It writes where it should not:** a write outside the tokscope data home (`TOKSCOPE_HOME`) and the bench/replay/optimize work folders, or to the owner's source files, `.git/` or `~/.claude/`. Ingest only reads `~/.claude/projects`.
-- **It opens to the network:** the default `host` stops being `127.0.0.1`, or a POST route is reachable from another origin without the host, origin and token checks in `dashboard.py`.
+- **It writes where it should not:** a write outside the tokscope data home (this repo's `data/`, `reports/` and `bench/` in a source checkout, else `TOKSCOPE_HOME`) and the bench/replay/optimize work folders, or to the owner's source files, `.git/` or `~/.claude/`. Ingest only reads `~/.claude/projects`.
+- **It opens to the network:** the dashboard's bind address in `dashboard.py` (`serve`) stops being `127.0.0.1`, or a POST route is reachable from another origin without the host, origin and token checks in `dashboard.py`.
 - **Private data leaks:** Claude session contents (prompts, paths, titles), `privacy.key`, or a token is logged, sent to a third party, written into a `--privacy redacted` or `numbers` output, or rendered without escaping.
 
 ## Risk by path

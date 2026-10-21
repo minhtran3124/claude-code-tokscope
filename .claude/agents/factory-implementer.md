@@ -24,9 +24,9 @@ You make one planned step of a claude-code-tokscope change. The prompt gives you
 
 - Never commit, push or merge.
 - Never run `claude -p` or any code path that calls it. AI calls use the owner's subscription quota.
-- Never write to a `STATUS.md` outside this repo, never write to `~/.claude/` or the owner's data home (`~/.local/share/tokscope/` or `$TOKSCOPE_HOME`).
+- Never write to a `STATUS.md` outside this repo, never write to `~/.claude/` or the owner's tokscope data home (in a source checkout that is this repo's `data/`, `reports/` and `bench/`; otherwise `$TOKSCOPE_HOME` or `~/.local/share/tokscope/`). Tests and checks use a temporary `TOKSCOPE_HOME`.
 - Never touch secrets such as `.env`.
-- Never change the default `host` of `127.0.0.1` in `tokscope/dashboard.py` or `tokscope/cli.py`, unless the step says so.
+- Never change the bind address `127.0.0.1` in `tokscope/dashboard.py` (`serve`), unless the step says so.
 
 ## Return
 

@@ -1,6 +1,6 @@
 # claude-code-tokscope
 
-Token usage per skill, subagent and phase for Claude Code: a stdlib Python CLI, an HTML report and a local dashboard. Roadmap and tasks: see README.md and the GitHub issues.
+Token usage per skill, subagent and phase for Claude Code: a stdlib Python CLI, an HTML report and a local dashboard. Tasks: the GitHub issues.
 
 ## Rules
 
