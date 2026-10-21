@@ -463,25 +463,31 @@ class HeadlessLinkTest(Fixture):
     def test_a_parent_outside_the_reports_filter_keeps_its_id_but_not_its_title(self):
         from tokscope.report import _sessions_json
 
-        self.write(PARENT, [at(human("ship the secret release"), "2026-10-01T00:00:00Z"),
-                            bash("r1", "t1", "claude -p hi", "2026-10-01T00:00:01Z"),
-                            at(result("t1", "ok"), "2026-10-01T00:05:00Z")])
+        other = self.tmp / "projects" / "other"  # the parent lives in another project
+        other.mkdir()
+        (other / f"{PARENT}.jsonl").write_text("".join(json.dumps(r) + "\n" for r in [
+            at(human("ship the secret release"), "2026-10-01T00:00:00Z"),
+            bash("r1", "t1", "claude -p hi", "2026-10-01T00:00:01Z"),
+            at(result("t1", "ok"), "2026-10-01T00:05:00Z")]))
         self.write(CHILD, headless("2026-10-01T00:00:03Z"))
         self.run_ingest()
-        rows = {s["id"]: s for s in _sessions_json(sqlite3.connect(self.db), "WHERE s.session_id = ?", (CHILD,))}
+        self.assertEqual(self.parents()[CHILD], PARENT)
+        rows = {s["id"]: s for s in _sessions_json(sqlite3.connect(self.db), "WHERE s.project = ?", ("proj",))}
         self.assertEqual(set(rows), {CHILD})
         self.assertEqual((rows[CHILD]["parent"], rows[CHILD]["parent_title"]), (PARENT, f"session {PARENT[:8]}"))
         self.assertNotIn("secret", str(rows))
 
-    def test_a_second_ingest_with_nothing_new_does_not_link_or_write(self):
+    def test_links_are_repaired_on_the_next_run_and_are_not_rewritten_when_right(self):
         self.write(PARENT, [at(human("go"), "2026-10-01T00:00:00Z"),
                             bash("r1", "t1", "claude -p hi", "2026-10-01T00:00:01Z"),
                             at(result("t1", "ok"), "2026-10-01T00:05:00Z")])
         self.write(CHILD, headless("2026-10-01T00:00:03Z"))
         self.run_ingest()
-        with mock.patch("tokscope.ingest.link_sessions") as link:
-            self.assertEqual(self.run_ingest()[0], 0)
-        link.assert_not_called()
+        # a run that stored the sessions but stopped before linking: the next run, with nothing to parse, links them
+        with sqlite3.connect(self.db) as db:
+            db.execute("UPDATE sessions SET parent_session_id = NULL")
+        self.assertEqual(self.run_ingest()[0], 0)
+        self.assertEqual(self.parents(), {PARENT: None, CHILD: PARENT})
         from tokscope.ingest import connect, link_sessions
 
         conn = connect(self.db)

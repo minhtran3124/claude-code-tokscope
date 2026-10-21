@@ -512,9 +512,10 @@ def ingest(db_path, phases_path, projects_dir=PROJECTS_DIR, project_filter=None,
             store(conn, project_dir.name, parser, signature)
             conn.commit()
             parsed += 1
-    if parsed:  # links only change when a transcript did
-        link_sessions(conn)
-        conn.commit()
+    # every run, so a run that stopped after storing sessions but before linking is repaired by the next; when the
+    # links are already right it only reads
+    link_sessions(conn)
+    conn.commit()
     log(f"ingest: {parsed} sessions parsed, {skipped} unchanged")
     from .skills import scan  # a skill edited since the last ingest shows up as a new version
 
