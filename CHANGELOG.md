@@ -44,6 +44,9 @@ Sessions:
   (a link on the dashboard, text in the static report). Headless runs that no session started (for example a web app
   calling `claude -p`) stay top-level. `showing N of M` counts groups.
 - A parent's totals do not include its children's tokens; each child keeps its own row.
+- Upgrading from a build that was never tagged: the database gains the new session columns on the next ingest and is
+  parsed again once. After that an older tokscope can no longer ingest into it (`table sessions has 11 columns but 9
+  values were supplied`), so stop old `tokscope serve` processes first. The data is unharmed.
 - Limit: two sessions that run `claude -p` at the same time in the same folder can swap children when the output is
   not JSON (the latest call wins). `--output-format json` avoids it.
 
@@ -52,10 +55,10 @@ Dashboard (`tokscope serve`):
   (range, project, model, skill; an Apply button runs it) kept in the URL. New transcripts are ingested in the
   background (every 10 seconds; `--interval N` changes that), and each page checks for new data every 2 seconds.
   At a redacted or numbers level the check makes no copy of the database.
-- Two designs, Classic and Ink: the sidebar button (or key `s`) switches the dashboard and the HTML report between
-  them. The choice is kept per browser. Light/dark (`t`) works in both.
   /api/summary, /api/sessions, /api/projects, /api/library and /api/version return JSON. Requests with another Host
   name are refused; writes need the dashboard's origin, a page token and a JSON body.
+- Two designs, Classic and Ink: the sidebar button (or key `s`) switches the dashboard and the HTML report between
+  them. The choice is kept per browser. Light/dark (`t`) works in both.
 - Projects: each project from your sessions (worktrees and subfolders folded into their repository) with sessions,
   tokens, cost and its MCP servers: source, transport, shadowing, calls, result tokens and a "never used here" flag.
   Check health runs `claude mcp list`. Env and header values are never read out.
