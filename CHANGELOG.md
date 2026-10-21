@@ -8,6 +8,8 @@ The version lives in `tokscope/__init__.py`; `mod/.claude-plugin/plugin.json` mu
 Design:
 - Two designs, Classic and Ink: the sidebar button (or key `s`) switches the dashboard and the HTML report between
   them. The choice is kept per browser. Light/dark (`t`) works in both.
+- Pages check for new data every 2 seconds (was 5), so "New data · reload" and the live numbers show sooner.
+  New transcripts are still read every 10 seconds; `tokscope serve --interval N` changes that.
 
 Sessions:
 - A headless session (`claude -p`) that another session started from its Bash tool shows under that session,

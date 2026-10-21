@@ -1140,7 +1140,7 @@ function offerReload(){if(document.getElementById('newdata'))return;const b=docu
 async function poll(){if(document.hidden)return;
   try{const j=await (await fetch('/api/version')).json();seenAt=Date.now();
     if(j.stamp!==stamp){stamp=j.stamp;page==='overview'?await refresh():offerReload()}fresh(true)}catch(_){fresh(false)}}
-setInterval(poll,5000);setInterval(()=>fresh(!freshEl.classList.contains('stale')),30000);
+setInterval(poll,2000);setInterval(()=>fresh(!freshEl.classList.contains('stale')),30000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});
 """
 
