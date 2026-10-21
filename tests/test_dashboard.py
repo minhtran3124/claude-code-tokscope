@@ -159,6 +159,20 @@ class ScriptTest(unittest.TestCase):
             os.unlink(f.name)
             self.assertEqual(run.returncode, 0, f"{name}: {run.stderr[-400:]}")
 
+    def test_the_from_label_links_only_where_the_dashboard_serves_sessions(self):
+        js = dashboard.JS_SESSIONS
+        # an orphan child links to its parent's full id, all time; the id is URL-encoded and the name escaped
+        self.assertIn("DASH&&s.parent?`<a href=\"/sessions?range=all&amp;q=${encodeURIComponent(s.parent)}\"", js)
+        self.assertIn("${esc(by)}</a>`:esc(by)", js)
+        # the static report's body has no data-page, so it keeps plain text
+        self.assertIn("const DASH=!!document.body.dataset.page", js)
+
+    def test_a_parent_with_many_children_can_collapse_again(self):
+        js = dashboard.JS_SESSIONS
+        self.assertIn("'Show fewer'", js)
+        self.assertIn("setAttribute('aria-expanded'", js)
+        self.assertIn("openKids.delete(id)", js)
+
 
 if __name__ == "__main__":
     unittest.main()

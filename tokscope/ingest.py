@@ -400,7 +400,10 @@ def link_sessions(conn):
     command) or in the calling session's own folder (a scratchpad path holds its session id). A call whose result
     named a session that started while it ran (its JSON child) gets no window: another run in that folder at that
     time is not its child. An id it only lists (`ls`, an older session) does not count. The call must start before
-    the child; of several, the latest wins. A session that no call matches keeps no parent."""
+    the child; of several, the latest wins. A session that no call matches keeps no parent.
+
+    Limit: two sessions that run `claude -p` at the same time in the same folder can swap children when the output is
+    not JSON, because the latest call wins. `--output-format json` names the child's id and avoids it."""
     calls = conn.execute(
         "SELECT session_id, cwds, start_ts, end_ts, child_ids FROM headless_calls WHERE start_ts IS NOT NULL").fetchall()
     headless = conn.execute(
