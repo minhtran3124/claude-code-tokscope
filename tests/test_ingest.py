@@ -331,6 +331,27 @@ class HeadlessLinkTest(Fixture):
         self.run_ingest()
         self.assertEqual(self.parents(), {PARENT: None, CHILD: PARENT, "late": None, "other-cwd": None, "typed": None})
 
+    def test_a_call_that_printed_its_childs_id_adopts_no_other_run_by_window(self):
+        self.write(PARENT, [at(human("go"), "2026-10-01T00:00:00Z"),
+                            bash("r1", "t1", "claude -p 'hi' --output-format json", "2026-10-01T00:00:01Z"),
+                            at(result("t1", f'{{"session_id": "{CHILD}"}}'), "2026-10-01T00:05:00Z")])
+        self.write(CHILD, headless("2026-10-01T00:00:02Z"))
+        # a web app's run in the same folder while the call ran: the call already named its child
+        self.write("web", headless("2026-10-01T00:02:00Z", req="h2"))
+        self.run_ingest()
+        self.assertEqual(self.parents(), {PARENT: None, CHILD: PARENT, "web": None})
+
+    def test_a_path_inside_the_prompt_is_not_a_folder_the_call_runs_in(self):
+        self.write(PARENT, [at(human("go"), "2026-10-01T00:00:00Z"),
+                            bash("r1", "t1", "claude -p \"review /home/u/projX please\" <<'EOF'\nsee /home/u/projY\nEOF",
+                                 "2026-10-01T00:00:01Z"),
+                            at(result("t1", "done"), "2026-10-01T00:05:00Z")])
+        self.write("in-x", headless("2026-10-01T00:00:02Z", cwd="/home/u/projX", req="h2"))
+        self.write("in-y", headless("2026-10-01T00:00:03Z", cwd="/home/u/projY", req="h3"))
+        self.write(CHILD, headless("2026-10-01T00:00:04Z", req="h4"))  # the call's own cwd still links
+        self.run_ingest()
+        self.assertEqual(self.parents(), {PARENT: None, "in-x": None, "in-y": None, CHILD: PARENT})
+
     def test_a_background_call_ends_at_its_task_notification_and_nested_runs_link_each_level(self):
         done = notification("<task-notification>\n<task-id>b1</task-id>\n<tool-use-id>t1</tool-use-id>\n"
                             "<status>completed</status>\n</task-notification>")
