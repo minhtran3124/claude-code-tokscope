@@ -18,5 +18,5 @@ Merge the README screenshots PR, then fix the CI billing block (GitHub says the 
 - GitHub Actions jobs do not start: account payment or spending limit (see Settings > Billing).
 
 ## Recent
-- 2026-10-21: released 0.1.0, merged the worktree-folding fix (#1), setup.sh, repo About and topics, design update (borders, colours, weights, fonts); fixed the review findings (amber text, mono weights); README screenshots (redacted); docs/design-prompt.md: ink style adapted for tokscope; brand mark and favicon redrawn in ink (PR opened); PR #4 merged to v1; ink palette PR to v1
+- 2026-10-21: released 0.1.0, merged the worktree-folding fix (#1), setup.sh, repo About and topics, design update (borders, colours, weights, fonts); fixed the review findings (amber text, mono weights); README screenshots (redacted); docs/design-prompt.md: ink style adapted for tokscope; brand mark and favicon redrawn in ink (PR opened); #4 and #6 (ink palette) merged to v1; design-prompt fixes (#5) rebased onto them
 - 2026-10-19: created STATUS.md
