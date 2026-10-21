@@ -13,7 +13,7 @@ These come from `tokscope serve --privacy redacted` and `tokscope report --priva
 
 ![The dashboard Overview page](docs/screenshots/dashboard-overview.png)
 
-**Sessions** (`tokscope serve`): each session with its tokens, split between the main thread (blue) and subagents (amber). Open a row to see each prompt, or tick 2 to 4 rows to compare them.
+**Sessions** (`tokscope serve`): each session with its tokens, split between the main thread (blue) and subagents (yellow). Open a row to see each prompt, or tick 2 to 4 rows to compare them.
 
 ![The dashboard Sessions page](docs/screenshots/dashboard-sessions.png)
 

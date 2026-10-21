@@ -3,6 +3,28 @@
 Versions follow [semver](https://semver.org). Before 1.0 a minor bump may break things; each break is listed.
 The version lives in `tokscope/__init__.py`; `mod/.claude-plugin/plugin.json` must carry the same number.
 
+## Unreleased
+
+Temporary: a Classic/Ink switch (button or key `s`) compares the design of `main` with this one; it goes when `v1` merges into `main`.
+
+Sessions:
+- A headless session (`claude -p`) that another session started from its Bash tool shows under that session,
+  indented by depth. The link comes from the parent's side: the session id the call printed, or a child that started
+  while the call ran, in a folder the call names or in the parent's scratchpad. A background call runs until its task
+  notification. A command that only quotes `claude -p` (a commit message, a PR body) is not a run; a heredoc script
+  that the command then runs is. Sorting and the filter keep a child with its parent; a parent shows 3 children until
+  "+N more" is pressed. A child whose parent is outside the filter shows "from <parent>". Headless runs that no
+  session started (for example a web app calling `claude -p`) stay top-level. `showing N of M` now counts groups.
+- A parent's totals do not include its children's tokens; each child keeps its own row.
+- A database from an earlier version gains the new columns on the next ingest and is parsed again once.
+- Upgrading: after this version has opened the database, an older tokscope can no longer ingest into it (it fails with
+  `table sessions has 11 columns but 9 values were supplied`). Stop old `tokscope serve` processes before upgrading.
+  The data is unharmed; the new version parses it again on its next ingest.
+- Limit: two sessions that run `claude -p` at the same time in the same folder can swap children when the output is
+  not JSON (the latest call wins). `--output-format json` avoids it.
+- On the dashboard, "from <parent>" links to that session (all time). The static report shows it as text. "Show fewer"
+  folds an expanded parent back to its first 3 children.
+
 ## 0.1.0 - 2026-10-21
 
 First public release.

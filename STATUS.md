@@ -9,14 +9,14 @@ updated_by: claude   # claude | manual
 # claude-code-tokscope — Status
 
 ## Summary
-Version 0.1.0 and the design update (borders, colours, weights, Be Vietnam Pro + IBM Plex Mono) are on `main`. A PR adds redacted screenshots to the README.
+Ink redesign is complete on branch `v1`: brand mark (#4), palette (#6), design-prompt fixes (#5), shapes (#7) and type (#9) are merged, and the README screenshots show the new look. #11 (headless `claude -p` child sessions indented under their parent) is merged to `v1` too. `main` still has the old design.
 
 ## Next step
-Merge the README screenshots PR, then fix the CI billing block (GitHub says the account's payments failed) so the workflow can run.
+Owner review of `v1` (compare with the temporary Classic/Ink switch, key `s`), then merge `v1` into `main` and remove the switch (`tokscope/classic.py`, the `#skin` button and `skin-*` styles). Restart `tokscope serve` so it re-ingests with the #11 schema. CI is still blocked by GitHub billing.
 
 ## Blockers
 - GitHub Actions jobs do not start: account payment or spending limit (see Settings > Billing).
 
 ## Recent
-- 2026-10-21: released 0.1.0, merged the worktree-folding fix (#1), setup.sh, repo About and topics, design update (borders, colours, weights, fonts); fixed the review findings (amber text, mono weights); README screenshots (redacted)
+- 2026-10-21: released 0.1.0, merged the worktree-folding fix (#1), setup.sh, repo About and topics, design update (borders, colours, weights, fonts); fixed the review findings (amber text, mono weights); README screenshots (redacted); docs/design-prompt.md: ink style adapted for tokscope; brand mark and favicon redrawn in ink (PR opened); #4 and #6 (ink palette) merged to v1; design-prompt fixes (#5) rebased onto them; ink shapes PR to v1; ink type PR to v1; #7 shapes and #9 type merged to v1; README screenshots retaken in the ink style; filed #8 (headless child sessions) and merged it to v1 as #11 after fixing all review findings; #8 headless-link review: fix PR for exact-match calls adopting window runs and prompt paths as folders; #8 follow-ups PR (from-link, collapse, DECISIONS.md, upgrade note); #13 merged; temporary Classic/Ink switch PR
 - 2026-10-19: created STATUS.md

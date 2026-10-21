@@ -30,7 +30,8 @@ TITLE, PROJECT, CWD = "title", "project", "cwd"
 
 COLUMNS = {
     "sessions": {"session_id": KEEP, "project": PROJECT, "cwd": CWD, "title": TITLE, "version": KEEP,
-                 "first_ts": KEEP, "last_ts": KEEP, "prompts": KEEP, "signature": DROP},
+                 "first_ts": KEEP, "last_ts": KEEP, "prompts": KEEP, "signature": DROP, "entrypoint": KEEP,
+                 "parent_session_id": KEEP},
     "requests": {"session_id": KEEP, "request_key": KEEP, "ts": KEEP, "model": KEEP, "agent_id": KEEP, "agent_type": AGENT,
                  "prompt_idx": KEEP, "skill": SKILL, "phase": PHASE, "input": KEEP, "output": KEEP, "thinking": KEEP,
                  "cache_read": KEEP, "cache_write_5m": KEEP, "cache_write_1h": KEEP, "cost_usd": KEEP},
@@ -42,6 +43,8 @@ COLUMNS = {
                        "source": KEEP, "body_hash": KEEP},
     "skill_load_versions": {"session_id": KEEP, "tool_use_id": KEEP, "skill": SKILL, "version": KEEP, "ts": KEEP},
     "prompts": {"session_id": KEEP, "prompt_idx": KEEP, "ts": KEEP, "text": PROMPT},
+    "headless_calls": {"session_id": KEEP, "tool_use_id": KEEP, "cwds": DROP, "start_ts": KEEP, "end_ts": KEEP,
+                       "child_ids": KEEP},
     "tool_calls": {"session_id": KEEP, "tool_use_id": KEEP, "prompt_idx": KEEP, "agent_id": KEEP, "name": TOOL,
                    "result_chars": KEEP},
     "bench_runs": {"run_id": KEEP, "task": TASK, "variant": VARIANT, "run_idx": KEEP, "session_id": KEEP,

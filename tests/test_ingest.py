@@ -284,5 +284,181 @@ class SessionCommandTest(Fixture):
         self.assertTrue(all("received_at" in m for m in lines))
 
 
+
+PARENT, CHILD, GRANDCHILD = (f"{n}0000000-0000-4000-8000-000000000000" for n in "abc")
+
+
+def at(rec, ts, cwd="/repo", entrypoint="cli"):
+    return {**rec, "timestamp": ts, "cwd": cwd, "entrypoint": entrypoint}
+
+
+def bash(req, tid, command, ts, cwd="/repo", **inp):
+    return at(assistant(req, tools=[(tid, "Bash", {"command": command, **inp})]), ts, cwd)
+
+
+def headless(ts, cwd="/repo", req="h1"):
+    """The start of a `claude -p` session: its prompt comes from the SDK."""
+    return [at({**human("do the thing"), "turnOrigin": "sdk"}, ts, cwd, "sdk-cli"),
+            at(assistant(req), ts, cwd, "sdk-cli")]
+
+
+class HeadlessLinkTest(Fixture):
+    def write(self, sid, records):
+        (self.project / f"{sid}.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
+
+    def parents(self):
+        return dict(self.rows("SELECT session_id, parent_session_id FROM sessions"))
+
+    def test_child_links_by_the_session_id_its_parents_bash_result_printed(self):
+        self.write(PARENT, [at(human("go"), "2026-10-01T00:00:00Z"),
+                            bash("r1", "t1", "claude -p 'hi' --output-format json", "2026-10-01T00:00:01Z"),
+                            at(result("t1", f'{{"session_id": "{CHILD}"}}'), "2026-10-01T00:05:00Z")])
+        # another cwd, and it starts after the call returned: only the printed id links it
+        self.write(CHILD, headless("2026-10-01T00:06:00Z", cwd="/elsewhere"))
+        self.run_ingest()
+        self.assertEqual(self.parents(), {PARENT: None, CHILD: PARENT})
+        self.assertEqual(self.rows(f"SELECT entrypoint FROM sessions WHERE session_id = '{CHILD}'"), [("sdk-cli",)])
+
+    def test_child_links_by_starting_in_the_same_cwd_while_the_call_ran(self):
+        self.write(PARENT, [at(human("go"), "2026-10-01T00:00:00Z"),
+                            bash("r1", "t1", "cd /repo && timeout 90 claude --model haiku -p 'hi'", "2026-10-01T00:00:01Z"),
+                            at(result("t1", "done"), "2026-10-01T00:05:00Z")])
+        self.write(CHILD, headless("2026-10-01T00:00:03Z"))
+        # outside the window, in another cwd, or not headless: no parent
+        self.write("late", headless("2026-10-01T00:06:00Z", req="h2"))
+        self.write("other-cwd", headless("2026-10-01T00:00:04Z", cwd="/other", req="h3"))
+        self.write("typed", [at(human("hi"), "2026-10-01T00:00:05Z"), at(assistant("h4"), "2026-10-01T00:00:05Z")])
+        self.run_ingest()
+        self.assertEqual(self.parents(), {PARENT: None, CHILD: PARENT, "late": None, "other-cwd": None, "typed": None})
+
+    def test_a_call_that_printed_its_childs_id_adopts_no_other_run_by_window(self):
+        self.write(PARENT, [at(human("go"), "2026-10-01T00:00:00Z"),
+                            bash("r1", "t1", "claude -p 'hi' --output-format json", "2026-10-01T00:00:01Z"),
+                            at(result("t1", f'{{"session_id": "{CHILD}"}}'), "2026-10-01T00:05:00Z")])
+        self.write(CHILD, headless("2026-10-01T00:00:02Z"))
+        # a web app's run in the same folder while the call ran: the call already named its child
+        self.write("web", headless("2026-10-01T00:02:00Z", req="h2"))
+        self.run_ingest()
+        self.assertEqual(self.parents(), {PARENT: None, CHILD: PARENT, "web": None})
+
+    def test_a_path_inside_the_prompt_is_not_a_folder_the_call_runs_in(self):
+        self.write(PARENT, [at(human("go"), "2026-10-01T00:00:00Z"),
+                            bash("r1", "t1", "claude -p \"review /home/u/projX please\" <<'EOF'\nsee /home/u/projY\nEOF",
+                                 "2026-10-01T00:00:01Z"),
+                            at(result("t1", "done"), "2026-10-01T00:05:00Z")])
+        self.write("in-x", headless("2026-10-01T00:00:02Z", cwd="/home/u/projX", req="h2"))
+        self.write("in-y", headless("2026-10-01T00:00:03Z", cwd="/home/u/projY", req="h3"))
+        self.write(CHILD, headless("2026-10-01T00:00:04Z", req="h4"))  # the call's own cwd still links
+        self.run_ingest()
+        self.assertEqual(self.parents(), {PARENT: None, "in-x": None, "in-y": None, CHILD: PARENT})
+
+    def test_a_heredoc_script_keeps_its_folder_and_a_listed_id_keeps_the_window(self):
+        script = "cat > /tmp/run.sh <<'EOF'\ncd /work/proj && claude -p hi\nEOF\nbash /tmp/run.sh"
+        self.write(PARENT, [at(human("go"), "2026-10-01T00:00:00Z"),
+                            bash("r1", "t1", script, "2026-10-01T00:00:01Z"),
+                            at(result("t1", "done"), "2026-10-01T00:05:00Z"),
+                            # this call only lists an older session's id: it keeps its window
+                            bash("r2", "t2", "ls ~/.claude/projects/x; claude -p again", "2026-10-01T00:10:00Z"),
+                            at(result("t2", f"{CHILD}.jsonl"), "2026-10-01T00:15:00Z")])
+        self.write(CHILD, headless("2026-10-01T00:00:03Z", cwd="/work/proj"))
+        self.write(GRANDCHILD, headless("2026-10-01T00:11:00Z", req="h2"))
+        self.run_ingest()
+        self.assertEqual(self.parents(), {PARENT: None, CHILD: PARENT, GRANDCHILD: PARENT})
+
+    def test_command_dirs_reads_shell_words_not_prompt_text(self):
+        from tokscope.ingest import command_dirs
+        cases = {
+            'cd "/x" && claude -p hi': {"/x"},
+            "cd '/a b/c' && claude -p hi": {"/a b/c"},
+            'X="/p q"; cd "$X" && claude -p hi': {"/p q"},
+            "cd $'/x' && claude -p hi": {"/x"},
+            "cd `echo /x` && claude -p hi": {"/x"},
+            'claude -p "review /home/u/projX please"': set(),
+            "claude -p hi <<'EOF'\nsee /home/u/projY\nEOF": set(),
+            "cat > r.sh <<'EOF'\ncd /x/proj && claude -p hi\nEOF\nbash r.sh": {"/x/proj"},
+            "cat > r.sh <<'EOF'\ncd /x/proj && claude -p hi\nEOF\nclaude -p yo": set(),
+        }
+        for command, dirs in cases.items():
+            with self.subTest(command=command):
+                self.assertEqual(set(command_dirs(command, "/c").split("\n")) - {"/c"}, dirs)
+
+    def test_a_background_call_ends_at_its_task_notification_and_nested_runs_link_each_level(self):
+        done = notification("<task-notification>\n<task-id>b1</task-id>\n<tool-use-id>t1</tool-use-id>\n"
+                            "<status>completed</status>\n</task-notification>")
+        self.write(PARENT, [at(human("go"), "2026-10-01T00:00:00Z"),
+                            bash("r1", "t1", "claude -p 'hi'", "2026-10-01T00:00:01Z", run_in_background=True),
+                            at(result("t1", "Command running in background with ID: b1"), "2026-10-01T00:00:02Z"),
+                            at(done, "2026-10-01T00:20:00Z"),
+                            at(human("later"), "2026-10-01T08:00:00Z")])
+        self.write(CHILD, [*headless("2026-10-01T00:10:00Z"),
+                           bash("r9", "t9", "claude -p 'deeper'", "2026-10-01T00:10:05Z"),
+                           at(result("t9", "ok"), "2026-10-01T00:12:00Z")])
+        self.write(GRANDCHILD, headless("2026-10-01T00:10:06Z", req="h2"))
+        # after the notification, while the parent session is still open: not its child
+        self.write("after-done", headless("2026-10-01T03:00:00Z", req="h3"))
+        self.run_ingest()
+        # the grandchild started inside both calls: the latest one is its parent
+        self.assertEqual(self.parents(), {PARENT: None, CHILD: PARENT, GRANDCHILD: CHILD, "after-done": None})
+
+    def test_a_background_call_with_no_notification_links_no_window_child(self):
+        self.write(PARENT, [at(human("go"), "2026-10-01T00:00:00Z"),
+                            bash("r1", "t1", "claude -p 'hi'", "2026-10-01T00:00:01Z", run_in_background=True),
+                            at(result("t1", "Command running in background with ID: b1"), "2026-10-01T00:00:02Z"),
+                            at(human("later"), "2026-10-01T08:00:00Z")])
+        self.write(CHILD, headless("2026-10-01T02:00:00Z"))
+        self.run_ingest()
+        self.assertEqual(self.parents(), {PARENT: None, CHILD: None})
+
+    def test_child_links_in_a_folder_the_command_names_or_the_parents_scratchpad(self):
+        pad = f"/tmp/claude-1000/-repo/{PARENT}/scratchpad/probe"
+        self.write(PARENT, [at(human("go"), "2026-10-01T00:00:00Z"),
+                            bash("r1", "t1", "SP=/work/e2e; cd \"$SP/repo\" && claude -p hi", "2026-10-01T00:00:01Z"),
+                            at(result("t1", "ok"), "2026-10-01T00:05:00Z"),
+                            bash("r2", "t2", "cd $(mktemp -d) && claude -p hi", "2026-10-01T00:10:00Z"),
+                            at(result("t2", "ok"), "2026-10-01T00:15:00Z")])
+        self.write(CHILD, headless("2026-10-01T00:00:03Z", cwd="/work/e2e/repo"))
+        self.write(GRANDCHILD, headless("2026-10-01T00:10:03Z", cwd=pad, req="h2"))
+        self.write("stranger", headless("2026-10-01T00:10:04Z", cwd="/tmp/x", req="h3"))
+        self.run_ingest()
+        self.assertEqual(self.parents(), {PARENT: None, CHILD: PARENT, GRANDCHILD: PARENT, "stranger": None})
+
+    def test_commands_that_only_mention_claude_are_not_headless_runs(self):
+        from tokscope.ingest import HEADLESS_RE
+
+        for cmd in ("claude -p hi", "npx claude --print 'x'", "/usr/bin/claude -p x", "(claude -p x)", "a; claude --model m -p x"):
+            self.assertTrue(HEADLESS_RE.search(cmd), cmd)
+        for cmd in ("ls ~/.claude -p", "cd claude-code-tokscope && ls -p", "claude --resume x", "grep claude -r . | head -p"):
+            self.assertFalse(HEADLESS_RE.search(cmd), cmd)
+        # quoted words and heredoc bodies are text the command passes along, not a run
+        from tokscope.ingest import is_headless
+        self.assertTrue(is_headless("cd /x && claude -p \"do it\" --output-format json"))
+        # a script written by a heredoc and run in the same command
+        self.assertTrue(is_headless("cat > $S/run.sh <<'EOF'\ncd /x && claude -p hi\nEOF\nbash $S/run.sh $S"))
+        self.assertFalse(is_headless("cat > $S/run.sh <<'EOF'\nclaude -p hi\nEOF\necho saved"))
+        for cmd in ('git commit -m "Run claude -p in CI"', "gh pr create --body 'A (`claude -p`) run'",
+                    "git commit -F - <<'EOF'\nshow claude -p runs\nEOF\ngit push"):
+            self.assertFalse(is_headless(cmd), cmd)
+
+    def test_session_list_names_the_parent_and_an_old_database_gains_the_columns(self):
+        from tokscope.ingest import connect
+        from tokscope.report import _sessions_json
+
+        old = sqlite3.connect(self.db)
+        old.execute("CREATE TABLE sessions (session_id TEXT PRIMARY KEY, project TEXT, cwd TEXT, title TEXT, version TEXT,"
+                    " first_ts TEXT, last_ts TEXT, prompts INTEGER, signature TEXT)")
+        old.commit()
+        old.close()
+        connect(self.db).close()
+        self.assertIn("parent_session_id", {c[1] for c in self.rows("PRAGMA table_info(sessions)")})
+        self.write(PARENT, [at(human("ship the release"), "2026-10-01T00:00:00Z"),
+                            bash("r1", "t1", "claude -p hi", "2026-10-01T00:00:01Z"),
+                            at(result("t1", "ok"), "2026-10-01T00:05:00Z")])
+        self.write(CHILD, headless("2026-10-01T00:00:03Z"))
+        self.run_ingest()
+        rows = {s["id"]: s for s in _sessions_json(sqlite3.connect(self.db), "WHERE 1", ())}
+        self.assertEqual((rows[CHILD]["parent"], rows[CHILD]["parent_title"]), (PARENT, "“ship the release”"))
+        self.assertNotIn("parent", rows[PARENT])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -82,6 +82,13 @@ class ServerTest(unittest.TestCase):
             self.assertIn(f"<title>tokscope · {title}</title>", body)
             self.assertIn(f'href="/{name}" class=on aria-current=page', body)
 
+    def test_pages_carry_both_skins_and_the_switch_button(self):
+        # TEMPORARY Classic/Ink switch: remove with tokscope/classic.py
+        _, page = self.get("/overview")
+        self.assertIn('<style id="skin-ink">', page)
+        self.assertIn('<style id="skin-classic" media="not all">', page)
+        self.assertIn('id="skin"', page)
+
     def test_fonts_are_served_from_the_package_and_nothing_else_is(self):
         _, page = self.get("/overview")
         self.assertIn("url(/fonts/BeVietnamPro-400-latin.woff2)", page)
@@ -158,6 +165,36 @@ class ScriptTest(unittest.TestCase):
             run = subprocess.run([node, "--check", f.name], capture_output=True, text=True)
             os.unlink(f.name)
             self.assertEqual(run.returncode, 0, f"{name}: {run.stderr[-400:]}")
+
+    def test_the_from_label_links_only_where_the_dashboard_serves_sessions(self):
+        js = dashboard.JS_SESSIONS
+        # an orphan child links to its parent's full id, all time; the id is URL-encoded and the name escaped
+        self.assertIn("DASH&&s.parent?`<a href=\"/sessions?range=all&amp;q=${encodeURIComponent(s.parent)}\"", js)
+        self.assertIn("${esc(by)}</a>`:esc(by)", js)
+        # the static report's body has no data-page, so it keeps plain text
+        self.assertIn("const DASH=!!document.body.dataset.page", js)
+
+    def test_a_parent_with_many_children_can_collapse_again(self):
+        js = dashboard.JS_SESSIONS
+        self.assertIn("'Show fewer'", js)
+        self.assertIn("setAttribute('aria-expanded'", js)
+        self.assertIn("openKids.delete(id)", js)
+
+
+class SkinSwitchReportTest(unittest.TestCase):
+    """TEMPORARY Classic/Ink switch: remove with tokscope/classic.py."""
+
+    def test_a_report_carries_both_skins_and_the_switch_button(self):
+        with tempfile.TemporaryDirectory() as d:
+            db = Path(d) / "t.db"
+            connect(db).close()
+            out = Path(d) / "r.html"
+            from tokscope.report import write_report
+            write_report(db, out, tasks_dir=Path(d))
+            page = out.read_text()
+        self.assertIn('<style id="skin-ink">', page)
+        self.assertIn('<style id="skin-classic" media="not all">', page)
+        self.assertIn('id="skin"', page)
 
 
 if __name__ == "__main__":
