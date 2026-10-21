@@ -1,7 +1,7 @@
 """Your projects, as Claude Code saw them, and the MCP servers each one has: configured where, and used how much.
 
 A project is the folder a session ran in, with its worktrees, eval copies and subfolders folded into the repository
-they belong to. Temporary folders (/tmp, scratchpads) form one group. The servers come from the files Claude Code
+they belong to (a deleted one too, by its name). Temporary folders (/tmp, scratchpads) form one group. The servers come from the files Claude Code
 reads: ~/.claude.json (user scope, and local scope per project), the project's .mcp.json, the MCP servers of the
 plugins enabled for the project, and the claude.ai connectors the transcripts used. Usage comes from the transcripts.
 Nothing here writes a file. Values of env and headers are never read out, only their names.
@@ -12,8 +12,10 @@ Adding and removing a server go through `claude mcp add-json` and `claude mcp re
 an explicit scope, so Claude Code writes its own files (~/.claude.json is shared with every running session). A log
 in the data folder records each change without its values."""
 
+import fnmatch
 import hashlib
 import json
+import os
 import re
 import subprocess
 import tempfile
@@ -53,18 +55,31 @@ def _temp(path):
     return s == t or s.startswith(t + "/") or "/scratchpad" in s
 
 
+def _hidden_parent(p, known):
+    """The folder above the first hidden part of p (.worktrees, .codex-lens-eval-wt-x, .claude/skills/x/eval), when that
+    folder is a repository or a known project, or is gone. Hidden folders of the home folder itself stay as they are."""
+    home = Path.home()
+    for i, part in enumerate(p.parts[1:], 1):
+        if part.startswith("."):
+            above = Path(*p.parts[:i])
+            if above == home or above in home.parents:
+                return p
+            return above if (above / ".git").exists() or str(above) in known or not above.exists() else p
+    return p
+
+
 def root_of(cwd, known=()):
     """The project a folder belongs to: the git repository around it (a worktree's main one), else a folder
-    ~/.claude.json knows, else the folder itself. None for a temporary folder."""
+    ~/.claude.json knows, else the folder itself. None for a temporary folder. A worktree or eval copy that is
+    deleted still folds into its repository by name: <repo>-worktrees/<x>, <repo>/.<hidden>/..."""
     p = Path(cwd)
     if _temp(p):
         return None
-    if "/.worktrees/" in str(p):
-        p = Path(str(p).split("/.worktrees/")[0])
+    p = _hidden_parent(p, known)
     home = Path.home()
     chain = [a for a in [p, *p.parents] if a != home and a != a.parent]
     for a in chain:  # <repo>-worktrees/<name> sits beside its repository
-        if a.name.endswith("-worktrees") and (a.parent / a.name.removesuffix("-worktrees")).is_dir():
+        if a.name.endswith("-worktrees") and a.name != "-worktrees":
             return a.parent / a.name.removesuffix("-worktrees")
     for a in chain:
         git = a / ".git"
@@ -157,9 +172,17 @@ def configured(root, members=()):
     return entries
 
 
+def _ignored(root, patterns):
+    """True when root matches a pattern of "ignore" in projects.json: a path (with ~) or a folder name, * allowed."""
+    return root is not None and any(fnmatch.fnmatch(str(root), os.path.expanduser(p)) or fnmatch.fnmatch(root.name, p)
+                                    for p in patterns)
+
+
 def discover(conn, bench_project="%tokscope%-bench-%"):
-    """[project] with its folders, sessions, tokens, cost and MCP usage; the temporary folders last, as one group."""
+    """[project] with its folders, sessions, tokens, cost and MCP usage; the temporary folders last, as one group.
+    projects.json in the data home may list "ignore" patterns for folders that are not projects."""
     known = set(_json(Path.home() / ".claude.json").get("projects", {}))
+    ignore = [str(x) for x in _json(paths.home() / "projects.json").get("ignore", [])]
     since = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - 30 * 86400))
     groups = {}
     for cwd, keys, sessions, tokens, recent, usd, first, last in conn.execute(
@@ -168,6 +191,8 @@ def discover(conn, bench_project="%tokscope%-bench-%"):
             f"FROM sessions s JOIN requests r USING (session_id) WHERE s.project NOT LIKE ? AND s.cwd IS NOT NULL "
             f"GROUP BY s.cwd", (since, bench_project)):
         root = root_of(cwd, known)
+        if _ignored(root, ignore):
+            continue
         g = groups.setdefault(str(root) if root else "", {
             "id": pid(root) if root else "temp", "root": root, "name": root.name if root else "Temporary folders",
             "path": _tilde(root) if root else _tempdir(), "folders": [], "keys": set(), "sessions": 0, "tokens": 0,

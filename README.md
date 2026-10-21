@@ -221,7 +221,15 @@ If the port is in use, tokscope tells you which port to try.
 ### See your projects and their MCP servers
 
 The Projects page shows each project where you used Claude Code. For each project, it shows the sessions, the tokens in the last 30 days and in all time, and the API-equivalent cost.
-tokscope adds worktrees, eval copies and subfolders to the repository that they belong to. Temporary folders (`/tmp` and scratchpads) are in one group. The page does not show benchmark runs.
+tokscope adds worktrees, eval copies and subfolders to the repository that they belong to. This works also when the worktree folder is deleted: tokscope uses the name (`<repo>-worktrees/<name>`, or a hidden folder such as `<repo>/.worktrees/<name>` or `<repo>/.claude/skills/<skill>/eval`). Temporary folders (`/tmp` and scratchpads) are in one group. The page does not show benchmark runs.
+
+If a folder that is not a project still shows in the list, write a `projects.json` file in the data folder. `ignore` is a list of patterns. A pattern is a folder name or a path (`~` is your home folder), and `*` matches any text:
+
+```json
+{"ignore": ["brichan-s55-*", "~/scratch/*"]}
+```
+
+tokscope does not count the sessions of an ignored folder in any project.
 
 Select a project to see its MCP servers. For each server, the table shows these items:
 

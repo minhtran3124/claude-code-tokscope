@@ -85,6 +85,18 @@ class ProjectsTest(unittest.TestCase):
         self.assertEqual(len(app["folders"]), 4)
         self.assertAlmostEqual(app["usd"], 2.0)
 
+    def test_a_deleted_worktree_or_eval_copy_folds_into_its_repository_by_name(self):
+        for cwd in (self.home / "work" / "app-worktrees" / "gone", self.app / ".claude" / "skills" / "x" / "eval",
+                    self.home / "old" / "repo-worktrees" / "t1", self.home / "old" / "repo-worktrees" / "t2"):
+            self.assertEqual(projects.root_of(cwd), self.app if "app" in str(cwd) else self.home / "old" / "repo")
+        # a hidden folder of the home folder is not cut off
+        self.assertEqual(projects.root_of(self.home / ".local" / "state" / "bot"), self.home / ".local" / "state" / "bot")
+
+    def test_projects_json_ignores_folders_that_are_not_projects(self):
+        (self.tmp / "data").mkdir(exist_ok=True)
+        (self.tmp / "data" / "projects.json").write_text(json.dumps({"ignore": ["no*", "~/nothing/*"]}))
+        self.assertEqual([g["name"] for g in projects.discover(self.conn)], ["app", "Temporary folders"])
+
     def test_servers_show_their_source_use_and_shadowing_and_never_a_secret(self):
         rows = {(e["name"], e["source"]): e for e in projects.servers(self.app_group())}
         self.assertEqual(rows[("api", "local")]["calls"], 2)          # local wins over the project's api
