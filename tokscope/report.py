@@ -106,7 +106,7 @@ box-shadow:0 8px 26px -14px color-mix(in oklch,var(--mark) 60%,transparent)}
 .layout>main{min-width:0}
 .layout{display:grid;grid-template-columns:224px minmax(0,1fr);max-width:1460px;margin:0 auto}
 .side{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:28px 12px 20px 16px;border-right:1px solid var(--edge);background:var(--page);z-index:10}
-.brand{font-weight:600;font-size:13px;color:var(--mark-ink);margin:0 0 14px 10px;display:flex;align-items:center;gap:7px;--tok-accent:var(--agent)}
+.brand{font-weight:600;font-size:13px;color:var(--ink);margin:0 0 14px 10px;display:flex;align-items:center;gap:7px}
 .brand .logo{width:24px;height:15px;flex:none;position:relative;top:-1px}
 .toc{display:flex;flex-direction:column;gap:2px}
 .toc a{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;color:var(--ink2);text-decoration:none;
