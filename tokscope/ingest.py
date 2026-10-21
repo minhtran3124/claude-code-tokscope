@@ -70,7 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_requests_ts ON requests (ts);
 """
 TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "headless_calls", "sessions")
 # bump when the parser records something new, so unchanged transcripts are parsed again once
-PARSER_VERSION = 10
+PARSER_VERSION = 11
 ARGS_RE = re.compile(r"<command-args>(.*?)</command-args>", re.S)
 PROMPT_CHARS = 160
 # a Bash command that starts a headless Claude Code session
@@ -102,12 +102,30 @@ ASSIGN_RE = re.compile(r"""(?:^|[\s;&|(])(\w+)=["']?([^\s"';&|)]+)""")
 PATH_RE = re.compile(r"""(?:^|[\s=;&|("'])((?:~|/)[^\s"';&|)]*)""")
 
 
+def _shell_word(m):
+    """A quoted string as `command_dirs` reads it: a backtick command keeps its words, a path keeps its text (spaces
+    held as NUL so it stays one word), other text with spaces is prompt text and goes, a bare word loses its quotes."""
+    body = m.group(0)[1:-1]
+    if m.group(0)[0] == "`":
+        return " " + body + " "
+    if re.match(r"[/~$]", body):
+        return body.replace(" ", "\0")
+    return "''" if re.search(r"\s", body) else body
+
+
 def command_dirs(command, cwd):
-    """The folders a Bash command may start `claude -p` in: its own cwd and every absolute path it names
-    (`cd /x && claude -p`), with simple `X=/path` variables filled in."""
+    """The folders a Bash command may start `claude -p` in: its own cwd and every absolute path it names as a shell
+    word (`cd /x && claude -p`, `cd "/a b"`, `cd $'/x'`, `` cd `pwd` ``), with simple `X=/path` variables filled in. A
+    path inside prompt text (a quoted string that does not start with a path, a heredoc body) is not a folder the
+    command runs in; a heredoc script written to a file, run later, that runs `claude -p` is, as in `is_headless`."""
+    rest = HEREDOC_RE.sub("", command)
+    command = HEREDOC_RE.sub(lambda m: "\n" + m.group(4) if m.group(1) and m.group(1) in rest
+                             and is_headless(m.group(4)) else "", command)
+    command = QUOTED_RE.sub(_shell_word, command)
+    command = re.sub(r"\$(?=[/~])", "", command)  # what is left of $'/x'
     for name, value in ASSIGN_RE.findall(command):
         command = command.replace("${" + name + "}", value).replace("$" + name, value)
-    dirs = {os.path.expanduser(p).rstrip("/") or "/" for p in PATH_RE.findall(command)}
+    dirs = {os.path.expanduser(p.replace("\0", " ")).rstrip("/") or "/" for p in PATH_RE.findall(command)}
     return "\n".join(sorted(dirs | ({cwd} if cwd else set())))
 
 
@@ -379,16 +397,23 @@ def link_sessions(conn):
     The child's transcript does not name its parent, so the link comes from the parent's side. First choice: the
     call's result names the child's session id (`--output-format json` prints it). Else: the child started while the
     call ran (a background call until its task notification; with none, it has no window), in a folder the call names (its cwd or a path in the
-    command) or in the calling session's own folder (a scratchpad path holds its session id). The call must start
-    before the child; of several, the latest wins. A session that no call matches keeps no parent."""
+    command) or in the calling session's own folder (a scratchpad path holds its session id). A call whose result
+    named a session that started while it ran (its JSON child) gets no window: another run in that folder at that
+    time is not its child. An id it only lists (`ls`, an older session) does not count. The call must start before
+    the child; of several, the latest wins. A session that no call matches keeps no parent."""
     calls = conn.execute(
         "SELECT session_id, cwds, start_ts, end_ts, child_ids FROM headless_calls WHERE start_ts IS NOT NULL").fetchall()
+    headless = conn.execute(
+        "SELECT session_id, cwd, first_ts FROM sessions WHERE entrypoint LIKE 'sdk%' AND first_ts IS NOT NULL").fetchall()
+    started = {h[0]: h[2] for h in headless}
+
+    def named_a_child(c):
+        return any(c[2] <= started[i] <= (c[3] or started[i]) for i in (c[4] or "").split() if i in started)
     links = []
-    for sid, cwd, first_ts in conn.execute(
-            "SELECT session_id, cwd, first_ts FROM sessions WHERE entrypoint LIKE 'sdk%' AND first_ts IS NOT NULL"):
+    for sid, cwd, first_ts in headless:
         before = [c for c in calls if c[0] != sid and c[2] <= first_ts]
         found = ([c for c in before if sid in (c[4] or "").split()]
-                 or [c for c in before if c[3] and first_ts <= c[3]
+                 or [c for c in before if c[3] and first_ts <= c[3] and not named_a_child(c)
                      and (cwd in (c[1] or "").split("\n") or c[0] in (cwd or ""))])
         if found:
             links.append((max(found, key=lambda c: c[2])[0], sid))
