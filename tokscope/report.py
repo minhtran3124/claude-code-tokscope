@@ -380,7 +380,7 @@ function group(root,match){const out=[],seen=new Set();
   walk(root,0,false);return out}
 function moreBtn(e){let el=nodes.get('more:'+e.more.id);
   if(!el){el=document.createElement('button');el.type='button';el.className='btn kids-more';el.dataset.id='more:'+e.more.id;
-    el.addEventListener('click',()=>{const id=e.more.id;openKids.has(id)?openKids.delete(id):openKids.add(id);render()});nodes.set('more:'+e.more.id,el)}
+    el.addEventListener('click',()=>{const id=e.more.id;openKids.has(id)?openKids.delete(id):openKids.add(id);render();el.focus({preventScroll:true})});nodes.set('more:'+e.more.id,el)}
   el.textContent=e.open?'Show fewer':`+${e.n} more started by this session`;el.setAttribute('aria-expanded',e.open?'true':'false');el.style.setProperty('--depth',e.d);return el}
 function render(){
   const needle=q.value.toLowerCase();
