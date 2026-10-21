@@ -193,6 +193,12 @@ class SkinSwitchReportTest(unittest.TestCase):
         self.assertIn('<style id="skin-classic" media="not all">', page)
         self.assertIn('id="skin"', page)
 
+    def test_classic_nests_child_sessions_like_ink(self):
+        from tokscope.classic import CLASSIC_CSS
+        for rule in (".srow.child{", ".srow.child::before{", ".btn.kids-more{", ".srow.orphan>summary .t{",
+                     ".srow>summary .from{", ".srow.dim:not(:hover)"):
+            self.assertIn(rule, CLASSIC_CSS)
+
 
 if __name__ == "__main__":
     unittest.main()

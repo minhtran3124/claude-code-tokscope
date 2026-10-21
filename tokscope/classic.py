@@ -2,8 +2,11 @@
 
 Pages carry both stylesheets: <style id="skin-ink"> and <style id="skin-classic" media="not all">. The Classic/Ink button
 (key `s`) flips their media attributes; SKIN_APPLY restores the saved choice (localStorage `tokscope-skin`) before paint.
-Every part of the switch is named "skin" (`grep -rn -i skin tokscope tests`). The skin block in report.py's JS_CORE needs
-the #skin button: without it the page script throws."""
+The code of the switch is named "skin" (`grep -rn -i skin tokscope tests`); the `s` rows of both shortcut dialogs say
+"Classic or Ink design" instead. The skin block in report.py's JS_CORE reads #skin, #skin-ink and #skin-classic
+unguarded: a page without any of them stops the page script.
+
+New markup gets its Ink rules first; copy them here when Classic shows it wrong (the session nesting rules below)."""
 from . import fonts
 
 CLASSIC_CSS = """
@@ -131,6 +134,15 @@ transition:transform .15s var(--ease),box-shadow .15s var(--ease),opacity .15s v
 .primary:focus-visible{outline:2px solid var(--mark);outline-offset:2px}.primary:disabled{opacity:.45;cursor:not-allowed}
 .srow>summary::-webkit-details-marker{display:none}
 .srow>summary .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.srow>summary .r{text-align:right;font-variant-numeric:tabular-nums}
+.srow.child{margin-left:calc(var(--depth)*24px);position:relative;overflow:visible}
+.srow.child::before{content:'';position:absolute;left:-15px;top:-10px;height:calc(10px + 1.3em);width:10px;
+border-left:1px solid var(--grid);border-bottom:1px solid var(--grid);border-bottom-left-radius:6px}
+.srow.child>summary .t::before,.srow.orphan>summary .tt::before{content:'↳ ';color:var(--muted)}
+.srow.child.ghost{position:absolute}
+.srow.dim:not(:hover):not([open]){opacity:.6}
+.btn.kids-more{margin:0 0 8px calc(var(--depth)*24px);padding:7px 14px}
+.srow.orphan>summary .t{display:flex;gap:8px;align-items:baseline}.srow>summary .tt{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.srow>summary .from{flex:none;max-width:45%;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:12px}
 .srow>summary .n{white-space:nowrap;color:var(--ink2);font-size:13px}
 .srow>summary .sk{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .split{display:flex;gap:2px;height:8px;border-radius:4px;overflow:hidden;background:var(--track)}
@@ -153,7 +165,9 @@ background:var(--surface);border:1px solid var(--edge);border-radius:10px}
 @keyframes pop{from{opacity:.4;transform:translateY(-6px)}}
 .btn{all:unset;cursor:pointer;font-size:12px;color:var(--mark-ink);padding:2px 6px;border-radius:6px;transition:background .15s var(--ease)}
 .btn:hover{background:color-mix(in oklch,var(--mark) 14%,transparent)}
-@media (max-width:640px){.srow>summary{grid-template-columns:22px 1fr 80px 14px}.srow>summary .d,.srow>summary .sk,.srow>summary .n,.srow>summary .split{display:none}}
+@media (max-width:640px){.srow>summary{grid-template-columns:22px 1fr 80px 14px}.srow>summary .d,.srow>summary .sk,.srow>summary .n,.srow>summary .split{display:none}
+.srow.child{margin-left:calc(var(--depth)*14px)}.srow.child::before{left:-10px;width:6px}.btn.kids-more{margin-left:calc(var(--depth)*14px)}
+.srow.orphan>summary .t{flex-direction:column;align-items:stretch;gap:0}.srow>summary .from{max-width:100%}}
 /* motion layer: entrance, spotlight, aurora, scroll reveal; all of it off under reduced motion */
 html{scroll-behavior:smooth}body{transition:background-color .35s var(--ease),color .35s var(--ease)}
 #progress{position:fixed;inset:0 0 auto 0;height:3px;z-index:40;transform-origin:0 50%;transform:scaleX(0);
