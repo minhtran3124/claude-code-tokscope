@@ -82,6 +82,16 @@ class ServerTest(unittest.TestCase):
             self.assertIn(f"<title>tokscope · {title}</title>", body)
             self.assertIn(f'href="/{name}" class=on aria-current=page', body)
 
+    def test_fonts_are_served_from_the_package_and_nothing_else_is(self):
+        _, page = self.get("/overview")
+        self.assertIn("url(/fonts/BeVietnamPro-400-latin.woff2)", page)
+        self.assertNotIn("fonts.googleapis", page)
+        with urllib.request.urlopen(f"http://127.0.0.1:{self.port}/fonts/BeVietnamPro-400-latin.woff2") as r:
+            self.assertEqual((r.status, r.headers["Content-Type"]), (200, "font/woff2"))
+            self.assertEqual(r.read()[:4], b"wOF2")
+        for bad in ("/fonts/../cli.py", "/fonts/x.woff2", "/fonts/..%2Fcli.py"):
+            self.assertEqual(self.get(bad)[0], 404, bad)
+
     def test_overview_compares_the_range_with_the_one_before(self):
         _, body = self.get("/overview")
         self.assertIn('data-key="tokens">2.0K', body)           # only the request 2 days ago is in the last 30
