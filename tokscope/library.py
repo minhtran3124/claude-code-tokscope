@@ -48,12 +48,14 @@ def _skipped(path):
     return "/.worktrees/" in s or s.startswith(str(paths.home() / "bench") + "/")
 
 
-def roots(conn):
-    """[(scope, skills folder)]: yours first, then each project's (the cwd of a session or a folder above it)."""
+def roots(conn, project=None):
+    """[(scope, skills folder)]: yours first, then each project's (the cwd of a session or a folder above it).
+    `project` (a sessions.project value) keeps only the folders its sessions ran in; yours stay."""
     home = Path.home()
     found = [("personal", home / ".claude" / "skills")]
     try:
-        cwds = [c for (c,) in conn.execute("SELECT DISTINCT cwd FROM sessions WHERE cwd IS NOT NULL AND cwd != ''")]
+        cwds = [c for (c,) in conn.execute("SELECT DISTINCT cwd FROM sessions WHERE cwd IS NOT NULL AND cwd != ''"
+                                           + " AND project = ?" * bool(project), (project,) if project else ())]
     except sqlite3.OperationalError:
         cwds = []
     seen = {found[0][1]}
@@ -97,12 +99,12 @@ def files(folder):
     return sorted(out, key=lambda f: (f[0] != "SKILL.md", f[0].count("/"), f[0]))
 
 
-def discover(conn):
+def discover(conn, project=None):
     """Every skill in the roots, as dicts: id, name, scope, folder, origin, reason, description, label."""
     override = _json(paths.home() / "library.json")
     lock_agents = _json(Path.home() / ".agents" / ".skill-lock.json").get("skills", {})
     out = []
-    for scope, root in roots(conn):
+    for scope, root in roots(conn, project):
         lock = _json(root.parent.parent / "skills-lock.json").get("skills", {}) if scope != "personal" else {}
         for folder in sorted(root.iterdir()) if root.is_dir() else []:
             skill_md = folder / "SKILL.md"

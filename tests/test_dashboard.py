@@ -117,14 +117,22 @@ class ServerTest(unittest.TestCase):
         _, body = self.get("/api/summary?range=7&skill=other")
         self.assertEqual(json.loads(body)["tokens"], 0)
 
-    def test_the_skills_page_follows_the_filters_and_has_an_apply_button(self):
-        _, body = self.get("/skills?range=all")
+    def test_old_skills_links_land_on_the_library(self):
+        class NoFollow(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *_):
+                return None
+        opener = urllib.request.build_opener(NoFollow)
+        for path, to in (("/skills", "/library"), ("/skills?project=-home-u-app&skill=xia2", "/library?project=-home-u-app")):
+            with self.assertRaises(urllib.error.HTTPError) as e:
+                opener.open(f"http://127.0.0.1:{self.port}{path}")
+            self.assertEqual((e.exception.code, e.exception.headers["Location"]), (302, to))
+        self.assertNotIn('href="/skills', self.get("/overview")[1])
+
+    def test_the_library_filters_by_project_only(self):
+        _, body = self.get("/library?project=-home-u-app")
+        self.assertIn('<option value="-home-u-app" selected>app</option>', body)
+        self.assertNotIn('name="range"', body)
         self.assertIn('<button type="submit" class="chip">Apply</button>', body)
-        self.assertIn("xia2", body)
-        _, body = self.get("/skills?range=all&skill=other")
-        self.assertIn("No skill loads match these filters.", body)
-        _, body = self.get("/skills?range=all&project=-home-u-none")
-        self.assertIn("No skill loads match these filters.", body)
 
     def test_no_percentage_when_history_covers_less_than_half_the_range_before(self):
         _, body = self.get("/overview?range=7")                  # 7 days before: data starts 50 days ago, fine

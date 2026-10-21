@@ -89,6 +89,30 @@ class LibraryTest(unittest.TestCase):
         page = dashboard.page_library(self.conn, dashboard.Filters({}), {"skill": [k["id"]], "file": ["references/r.md"]}, "full")
         self.assertIn("<h1>Ref</h1>", page)
 
+    def test_a_project_filter_keeps_its_skills_and_yours_whatever_the_range(self):
+        other = self.home / "work" / "other"
+        skill(other / ".claude" / "skills" / "other-own", "other-own")
+        self.conn.execute("INSERT INTO sessions (session_id, project, cwd, title, prompts) VALUES ('s2', '-q', ?, 't', 1)", (str(other),))
+        self.assertIn("other-own", dashboard.page_library(self.conn, dashboard.Filters({}), {}, "full"))
+        page = dashboard.page_library(self.conn, dashboard.Filters({"project": ["-p"], "range": ["7"]}), {}, "full")
+        self.assertIn('data-dir="proj-own"', page)          # no load in the range, still listed
+        self.assertIn('data-dir="mine-a"', page)
+        self.assertNotIn("other-own", page)
+        page = dashboard.page_library(self.conn, dashboard.Filters({"project": ["-q"]}), {}, "full")
+        self.assertIn('data-dir="other-own"', page)
+        self.assertNotIn('data-dir="proj-own"', page)
+
+    def test_a_changed_skill_shows_its_versions_on_its_page(self):
+        k = self.by_dir()[("personal", "mine-a")]
+        page = dashboard.page_library(self.conn, dashboard.Filters({}), {"skill": [k["id"]]}, "full")
+        self.assertNotIn('id="versions"', page)               # one version or none: nothing to compare
+        self.conn.executemany("INSERT INTO skill_versions (skill, version, first_seen, last_seen, source) VALUES ('mine-a', ?, ?, ?, 'ingest')",
+                              [("aaaaaaaaaaaa", "2026-10-01", "2026-10-01"), ("bbbbbbbbbbbb", "2026-10-10", "2026-10-10")])
+        page = dashboard.page_library(self.conn, dashboard.Filters({}), {"skill": [k["id"]]}, "full")
+        self.assertIn('id="versions"', page)
+        self.assertIn('<a href="#v-mine-a">2 tracked versions</a>', page)
+        self.assertIn('<section class="card" id="v-mine-a">', page)
+
     def test_below_the_full_level_no_skill_text_is_shown(self):
         page = dashboard.page_library(self.conn, dashboard.Filters({}), {}, "redacted")
         self.assertIn("Skill text is hidden", page)

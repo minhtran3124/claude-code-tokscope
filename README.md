@@ -21,7 +21,7 @@ These come from `tokscope serve --privacy redacted` and `tokscope report --priva
 
 ![The HTML report](docs/screenshots/report-overview.png)
 
-The dashboard also has Projects, Skills, Library and Benchmarks pages. They are not shown here, because they read real paths and skill names.
+The dashboard also has Projects, Library and Benchmarks pages. They are not shown here, because they read real paths and skill names.
 
 ## Requirements
 
@@ -217,7 +217,7 @@ The dashboard is a local web server. It reads the database for each request. It 
 2. Open `http://127.0.0.1:8765/overview` if the browser does not open.
 3. Press Ctrl+C in the terminal to stop the dashboard.
 
-The dashboard has seven pages: Overview, Projects, Sessions, Skills, Library, Benchmarks and Breakdowns.
+The dashboard has six pages: Overview, Projects, Sessions, Library, Benchmarks and Breakdowns.
 A filter bar at the top sets the range, project, model and skill for every number on the page. The URL keeps the filters.
 The range is the last 7, 30 or 90 days, or all time. The default range is the last 30 days.
 
@@ -302,6 +302,7 @@ tokscope records each change in `data/mcp-changes.jsonl` in the data folder. The
 ### Read your skills
 
 The Library page shows the skills that you wrote. Use it to read the SKILL.md file and the other files of a skill.
+Select a project to see only its skills and your personal skills. The date range does not apply: the Library shows every skill.
 
 tokscope finds skills in these folders:
 
@@ -414,7 +415,7 @@ In Claude Code, use `/tokscope skills [name]`.
 tokscope keeps the files of each skill version in `data/skills/<skill>/<version>/`. You can compare two skill versions with a diff.
 A `version:` line in the SKILL.md frontmatter shows as a label next to the hash.
 
-The report and the dashboard Skills page have a "Skill versions" section. It shows a card for each changed skill.
+The report has a "Skill versions" section with a card for each changed skill. On the dashboard, the card is on the page of the skill in the Library.
 Each card shows the loads, the median tokens per load, the change from the previous skill version, and the diff.
 tokscope marks a skill version with fewer than 5 loads as "few". Do not make a decision from these numbers.
 These medians come from different work. For a fair comparison, run a benchmark or a replay. Redacted and numbers reports do not show the diffs.
