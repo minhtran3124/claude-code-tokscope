@@ -5,6 +5,24 @@ It reads the transcripts that Claude Code writes to `~/.claude/projects`. It kee
 You can see the numbers in the terminal, in an HTML report, or in a live local dashboard.
 Use it to measure a skill or agent change before and after you make it.
 
+## Screenshots
+
+These come from `tokscope serve --privacy redacted` and `tokscope report --privacy redacted`, so they show no project names, paths or prompt text.
+
+**Overview** (`tokscope serve`): today's totals, and what changed against the range before, for skills and subagent types.
+
+![The dashboard Overview page](docs/screenshots/dashboard-overview.png)
+
+**Sessions** (`tokscope serve`): each session with its tokens, split between the main thread (blue) and subagents (amber). Open a row to see each prompt, or tick 2 to 4 rows to compare them.
+
+![The dashboard Sessions page](docs/screenshots/dashboard-sessions.png)
+
+**Report** (`tokscope report`): one HTML file with the last-7-days summary, the totals, the sessions and the breakdowns.
+
+![The HTML report](docs/screenshots/report-overview.png)
+
+The dashboard also has Projects, Skills, Library and Benchmarks pages. They are not shown here, because they read real paths and skill names.
+
 ## Requirements
 
 - Python 3.10 or later. The CLI has no dependencies.
