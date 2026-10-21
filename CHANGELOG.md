@@ -3,6 +3,16 @@
 Versions follow [semver](https://semver.org). Before 1.0 a minor bump may break things; each break is listed.
 The version lives in `tokscope/__init__.py`; `mod/.claude-plugin/plugin.json` must carry the same number.
 
+## Unreleased
+
+Sessions:
+- A headless session (`claude -p`) that another session started from its Bash tool shows under that session,
+  indented by depth. The link comes from the parent's side: the session id the call printed, or a child that started
+  while the call ran, in a folder the call names or in the parent's scratchpad. Sorting and the filter keep a child
+  with its parent; a parent shows 3 children until "+N more" is pressed. Headless runs that no session started (for
+  example a web app calling `claude -p`) stay top-level. `showing N of M` now counts these groups.
+- A database from an earlier version gains the new columns on the next ingest and is parsed again once.
+
 ## 0.1.0 - 2026-10-21
 
 First public release.

@@ -136,6 +136,12 @@ transition:background .15s var(--ease),color .15s var(--ease),opacity .15s var(-
 .primary:hover:not(:disabled){background:var(--surface);color:var(--ink)}
 .primary:focus-visible{outline:2px solid var(--ink);outline-offset:2px}.primary:disabled{opacity:.45;cursor:not-allowed}
 .srow>summary::-webkit-details-marker{display:none}
+.srow.child{margin-left:calc(var(--depth)*24px);position:relative;overflow:visible}
+.srow.child::before{content:'';position:absolute;left:-15px;top:-10px;height:calc(10px + 1.3em);width:10px;
+border-left:var(--line-w) solid var(--grid);border-bottom:var(--line-w) solid var(--grid);border-bottom-left-radius:6px}
+.srow.child>summary .t::before,.srow.orphan>summary .t::before{content:'↳ ';color:var(--muted)}
+.srow.dim:not(:hover):not([open]){opacity:.6}
+.btn.kids-more{margin:0 0 8px calc(var(--depth)*24px)}
 .srow>summary .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.srow>summary .r{text-align:right;font-variant-numeric:tabular-nums}
 .srow>summary .n{white-space:nowrap;color:var(--ink2);font-size:13px}
 .srow>summary .sk{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -159,7 +165,8 @@ background:var(--surface);border:var(--line-w) solid var(--ink);border-radius:12
 @keyframes pop{from{opacity:.4;transform:translateY(-6px)}}
 .btn{all:unset;cursor:pointer;display:inline-block;font-size:12px;line-height:1.45;color:var(--ink);padding:5px 12px;border:var(--line-w) solid var(--ink);border-radius:999px;background:var(--surface);transition:background .15s var(--ease),color .15s var(--ease)}
 .btn:hover{background:var(--ink);color:var(--page)}
-@media (max-width:640px){.srow>summary{grid-template-columns:22px 1fr 80px 14px}.srow>summary .d,.srow>summary .sk,.srow>summary .n,.srow>summary .split{display:none}}
+@media (max-width:640px){.srow>summary{grid-template-columns:22px 1fr 80px 14px}.srow>summary .d,.srow>summary .sk,.srow>summary .n,.srow>summary .split{display:none}
+.srow.child{margin-left:calc(var(--depth)*14px)}.srow.child::before{left:-10px;width:6px}.btn.kids-more{margin-left:calc(var(--depth)*14px)}}
 /* motion layer: entrance, scroll reveal; all of it off under reduced motion */
 html{scroll-behavior:smooth}body{transition:background-color .35s var(--ease),color .35s var(--ease)}
 #progress{position:fixed;inset:0 0 auto 0;height:3px;z-index:40;transform-origin:0 50%;transform:scaleX(0);
@@ -289,15 +296,22 @@ JS_SESSIONS = """
 const S=JSON.parse(document.getElementById('sessions-data').textContent);
 const list=document.getElementById('session-list'),q=document.getElementById('s-q'),sortSel=document.getElementById('s-sort');
 const picked=new Set();let limit=15;
+// a headless session (claude -p) sits under the session whose Bash call started it, indented by depth
+const byId=new Map(S.map(s=>[s.id,s])),kids=new Map(),openKids=new Set();
+S.forEach(s=>{if(s.parent&&byId.has(s.parent)&&s.parent!==s.id){if(!kids.has(s.parent))kids.set(s.parent,[]);kids.get(s.parent).push(s)}});
+kids.forEach(k=>k.sort((a,b)=>a.start.localeCompare(b.start)));
+// a root has no parent in this range (a parent loop, which ingest never makes, counts as a root too)
+const isRoot=s=>{const seen=new Set([s.id]);for(let p=byId.get(s.parent);p;p=byId.get(p.parent)){if(seen.has(p.id))return true;seen.add(p.id)}return !byId.has(s.parent)};
 // wraps each match of the filter in <mark>, after escaping
 const hl=(text,needle)=>{if(!needle)return esc(text);const lo=text.toLowerCase(),n=needle.toLowerCase();let out='',pos=0,at;
   while((at=lo.indexOf(n,pos))>-1){out+=esc(text.slice(pos,at))+'<mark>'+esc(text.slice(at,at+n.length))+'</mark>';pos=at+n.length}
   return out+esc(text.slice(pos))};
 function split(main,ag){const t=Math.max(main+ag,1);return `<span class=split title="main ${fmt(main)} · subagents ${fmt(ag)}"><u style="width:${(100*main/t).toFixed(1)}%"></u>${ag?`<u class=a style="width:${(100*ag/t).toFixed(1)}%"></u>`:''}</span>`}
 function row(s){
-  const d=document.createElement('details');d.className='srow'+(picked.has(s.id)?' picked':'');d.dataset.id=s.id;
+  const d=document.createElement('details');d.className='srow'+(picked.has(s.id)?' picked':'')+(s.parent&&!byId.has(s.parent)?' orphan':'');d.dataset.id=s.id;
+  const from=s.parent?`\nstarted by ${s.parent_title||s.parent.slice(0,8)}${byId.has(s.parent)?'':' (outside this range)'}`:'';
   d.innerHTML=`<summary><input type=checkbox aria-label="compare" ${picked.has(s.id)?'checked':''}>
-    <span class=d>${s.start.slice(0,10)}</span><span class=t title="${esc(s.title)}">${s.title?hl(s.title,q.value.trim()):'(untitled)'}</span>
+    <span class=d>${s.start.slice(0,10)}</span><span class=t title="${esc(s.title+from)}">${s.title?hl(s.title,q.value.trim()):'(untitled)'}</span>
     <span class=r><b>${fmt(s.tokens)}</b></span>${split(s.main,s.agents)}<span class="r n">${s.prompts} prompts</span><span class=sk>${esc(s.top_skill||'')}</span><span class=cv aria-hidden=true>›</span></summary><div class=body></div>`;
   const cb=d.querySelector('input');
   cb.addEventListener('click',e=>e.stopPropagation());
@@ -310,7 +324,7 @@ function row(s){
   return d}
 function bar(v,top,ag=0,i=0){const p=top?Math.max(1.5,100*v/top):0,a=v?p*ag/v:0;return `<span class=bar><span data-count="${v}" data-i="${i}">${fmt(v)}</span><i style="--i:${i}"><u style="width:${(p-a).toFixed(1)}%"></u>${a>0.5?`<u class=a style="width:${a.toFixed(1)}%"></u>`:''}</i></span>`}
 // ids an agent can use to trace the session further
-function ids(s){return `<dl class=ids>${[['Session ID',s.id],['Trace',`tokscope session ${s.id} --json`],['Transcript',s.path],['Resume',`claude --resume ${s.id}`]]
+function ids(s){return `<dl class=ids>${[['Session ID',s.id],...(s.parent?[['Started by',s.parent]]:[]),['Trace',`tokscope session ${s.id} --json`],['Transcript',s.path],['Resume',`claude --resume ${s.id}`]]
   .map(([k,v])=>`<dt>${k}</dt><dd><span class=code>${esc(v)}</span><button type=button class="btn cp" data-copy="${esc(v)}">Copy</button></dd>`).join('')}</dl>`}
 // one line per kind: agents (exact tokens + models), mcp servers and tools (~ estimated from result size)
 // one line per subagent run (type, what it was asked, measured tokens, model, price); nested runs indented
@@ -337,18 +351,34 @@ function detail(s){
 // rows are kept by id so a re-render moves them (FLIP): kept rows slide from where they were,
 // new rows rise in one after another, and rows that leave fade out in place
 const nodes=new Map(),EXPO='cubic-bezier(0.16,1,0.3,1)';
+// one root and the sessions under it, depth first. A filter keeps a match, the sessions under it, and the sessions
+// above it (dimmed when they do not match). A parent shows 3 children until its "+N more" is pressed.
+function group(root,match){const out=[],seen=new Set();
+  const walk=(s,d,up)=>{if(seen.has(s.id))return false;seen.add(s.id);const me=match(s),at=out.length,e={s,d,dim:false};out.push(e);
+    let down=false;const spans=[];
+    (kids.get(s.id)||[]).forEach(k=>{const from=out.length;down=walk(k,d+1,up||me)||down;if(out.length>from)spans.push(from)});
+    if(!(me||up||down)){out.splice(at);return false}
+    if(spans.length>3&&!openKids.has(s.id)){out.splice(spans[3]);out.push({more:s,n:spans.length-3,d:d+1})}
+    e.dim=!(me||up);return me||down};
+  walk(root,0,false);return out}
+function moreBtn(e){let el=nodes.get('more:'+e.more.id);
+  if(!el){el=document.createElement('button');el.type='button';el.className='btn kids-more';
+    el.addEventListener('click',()=>{openKids.add(e.more.id);render()});nodes.set('more:'+e.more.id,el)}
+  el.textContent=`+${e.n} more started by this session`;el.style.setProperty('--depth',e.d);return el}
 function render(){
   const needle=q.value.toLowerCase();
-  let rows=S.filter(s=>!needle||(s.title||'').toLowerCase().includes(needle)||s.id.startsWith(needle)||(s.top_skill||'').includes(needle));
-  rows.sort(sortSel.value==='tokens'?(a,b)=>b.tokens-a.tokens:(a,b)=>b.start.localeCompare(a.start));
-  const shown=rows.slice(0,limit),keep=new Set(shown.map(s=>s.id)),anim=smoothOk(),before=new Map();
+  const match=s=>!needle||(s.title||'').toLowerCase().includes(needle)||s.id.startsWith(needle)||(s.top_skill||'').includes(needle);
+  let rows=S.filter(isRoot).map(s=>group(s,match)).filter(g=>g.length);
+  rows.sort(sortSel.value==='tokens'?(a,b)=>b[0].s.tokens-a[0].s.tokens:(a,b)=>b[0].s.start.localeCompare(a[0].s.start));
+  const shown=rows.slice(0,limit).flat(),keep=new Set(shown.filter(e=>e.s).map(e=>e.s.id)),anim=smoothOk(),before=new Map();
   let top=list.getBoundingClientRect().top;
   if(anim)list.querySelectorAll(':scope>.srow:not(.ghost)').forEach(el=>{before.set(el.dataset.id,el.getBoundingClientRect().top-top);el.getAnimations().forEach(a=>a.cancel())});
-  const els=shown.map(s=>{let el=nodes.get(s.id);
+  const els=shown.map(e=>{if(e.more)return moreBtn(e);const s=e.s;let el=nodes.get(s.id);
     if(!el){el=row(s);nodes.set(s.id,el)}
     else{el.getAnimations().forEach(a=>a.cancel());el.classList.remove('ghost');el.style.top='';
       el.querySelector('.t').innerHTML=s.title?hl(s.title,q.value.trim()):'(untitled)';
       el.classList.toggle('picked',picked.has(s.id));el.querySelector('input').checked=picked.has(s.id)}
+    el.classList.toggle('child',e.d>0);el.classList.toggle('dim',e.dim);el.style.setProperty('--depth',e.d);
     return el});
   list.replaceChildren(...els);
   if(!rows.length){list.innerHTML=`<div class=empty><b>No sessions match “${esc(q.value)}”</b>Try part of a title, a skill name or the start of a session id.
@@ -678,6 +708,15 @@ def _sessions_json(conn, cond, params):
             first = next((t["text"] for t in s["turns"] if t["text"]), "")
             s["title"] = f"“{first[:80]}”" if first else ""
         s["top_skill"] = max(s["skills"], key=s["skills"].get) if s["skills"] else ""
+    # a headless session (claude -p) names the session that started it; the list shows it under that one
+    for sid, parent, title in conn.execute(
+            "SELECT s.session_id, s.parent_session_id, p.title FROM sessions s JOIN sessions p "
+            "ON p.session_id = s.parent_session_id"):
+        if sid in sessions:
+            first = texts.get((parent, 1), "")
+            sessions[sid]["parent"] = parent
+            sessions[sid]["parent_title"] = (sessions[parent]["title"] if parent in sessions
+                                              else title or (f"“{first[:80]}”" if first else ""))
     return list(sessions.values())
 
 
