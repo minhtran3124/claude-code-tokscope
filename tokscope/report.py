@@ -9,6 +9,7 @@ from pathlib import Path
 from statistics import median
 
 from . import charts, fonts, paths, privacy, skills
+from .classic import CLASSIC_CSS, SKIN_APPLY, SKIN_BUTTON
 from .brand import MARK, favicon_link
 from .calls import est_tokens, mcp_server, turn_calls
 from .changes import BENCH_PROJECT, impact, list_changes
@@ -186,7 +187,7 @@ background:var(--mark)}
 background:color-mix(in oklch,var(--mark) 15%,transparent);box-shadow:inset 3px 0 0 var(--mark);
 transition:transform .35s var(--ease-expo),width .35s var(--ease-expo),height .35s var(--ease-expo),opacity .2s}
 .has-pill .toc a.on{background:transparent}
-.side-foot{display:flex;gap:6px;margin:18px 0 0 4px}
+.side-foot{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0 0 4px}
 .chip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);padding:5px 12px;border:var(--line-w) solid var(--ink);border-radius:999px;background:var(--surface);
 transition:color .15s var(--ease),background .15s var(--ease)}
 .chip:hover,.chip.on,.chip[aria-pressed=true]{background:var(--ink);color:var(--page)}.chip:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
@@ -291,6 +292,13 @@ function toggleTheme(x,y){const apply=()=>{root.dataset.theme=isDark()?'light':'
   document.startViewTransition(apply).ready.then(()=>root.animate({clipPath:[`circle(0px at ${x}px ${y}px)`,`circle(${r}px at ${x}px ${y}px)`]},
     {duration:650,easing:'cubic-bezier(0.16,1,0.3,1)',pseudoElement:'::view-transition-new(root)'}))}
 themeBtn.addEventListener('click',e=>{const b=themeBtn.getBoundingClientRect();toggleTheme(e.clientX||b.left+b.width/2,e.clientY||b.top+b.height/2)});syncTheme();
+// Classic/Ink switch: two stylesheets, one enabled by its media attribute
+const skinBtn=document.getElementById('skin'),skinInk=document.getElementById('skin-ink'),skinClassic=document.getElementById('skin-classic');
+function setSkin(classic){skinInk.media=classic?'not all':'all';skinClassic.media=classic?'all':'not all';root.dataset.skin=classic?'classic':'';
+  skinBtn.textContent=classic?'Ink':'Classic';skinBtn.setAttribute('aria-pressed',classic);
+  try{classic?localStorage.setItem('tokscope-skin','classic'):localStorage.removeItem('tokscope-skin')}catch(_){}}
+function toggleSkin(){setSkin(skinClassic.media!=='all')}
+skinBtn.addEventListener('click',toggleSkin);skinBtn.textContent=skinClassic.media==='all'?'Ink':'Classic';skinBtn.setAttribute('aria-pressed',skinClassic.media==='all');
 const io='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{rootMargin:'0px 0px -6% 0px'}):null;
 document.querySelectorAll('.reveal,main>details.more,#breakdowns>details').forEach(el=>{el.classList.add('reveal');io?io.observe(el):el.classList.add('in')});
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -299,6 +307,7 @@ const keysDlg=document.getElementById('keys');
 addEventListener('keydown',e=>{const typing=/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   if(typing||e.metaKey||e.ctrlKey||e.altKey)return;
   if(e.key==='t'){const b=themeBtn.getBoundingClientRect();toggleTheme(b.left+b.width/2,b.top+b.height/2)}
+  else if(e.key==='s')toggleSkin()
   else if(e.key==='g')scrollTo({top:0})
   else if(e.key==='?'){keysDlg.open?keysDlg.close():keysDlg.showModal()}});
 document.getElementById('keys-btn').addEventListener('click',()=>keysDlg.showModal());
@@ -1012,7 +1021,7 @@ def write_report(db_path, out_path, where="", params=(), tasks_dir=None, level="
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>tokscope report{"" if level == "full" else f" ({level})"}</title>{favicon_link()}<script>document.documentElement.classList.add('js');
 try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElement.dataset.theme=t}}catch(_){{}}</script>
-<style>{fonts.face_css(True)}</style><style>{CSS}</style></head><body><div id="progress"></div><div class="layout">
+<style>{fonts.face_css(True)}</style><style id="skin-ink">{CSS}</style><style id="skin-classic" media="not all">{CLASSIC_CSS}</style>{SKIN_APPLY}</head><body><div id="progress"></div><div class="layout">
 <aside class="side" aria-label="Sections"><div class="brand">{MARK}tokscope</div><nav class="toc">
 <a href="#overview">Overview</a>
 <a href="#sessions">Sessions<span class="cnt">{n_sess:,}</span></a>
@@ -1024,7 +1033,7 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 <div class="sub-toc"><a href="#by-week">Week over week</a><a href="#by-mcp">By MCP server</a><a href="#by-tool">By tool</a><a href="#by-phase">By phase</a>
 <a href="#by-owner">By owner</a><a href="#by-skill">By skill</a><a href="#agent-types">Subagent types</a></div>
 </nav><div class="side-foot"><button type="button" class="chip" id="theme">Theme</button>
-<button type="button" class="chip" id="keys-btn" aria-label="Keyboard shortcuts"><kbd>?</kbd></button></div></aside><main>
+<button type="button" class="chip" id="keys-btn" aria-label="Keyboard shortcuts"><kbd>?</kbd></button>{SKIN_BUTTON}</div></aside><main>
 <div id="overview">
 <h1>Claude Code token usage</h1>
 {f'<p class="privacy" role="note"><b>{level}</b> {PRIVACY_NOTE[level]}</p>' if level != "full" else ""}
@@ -1059,7 +1068,7 @@ Sessions do different work, so a comparison describes them; for a controlled bef
 <div id="breakdowns">{_breakdowns(conn, cond, params)}</div>
 </main></div><div id="tip"></div><div id="toast" role="status" aria-live="polite"></div>
 <dialog class="keys" id="keys"><h3 style="margin:0">Keyboard shortcuts</h3><dl>
-<dt><kbd>/</kbd></dt><dd>Filter sessions</dd><dt><kbd>t</kbd></dt><dd>Light or dark theme</dd>
+<dt><kbd>/</kbd></dt><dd>Filter sessions</dd><dt><kbd>t</kbd></dt><dd>Light or dark theme</dd><dt><kbd>s</kbd></dt><dd>Classic or Ink design</dd>
 <dt><kbd>c</kbd></dt><dd>Compare the ticked sessions</dd><dt><kbd>g</kbd></dt><dd>Back to the top</dd>
 <dt><kbd>Esc</kbd></dt><dd>Clear the filter, close this</dd><dt><kbd>?</kbd></dt><dd>Show this list</dd></dl></dialog>
 <button type="button" class="totop" id="totop" aria-label="Back to top" title="Back to top">↑</button>
