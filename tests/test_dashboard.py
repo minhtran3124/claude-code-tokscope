@@ -75,6 +75,14 @@ class ServerTest(unittest.TestCase):
         except urllib.error.HTTPError as e:
             return e.code, e.read().decode()
 
+    def test_the_version_poll_makes_no_redacted_copy(self):
+        self.server.RequestHandlerClass = dashboard.handler(self.db, self.live, self.port, "redacted")
+        with mock.patch.object(dashboard.privacy, "redacted_copy", side_effect=AssertionError("copied")) as copy:
+            code, body = self.get("/api/version")
+        self.assertEqual(code, 200)
+        self.assertEqual(json.loads(body), {"stamp": self.live.stamp})
+        copy.assert_not_called()
+
     def test_every_page_renders_and_names_itself(self):
         for name, title in dashboard.PAGES.items():
             code, body = self.get(f"/{name}")
@@ -173,6 +181,10 @@ class ScriptTest(unittest.TestCase):
             run = subprocess.run([node, "--check", f.name], capture_output=True, text=True)
             os.unlink(f.name)
             self.assertEqual(run.returncode, 0, f"{name}: {run.stderr[-400:]}")
+
+    def test_pages_ask_for_new_data_every_2_seconds(self):
+        # the "New data · reload" button and the live numbers wait at most this long after an ingest
+        self.assertIn("setInterval(poll,2000)", dashboard.DASH_JS)
 
     def test_the_from_label_links_only_where_the_dashboard_serves_sessions(self):
         js = dashboard.JS_SESSIONS
