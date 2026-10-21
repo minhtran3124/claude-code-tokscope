@@ -47,7 +47,8 @@ Type
 - Labels: mono 11px, uppercase, letter-spacing .08em, muted.
 - The main number of a block is its largest text (KPI 22-28px mono 600); weights stay
   400 text, 500 table heads, 600 labels, emphasis and big mono numbers; 700 only for sans (mono ships 400-600).
-- Table numbers right-aligned with tabular figures.
+- Table numbers right-aligned with tabular figures, in mono 13px; text cells (names, prompts, notes) stay sans.
+- Buttons, pills, selects and search boxes: mono 12px, weight 400-500. Sentences inside a tile (the "history starts" line) stay sans.
 
 Shapes
 - Outlines: 1.5px solid ink on cards, tiles and pills; tables use 1px rule lines inside.
