@@ -19,7 +19,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 from . import charts, fonts, library, markdown, optimize, paths, privacy, projects, registry, skills
 from .classic import CLASSIC_CSS, CLASSIC_DASH_CSS, SKIN_APPLY, SKIN_BUTTON
@@ -30,7 +30,7 @@ from .pricing import API_EQ_NOTE
 from .report import (CSS, JS_BENCH, JS_CORE, JS_SESSIONS, JS_TREND, TOKENS, _benchmarks, _breakdowns, _change_cards,
                      _daily_chart, _diff_html, _more, _sessions_json, _skill_versions, _table, _tok, _usd)
 
-PAGES = {"overview": "Overview", "projects": "Projects", "sessions": "Sessions", "skills": "Skills", "library": "Library",
+PAGES = {"overview": "Overview", "projects": "Projects", "sessions": "Sessions", "library": "Library",
          "benchmarks": "Benchmarks", "breakdowns": "Breakdowns"}
 RANGES = {"7": "Last 7 days", "30": "Last 30 days", "90": "Last 90 days", "all": "All time"}
 
@@ -211,7 +211,11 @@ def _new_versions(conn, f):
                     "ORDER BY v.first_seen DESC LIMIT 6", (since,))
     if not rows:
         return "<p class='note'>No skill changed in this range.</p>"
-    items = "".join(f'<li><a href="{f.link("skills")}#v-{html.escape(sk)}">{html.escape(sk)}</a> <code class="ver">{v[:6]}</code>'
+    ids = {}
+    for k in library.discover(conn, f.project or None):
+        ids.setdefault(k["dir"], k["id"])  # a personal copy wins, as it does when Claude Code loads the skill
+    href = lambda sk: f'/library?skill={ids[sk]}#v-{html.escape(sk)}' if sk in ids else "/library"  # noqa: E731
+    items = "".join(f'<li><a href="{href(sk)}">{html.escape(sk)}</a> <code class="ver">{v[:6]}</code>'
                     f'{" v" + html.escape(lbl) if lbl else ""} <span class="note">{first[:10]}</span></li>' for sk, v, first, lbl in rows)
     return f'<ul class="plain">{items}</ul>'
 
@@ -265,12 +269,6 @@ def page_sessions(conn, f, qs):
             f'<script type="application/json" id="sessions-data">{data}</script>')
 
 
-def page_skills(conn, f, level):
-    _, inner = _skill_versions(conn, level, f.cond(), f.skill or None)
-    return (f'<section class="card" id="skill-versions"><p class="note">Skill versions loaded over {"the " * bool(f.days)}{f.label()}; '
-            f'loads and tokens count only what the filters match.</p>{inner}</section>')
-
-
 def _ste_counts(findings):
     h = library.hard(findings)
     return f'<span class="ste-n" title="STE check: {h} hard findings, {len(findings) - h} hints">STE {h} · {len(findings) - h} hints</span>'
@@ -284,13 +282,15 @@ def _skill_card(k, used, lint=None):
     keys = f' data-loads="{loads}" data-ste="{library.hard(findings) if findings is not None else -1}"' 
     badge = f'<span class="badge inst" title="{html.escape(k["reason"])}">installed</span>' if k["origin"] == "installed" else ""
     hide = " hidden" if k["origin"] == "installed" else ""
-    return (f'<a class="sk" href="/library?skill={k["id"]}" data-origin="{k["origin"]}"{keys} '
+    return (f'<a class="sk" href="/library?skill={k["id"]}" data-dir="{html.escape(k["dir"])}" data-origin="{k["origin"]}"{keys} '
             f'data-find="{html.escape((k["name"] + " " + k["description"]).lower())}"{hide}>'
             f'<b>{html.escape(k["name"])}{badge}</b><p title="{html.escape(k["description"])}">{markdown.inline(k["description"]) or "<i>No description.</i>"}</p>'
             f'<span class="meta">{meta}</span></a>')
 
 
-def _library_list(found, used, lint=None, lint_note=""):
+def _library_list(found, used, lint=None, lint_note="", project=""):
+    if project and all(k["scope"] == "personal" for k in found):
+        lint_note += " This project has no .claude/skills folder; your personal skills load in it."
     if not found:
         return ('<div class="empty"><b>No skills found</b>tokscope looks in ~/.claude/skills and in the .claude/skills '
                 'folder of every project a session ran in.</div>')
@@ -610,7 +610,7 @@ def _job_view(k, job, linter, conn=None):
     return head + outcome + table + acts + '<p class="err" id="opt-err" hidden></p></section>' + diffs + bench_html + report + log + decide
 
 
-def _library_skill(k, qs, used, conn, linter=None, found=()):
+def _library_skill(k, qs, used, conn, linter=None, found=(), back="/library"):
     listed = library.files(k["folder"])
     names = {rel for rel, _ in listed}
     rel = (qs.get("file") or ["SKILL.md"])[0]
@@ -662,10 +662,10 @@ def _library_skill(k, qs, used, conn, linter=None, found=()):
              ("Origin", "yours" if k["origin"] == "mine" else f"installed: {html.escape(k['reason'])}"),
              ("Version", f"<code>{skills.fingerprint(k['folder'])}</code>" + (f" · v{html.escape(k['label'])}" if k["label"] else "")),
              ("Loads", f"{loads:,}" + (f", last {last[:10]}" if last else "")
-              + (f' · <a href="/skills#v-{html.escape(k["dir"])}">{tracked} tracked versions</a>' if tracked > 1  # only a changed skill has a card
+              + (f' · <a href="#v-{html.escape(k["dir"])}">{tracked} tracked versions</a>' if tracked > 1  # only a changed skill has a card
                  else " · 1 tracked version" if tracked else ""))]
     desc = f'<p>{markdown.inline(k["description"])}</p>' if k["description"] else ""
-    head = ('<p><a href="/library">← All skills</a></p>'
+    head = (f'<p><a href="{html.escape(back)}">← All skills</a></p>'
             f'<section class="card libhead"><h2 class="sec">{html.escape(k["name"])}</h2>{desc}'
             '<dl class="ids">' + "".join(f"<dt>{a}</dt><dd>{b}</dd>" for a, b in facts) + "</dl></section>")
     job = (qs.get("job") or [""])[0]
@@ -677,26 +677,29 @@ def _library_skill(k, qs, used, conn, linter=None, found=()):
     if going:  # a run you started and left: one click back to its progress
         opt = (f'<a class="outcome run" href="/library?skill={k["id"]}&amp;job={going[0]["job"]}"><b><span class="spin"></span>'
                f'An optimize run is going</b><span>Started {html.escape(going[0]["started"][11:16])} UTC · see its progress</span></a>') + opt
+    # a skill with one version and every load tracked has nothing to compare
+    versions = (f'<section class="card" id="versions"><h2 class="sec">Versions</h2>{_skill_versions(conn, "full", skill=k["dir"])[1]}</section>'
+                if len(skills.versions(conn, k["dir"])) > 1 else "")
     return (f'{head}{opt}<div class="libview"><nav class="card files" aria-label="Files">{tree}</nav>'
-            f'<article class="card viewer"><h3 class="path">{html.escape(rel)}</h3>{view}</article></div>')
+            f'<article class="card viewer"><h3 class="path">{html.escape(rel)}</h3>{view}</article></div>{versions}')
 
 
 def page_library(conn, f, qs, level):
     if level != "full":
         return f'<div class="empty"><b>Skill text is hidden</b>The library shows file contents at the full level only (now {level}).</div>'
-    found, used = library.discover(conn), library.usage(conn)
+    found, used = library.discover(conn, f.project or None), library.usage(conn)
     linter = library.ste_linter(found)
     pick = (qs.get("skill") or [""])[0]
-    k = next((k for k in found if k["id"] == pick), None)
+    k = next((k for k in found if k["id"] == pick), None) or next((k for k in library.discover(conn) if k["id"] == pick), None)
     if k:
-        return _library_skill(k, qs, used, conn, linter, found)
+        return _library_skill(k, qs, used, conn, linter, found, "/library" + (f"?{urlencode({'project': f.project})}" if f.project else ""))
     lint, note = None, " Install the asd-ste100 skill to see STE findings here." if linter is None else ""
     if linter:
         try:
             lint = library.ste_lint(linter, [k["folder"] / "SKILL.md" for k in found])
         except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as e:
             note = f" The STE check failed: {html.escape(str(e))}"
-    return _library_list(found, used, lint, note)
+    return _library_list(found, used, lint, note, f.project)
 
 
 def _project_card(g):
@@ -998,6 +1001,8 @@ function libFilter(){const q=(libFind?.value||'').trim().toLowerCase(),all=libIn
   document.querySelectorAll('a.sk').forEach(a=>{const ok=(all||a.dataset.origin==='mine')&&(!q||a.dataset.find.includes(q));a.hidden=!ok;shown+=ok});
   document.querySelectorAll('.libgroup').forEach(g=>g.hidden=!g.querySelector('a.sk:not([hidden])'));
   const none=document.getElementById('lib-none');if(none)none.hidden=shown>0}
+let vHash=null;try{vHash=location.hash.startsWith('#v-')&&document.querySelector(`a.sk[data-dir="${CSS.escape(decodeURIComponent(location.hash.slice(3)))}"]`)}catch(_){}  // a malformed hash: stay on the list
+if(vHash)location.replace(vHash.href+location.hash);
 libFind?.addEventListener('input',libFilter);libInst?.addEventListener('change',libFilter);if(libFind)libFilter();
 document.getElementById('lib-sort')?.addEventListener('change',e=>{const by=e.target.value;
   document.querySelectorAll('.libgrid').forEach(g=>[...g.children].sort((a,b)=>by?(+b.dataset[by])-(+a.dataset[by])||a.dataset.find.localeCompare(b.dataset.find)
@@ -1146,7 +1151,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});
 """
 
 
-def _options(conn, f):
+def _options(conn, f, only=None):
     projects = _q(conn, f"SELECT s.project, max(s.cwd), count(*) FROM sessions s WHERE s.project NOT LIKE '{BENCH_PROJECT}' "
                         "GROUP BY 1 ORDER BY 3 DESC")
     models = [m for (m,) in _q(conn, "SELECT DISTINCT model FROM requests WHERE model LIKE 'claude-%' ORDER BY 1")]
@@ -1157,6 +1162,8 @@ def _options(conn, f):
             f'<option value="{html.escape(v)}"{" selected" if v == current else ""}>{html.escape(t)}</option>' for v, t in options]
         return f'<select name="{name}" aria-label="{name}">{"".join(opts)}</select>'
 
+    if only == "project":
+        return select("project", f.project, [(p, Path(cwd or p).name or p) for p, cwd, _ in projects], "All projects")
     return "".join([
         select("range", f.range, [(k, v) for k, v in RANGES.items()], "Last 30 days").replace('<option value="">Last 30 days</option>', ""),
         select("project", f.project, [(p, Path(cwd or p).name or p) for p, cwd, _ in projects], "All projects"),
@@ -1168,7 +1175,7 @@ def _options(conn, f):
 def render(conn, name, qs, stamp, level="full", token=""):
     f = Filters(qs)
     body = {"overview": lambda: page_overview(conn, f), "sessions": lambda: page_sessions(conn, f, qs),
-            "skills": lambda: page_skills(conn, f, level), "library": lambda: page_library(conn, f, qs, level),
+            "library": lambda: page_library(conn, f, qs, level),
             "projects": lambda: page_projects(conn, f, qs, level),
             "benchmarks": lambda: page_benchmarks(conn, f),
             "breakdowns": lambda: page_breakdowns(conn, f)}[name]()
@@ -1176,8 +1183,14 @@ def render(conn, name, qs, stamp, level="full", token=""):
         return body
     scripts = (JS_CORE + (JS_SESSIONS if name == "sessions" else "") + JS_TREND + (JS_BENCH if name == "benchmarks" else "")
                + (LIB_JS if name in ("library", "projects") else "") + DASH_JS)
-    nav = "".join(f'<a href="{f.link(p)}"{" class=on aria-current=page" if p == name else ""}>{t}</a>' for p, t in PAGES.items())
-    reset = f' <a href="/{name}">clear filters</a>' if f.query() else ""
+    # on the Library, ?skill= is a skill's id, not the filter bar's skill name: other pages must not get it
+    navf = Filters({**qs, "skill": [""]}) if name == "library" else f
+    nav = "".join(f'<a href="{navf.link(p, **({"skill": ""} if p == "library" else {}))}"{" class=on aria-current=page" if p == name else ""}>{t}</a>' for p, t in PAGES.items())
+    reset = f' <a href="/{name}">clear filters</a>' if (f.project if name == "library" else f.query()) else ""
+    # a skill page or an optimize run has its own header; a ?skill= that matches no skill falls back to the list, with the bar
+    bar = ("" if name == "projects" or (name == "library" and 'class="card libhead"' in body) else
+           f'<form class="filters" method="get" action="/{name}">{_options(conn, f, "project" if name == "library" else None)}'
+           f'<button type="submit" class="chip">Apply</button>{reset}</form>')
     note = "" if level == "full" else f'<p class="privacy" role="note"><b>{level}</b> names and text follow the {level} level.</p>'
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>tokscope · {PAGES[name]}</title>{favicon_link()}<meta name="tokscope-token" content="{token}"><script>document.documentElement.classList.add('js');
@@ -1187,13 +1200,21 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 <div class="side-foot"><button type="button" class="chip" id="theme">Theme</button>
 <button type="button" class="chip" id="keys-btn" aria-label="Keyboard shortcuts"><kbd>?</kbd></button>{SKIN_BUTTON}</div></aside><main>
 <header class="dash-head"><h1>{PAGES[name]}</h1><span class="fresh" id="fresh"><span class="dot"></span> live</span>
-{"" if name in ("library", "projects") else f'<form class="filters" method="get" action="/{name}">{_options(conn, f)}<button type="submit" class="chip">Apply</button>{reset}</form>'}</header>{note}
+{bar}</header>{note}
 {body}
 </main></div><div id="tip"></div><div id="toast" role="status" aria-live="polite"></div>
 <dialog class="keys" id="keys"><h3 style="margin:0">Keyboard shortcuts</h3><dl>
 <dt><kbd>t</kbd></dt><dd>Light or dark theme</dd><dt><kbd>s</kbd></dt><dd>Classic or Ink design</dd><dt><kbd>g</kbd></dt><dd>Back to the top</dd>
 <dt><kbd>/</kbd></dt><dd>Filter sessions (Sessions page)</dd><dt><kbd>?</kbd></dt><dd>Show this list</dd></dl></dialog>
 <script>{scripts}</script></body></html>"""
+
+
+def skills_moved(conn, qs):
+    """Where an old /skills link goes: the Library, or a skill's page there when ?skill= names one."""
+    f = Filters(qs)
+    k = next((k for k in library.discover(conn, f.project or None) if k["dir"] == f.skill), None) if f.skill else None
+    q = urlencode({a: v for a, v in (("skill", k["id"] if k else ""), ("project", f.project)) if v})
+    return "/library" + (f"?{q}" if q else "") + (f"#v-{quote(k['dir'])}" if k else "")
 
 
 def api(conn, name, qs, stamp):
@@ -1341,6 +1362,12 @@ def handler(db, live, port, level, token=None):
             self.end_headers()
             self.wfile.write(data)
 
+        def _redirect(self, to):
+            self.send_response(302)
+            self.send_header("Location", to)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
         def do_GET(self):
             # only this machine's browser: a page on another site cannot reach it by renaming itself (DNS rebinding)
             if self.headers.get("Host") not in allowed:
@@ -1389,6 +1416,8 @@ def handler(db, live, port, level, token=None):
                         return self._send(200, json.dumps(api(conn, name[4:], qs, live.stamp)), "application/json")
                     except KeyError:
                         return self._send(404, json.dumps({"error": "unknown endpoint"}), "application/json")
+                if name == "skills":  # the Skills page moved into the Library
+                    return self._redirect(skills_moved(conn, qs))
                 if name not in PAGES:
                     return self._send(404, f"<p>No page {html.escape(name)}. Try <a href='/overview'>Overview</a>.</p>")
                 return self._send(200, render(conn, name, qs, live.stamp, level, token))
