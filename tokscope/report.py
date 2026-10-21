@@ -9,7 +9,6 @@ from pathlib import Path
 from statistics import median
 
 from . import charts, fonts, paths, privacy, skills
-from .classic import CLASSIC_CSS, CLASSIC_DASH_CSS, SKIN_APPLY, SKIN_BUTTON
 from .brand import MARK, favicon_link
 from .calls import est_tokens, mcp_server, turn_calls
 from .changes import BENCH_PROJECT, impact, list_changes
@@ -169,6 +168,7 @@ background:var(--surface);border:var(--line-w) solid var(--ink);border-radius:12
 @keyframes pop{from{opacity:.4;transform:translateY(-6px)}}
 .btn{all:unset;cursor:pointer;display:inline-block;font-size:12px;line-height:1.45;color:var(--ink);padding:5px 12px;border:var(--line-w) solid var(--ink);border-radius:999px;background:var(--surface);transition:background .15s var(--ease),color .15s var(--ease)}
 .btn:hover{background:var(--ink);color:var(--page)}
+.btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 @media (max-width:640px){.srow>summary{grid-template-columns:22px 1fr 80px 14px}.srow>summary .d,.srow>summary .sk,.srow>summary .n,.srow>summary .split{display:none}
 .srow.child{margin-left:calc(var(--depth)*14px)}.srow.child::before{left:-10px;width:6px}.btn.kids-more{margin-left:calc(var(--depth)*14px)}
 .srow.orphan>summary .t{flex-direction:column;align-items:stretch;gap:0}.srow>summary .from{max-width:100%}}
@@ -176,10 +176,9 @@ background:var(--surface);border:var(--line-w) solid var(--ink);border-radius:12
 html{scroll-behavior:smooth}body{transition:background-color .35s var(--ease),color .35s var(--ease)}
 #progress{position:fixed;inset:0 0 auto 0;height:3px;z-index:40;transform-origin:0 50%;transform:scaleX(0);
 background:var(--mark)}
-.hero>*{position:relative}.hero{animation:rise-in .7s var(--ease-expo) backwards}
+.hero{animation:rise-in .7s var(--ease-expo) backwards}
 .kpi{position:relative;overflow:hidden;animation:rise-in .6s var(--ease-expo) backwards;animation-delay:calc(120ms + var(--i,0)*70ms)}
 @keyframes rise-in{from{opacity:0;transform:translateY(12px) scale(.98)}}
-.changes .card{position:relative}
 .js .reveal{opacity:0;transform:translateY(16px);transition:opacity .6s var(--ease-expo),transform .6s var(--ease-expo)}
 .js .reveal.in{opacity:1;transform:none}
 /* sidebar: one pill slides to the section in view */
@@ -187,7 +186,7 @@ background:var(--mark)}
 background:color-mix(in oklch,var(--mark) 15%,transparent);box-shadow:inset 3px 0 0 var(--mark);
 transition:transform .35s var(--ease-expo),width .35s var(--ease-expo),height .35s var(--ease-expo),opacity .2s}
 .has-pill .toc a.on{background:transparent}
-.side-foot{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0 0 4px}/* flex-wrap: TEMPORARY skin button row */
+.side-foot{display:flex;gap:6px;margin:18px 0 0 4px}
 .chip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);padding:5px 12px;border:var(--line-w) solid var(--ink);border-radius:999px;background:var(--surface);
 transition:color .15s var(--ease),background .15s var(--ease)}
 .chip:hover,.chip.on,.chip[aria-pressed=true]{background:var(--ink);color:var(--page)}.chip:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
@@ -281,8 +280,6 @@ function countUp(el,delay,dur=1200){const end=el.dataset.end??(el.dataset.end=el
   el.textContent=f(0);setTimeout(()=>{const t0=performance.now();const step=now=>{if(el._run!==run)return;const p=Math.min(1,Math.max(0,(now-t0)/dur));
     el.textContent=p<1?f(raw*(1-Math.pow(1-p,4))):end;if(p<1)requestAnimationFrame(step)};requestAnimationFrame(step)},delay)}
 document.querySelectorAll('[data-count]').forEach((el,k)=>countUp(el,150+k*70));
-document.querySelectorAll('.kpi,.hero,.changes .card').forEach(el=>el.addEventListener('pointermove',e=>{const r=el.getBoundingClientRect();
-  el.style.setProperty('--mx',(e.clientX-r.left)+'px');el.style.setProperty('--my',(e.clientY-r.top)+'px')}));
 const root=document.documentElement;
 const isDark=()=>root.dataset.theme?root.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;
 const themeBtn=document.getElementById('theme');
@@ -294,13 +291,6 @@ function toggleTheme(x,y){const apply=()=>{root.dataset.theme=isDark()?'light':'
   document.startViewTransition(apply).ready.then(()=>root.animate({clipPath:[`circle(0px at ${x}px ${y}px)`,`circle(${r}px at ${x}px ${y}px)`]},
     {duration:650,easing:'cubic-bezier(0.16,1,0.3,1)',pseudoElement:'::view-transition-new(root)'}))}
 themeBtn.addEventListener('click',e=>{const b=themeBtn.getBoundingClientRect();toggleTheme(e.clientX||b.left+b.width/2,e.clientY||b.top+b.height/2)});syncTheme();
-// TEMPORARY Classic/Ink switch: two stylesheets, one enabled by its media attribute (remove after v1 merges into main)
-const skinBtn=document.getElementById('skin'),skinInk=document.getElementById('skin-ink'),skinClassic=document.getElementById('skin-classic');
-function setSkin(classic){skinInk.media=classic?'not all':'all';skinClassic.media=classic?'all':'not all';root.dataset.skin=classic?'classic':'';
-  skinBtn.textContent=classic?'Ink':'Classic';skinBtn.setAttribute('aria-pressed',classic);
-  try{classic?localStorage.setItem('tokscope-skin','classic'):localStorage.removeItem('tokscope-skin')}catch(_){}}
-function toggleSkin(){setSkin(skinClassic.media!=='all')}
-skinBtn.addEventListener('click',toggleSkin);skinBtn.textContent=skinClassic.media==='all'?'Ink':'Classic';skinBtn.setAttribute('aria-pressed',skinClassic.media==='all');
 const io='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{rootMargin:'0px 0px -6% 0px'}):null;
 document.querySelectorAll('.reveal,main>details.more,#breakdowns>details').forEach(el=>{el.classList.add('reveal');io?io.observe(el):el.classList.add('in')});
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -309,7 +299,6 @@ const keysDlg=document.getElementById('keys');
 addEventListener('keydown',e=>{const typing=/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   if(typing||e.metaKey||e.ctrlKey||e.altKey)return;
   if(e.key==='t'){const b=themeBtn.getBoundingClientRect();toggleTheme(b.left+b.width/2,b.top+b.height/2)}
-  else if(e.key==='s')toggleSkin()
   else if(e.key==='g')scrollTo({top:0})
   else if(e.key==='?'){keysDlg.open?keysDlg.close():keysDlg.showModal()}});
 document.getElementById('keys-btn').addEventListener('click',()=>keysDlg.showModal());
@@ -736,14 +725,11 @@ def _sessions_json(conn, cond, params):
             s["title"] = f"“{first[:80]}”" if first else ""
         s["top_skill"] = max(s["skills"], key=s["skills"].get) if s["skills"] else ""
     # a headless session (claude -p) names the session that started it; the list shows it under that one
-    for sid, parent, title in conn.execute(
-            "SELECT s.session_id, s.parent_session_id, p.title FROM sessions s JOIN sessions p "
-            "ON p.session_id = s.parent_session_id"):
+    # (a parent outside the report's filter keeps its id but not its title: that is another project's text)
+    for sid, parent in conn.execute("SELECT session_id, parent_session_id FROM sessions WHERE parent_session_id IS NOT NULL"):
         if sid in sessions:
-            first = texts.get((parent, 1), "")
             sessions[sid]["parent"] = parent
-            sessions[sid]["parent_title"] = (sessions[parent]["title"] if parent in sessions
-                                              else title or (f"“{first[:80]}”" if first else ""))
+            sessions[sid]["parent_title"] = sessions[parent]["title"] if parent in sessions else f"session {parent[:8]}"
     return list(sessions.values())
 
 
@@ -1026,7 +1012,7 @@ def write_report(db_path, out_path, where="", params=(), tasks_dir=None, level="
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>tokscope report{"" if level == "full" else f" ({level})"}</title>{favicon_link()}<script>document.documentElement.classList.add('js');
 try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElement.dataset.theme=t}}catch(_){{}}</script>
-<style>{fonts.face_css(True)}</style><style id="skin-ink">{CSS}</style><style id="skin-classic" media="not all">{CLASSIC_CSS}</style>{SKIN_APPLY}</head><body><div id="progress"></div><div class="layout">
+<style>{fonts.face_css(True)}</style><style>{CSS}</style></head><body><div id="progress"></div><div class="layout">
 <aside class="side" aria-label="Sections"><div class="brand">{MARK}tokscope</div><nav class="toc">
 <a href="#overview">Overview</a>
 <a href="#sessions">Sessions<span class="cnt">{n_sess:,}</span></a>
@@ -1038,7 +1024,7 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 <div class="sub-toc"><a href="#by-week">Week over week</a><a href="#by-mcp">By MCP server</a><a href="#by-tool">By tool</a><a href="#by-phase">By phase</a>
 <a href="#by-owner">By owner</a><a href="#by-skill">By skill</a><a href="#agent-types">Subagent types</a></div>
 </nav><div class="side-foot"><button type="button" class="chip" id="theme">Theme</button>
-<button type="button" class="chip" id="keys-btn" aria-label="Keyboard shortcuts"><kbd>?</kbd></button>{SKIN_BUTTON}</div></aside><main>
+<button type="button" class="chip" id="keys-btn" aria-label="Keyboard shortcuts"><kbd>?</kbd></button></div></aside><main>
 <div id="overview">
 <h1>Claude Code token usage</h1>
 {f'<p class="privacy" role="note"><b>{level}</b> {PRIVACY_NOTE[level]}</p>' if level != "full" else ""}
@@ -1073,7 +1059,7 @@ Sessions do different work, so a comparison describes them; for a controlled bef
 <div id="breakdowns">{_breakdowns(conn, cond, params)}</div>
 </main></div><div id="tip"></div><div id="toast" role="status" aria-live="polite"></div>
 <dialog class="keys" id="keys"><h3 style="margin:0">Keyboard shortcuts</h3><dl>
-<dt><kbd>/</kbd></dt><dd>Filter sessions</dd><dt><kbd>t</kbd></dt><dd>Light or dark theme</dd><dt><kbd>s</kbd></dt><dd>Classic or ink design (temporary)</dd>
+<dt><kbd>/</kbd></dt><dd>Filter sessions</dd><dt><kbd>t</kbd></dt><dd>Light or dark theme</dd>
 <dt><kbd>c</kbd></dt><dd>Compare the ticked sessions</dd><dt><kbd>g</kbd></dt><dd>Back to the top</dd>
 <dt><kbd>Esc</kbd></dt><dd>Clear the filter, close this</dd><dt><kbd>?</kbd></dt><dd>Show this list</dd></dl></dialog>
 <button type="button" class="totop" id="totop" aria-label="Back to top" title="Back to top">↑</button>

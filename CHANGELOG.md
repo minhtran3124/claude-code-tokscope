@@ -5,8 +5,6 @@ The version lives in `tokscope/__init__.py`; `mod/.claude-plugin/plugin.json` mu
 
 ## Unreleased
 
-Temporary: a Classic/Ink switch (button or key `s`) compares the design of `main` with this one; it goes when `v1` merges into `main`.
-
 Sessions:
 - A headless session (`claude -p`) that another session started from its Bash tool shows under that session,
   indented by depth. The link comes from the parent's side: the session id the call printed, or a child that started
