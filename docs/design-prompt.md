@@ -57,6 +57,10 @@ Shapes
   Plain cards and tiles: outline only.
 - Chart bars, legend swatches and sparklines' end dots: data fill with a 1.5px ink outline.
 - Pills: outline + paper fill; hover or selected = filled ink with paper text.
+- Chart marks (bars, share segments, columns, dots) get a 1px ink edge; thin bars are at least 10px
+  tall. Lines (sparkline, 7-day average) use the text-safe tokens (--mark-ink, --agent-ink).
+- Selection (picked row) = 2px ink outline, never a ring of tint. Primary button is a filled pill
+  that inverts to paper on hover. Pulse = opacity only. Diff gap cells are flat chip colour.
 
 Content rules
 - Up and down are an arrow plus a number ("▲ 59.8×", "▼ 8%"), never colour alone. Up in
