@@ -1,10 +1,15 @@
-"""The layout both skins share: grid, sizes, spacing and structure, as one stylesheet (<style id="layout">).
+"""The layout both skins share: grid, sizes, spacing, structure and every rule that differs between the skins only in value,
+as one stylesheet (<style id="layout">).
 
-Each page loads it once, before the skin sheets. A skin (Ink in report.py and dashboard.py, Classic in classic.py)
-adds its tokens and a look block: outline, radius, shadow, label case and font, control shape. A rule that reads the
-same in both skins belongs here, but only when no skin rule that comes before it in either skin sheet sets the same
-property on the same element: a skin sheet loads after this one and would win. New markup gets its rules here first
-and reads tokens (`--line-w`, `--radius-*`) instead of a skin's colours or sizes."""
+Each page loads it once, before the skin sheets. A skin (Ink in report.py and dashboard.py, Classic in classic.py) is its
+tokens (the :root rules) plus a short look block: only what differs in kind, such as the answer-card emphasis, the hero glow,
+hover and pressed looks, and the few rules where one skin sets a value the other leaves to the browser. A rule that reads the
+same in both skins, or differs only in a value, lives here and reads a token (`border:var(--line-w) solid var(--line-c)`). The
+skin tokens are listed above LAYOUT_TOKEN_CSS. Order of the sheets: LAYOUT_CSS, LAYOUT_DASH_CSS, LAYOUT_TOKEN_CSS (rules that
+came from report.CSS), LAYOUT_TOKEN_DASH_CSS (from DASH_CSS); the report page loads LAYOUT_CSS and LAYOUT_TOKEN_CSS only.
+The skin sheets load after this one and win at equal specificity, so once a rule here reads a token, the skin must not set
+the same property for that element too (delete the skin copy). New markup gets its rules here first and reads tokens, so
+Classic needs no copy."""
 
 LAYOUT_CSS = """
 /* motion tokens, shared by both skins. --t-fast: press, hover colour. --t-state: toggles, segments, tooltips, delta chip.
@@ -440,6 +445,22 @@ details.finding-sec .empty code{overflow-wrap:anywhere}
 @media (max-width:640px){details.more>summary .mini{display:block;margin:6px 0 0;width:min(100%,160px)}}
 /* end breakdowns */
 """
+
+# The skin tokens (set in the :root rule of both skins; the dark rules only change colours). Ink value | Classic value.
+#   --line-w 1.5px | 1px         outline width of a card, control or tray
+#   --line-c ink | edge          outline colour;  --focus-c ink | mark: focus ring;  --row-c grid | edge: row and day rules
+#   --r-card 14px | 12px         radius of a card;  --r-tile 12px | 10px: tile, row, KPI;  --r-box 12px | 8px: panel, list
+#   --r-ctl 999px | 8px          radius of an input, select, chip;  --r-btn 999px | 6px: small button;  --r-bar 5px | 4px: bar track
+#   --bar-h 10px | 8px           height of a share or split bar;  --key-s 12px | 10px: legend swatch
+#   --pad-sel / --pad-in / --pad-chip / --pad-btn: padding of a select, a text input, a chip, a small button
+#   --in-bg surface | page       background of an input
+#   --num-font mono | sans       font of labels, numbers and controls
+#   --lab-case uppercase | none, --lab-track .08em | normal, --lab-size 11px | 12px, --lab-w 600 | 400, --lab-c muted | ink2:
+#                                a label (KPI caption, column head, filter label)
+#   --cell-size 13px | 1em       number cells;  --btn-w 500 | 400: button weight;  --ctl-size 12px | 13px: control text
+#   --seg-ring 1px ink ring | none   ring around a stacked-bar segment;  --trace-c mark-ink | mark: sparkline and line colour
+#   --dot-edge ink | surface     edge of a chart dot
+#   Motion tokens (--t-fast, --t-state, --t-layout, --ease-exit) are the same in both skins and are set below.
 
 LAYOUT_TOKEN_CSS = """
 body{margin:0;background:var(--page);color:var(--ink);font:14px/1.45 var(--sans);accent-color:var(--mark)}

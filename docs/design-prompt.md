@@ -64,6 +64,21 @@ Shapes
 - Selection (picked row) = 2px ink outline, never a ring of tint. Primary button is a filled pill
   that inverts to paper on hover. Session rows do not lift on hover (colour only). Diff gap cells are flat chip colour.
 
+Skin tokens (write a new rule once, in `tokscope/layout.py`; Classic then needs no copy)
+- A skin is tokens plus a short look block. A rule reads a token, never a literal outline, radius or font, so both skins show it.
+  Ink value | Classic value. The full list sits above `LAYOUT_TOKEN_CSS` in `layout.py`.
+- Outline: `border:var(--line-w) solid var(--line-c)` (1.5px ink | 1px edge). Focus ring: `outline:2px solid var(--focus-c)`.
+  Row and day rules: `var(--row-c)`.
+- Radius: `--r-card` (cards, 14 | 12), `--r-tile` (rows, KPIs, 12 | 10), `--r-box` (panels, 12 | 8), `--r-ctl` (inputs, selects, chips,
+  pill | 8), `--r-btn` (small buttons), `--r-bar` (bar tracks).
+- Controls: `--pad-sel`, `--pad-in`, `--pad-chip`, `--pad-btn` (padding), `--in-bg` (input background), `--ctl-size` (text size),
+  `--btn-w` (weight).
+- Type: `font-family:var(--num-font)` for labels, numbers and controls (mono | sans). A label reads `--lab-case`, `--lab-track`,
+  `--lab-size`, `--lab-w` and `--lab-c`. A number cell reads `--cell-size`.
+- Charts: `--seg-ring` (ring round a segment), `--trace-c` (line and sparkline colour), `--dot-edge` (edge of a dot), `--bar-h`, `--key-s`.
+- Only what differs in kind goes in a skin's look block: the answer-card emphasis (Ink flat navy shadow | Classic tinted outline,
+  no shadow), the hero glow, hover and pressed looks, delta style. Add a token only when two or more rules need it.
+
 Motion (working tool: state changes are fast, nothing loops)
 - Three durations, as CSS tokens in the layout sheet (`tokscope/layout.py`): --t-fast 120ms (press, hover colour),
   --t-state 200ms (toggles, segments, tooltips, delta chip), --t-layout 320ms (row open, sheet, toast, first-paint

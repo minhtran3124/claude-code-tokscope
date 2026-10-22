@@ -7,9 +7,11 @@ The code of the switch is named "skin" (`grep -rn -i skin tokscope tests`); the 
 unguarded: a page without them stops the page script. #skin (the report's button) and the dashboard's [data-set-skin]
 segments are both optional.
 
-Pages also carry <style id="layout"> (layout.py): the rules both skins share. This sheet holds the tokens and the look
-block, plus the rules that differ from Ink or that must stay after a rule of its own. New markup gets its rules in
-layout.py and reads tokens, so Classic shows it without a copy."""
+Pages also carry <style id="layout"> (layout.py): the grid, sizes and every rule that differs from Ink only in value. A skin is
+its tokens plus a short look block. This sheet holds the Classic tokens (the :root rules, listed in layout.py) and the look
+block: the hero aurora and gradient text, the tinted answer card with no shadow, the tinted delta chip, hover lifts and
+glows, the selected-nav and pressed-segment colours. New markup gets its rules in layout.py and reads tokens, so Classic
+shows it without a copy."""
 from . import fonts
 
 CLASSIC_CSS = """
