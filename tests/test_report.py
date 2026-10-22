@@ -65,6 +65,91 @@ class WeekTest(unittest.TestCase):
         self.assertRegex(page, r"<td[^>]*>correctness-review</td>.*?800.*?</td><td[^>]*>100</td><td[^>]*>700</td>")
 
 
+class FindingTest(WeekTest):
+    """Each folded Breakdowns section says its finding in the summary line; the how-it-is-counted text is inside."""
+
+    def summary(self, page, anchor):
+        import re
+        m = re.search(rf'<details class="more finding-sec" id="{anchor}"><summary>(.*?)</summary>(.*?)</details>', page, re.S)
+        return re.sub(r"<[^>]+>", "", m.group(1)), m.group(2)
+
+    def test_owner_finding_is_the_subagent_share_and_the_how_text_is_inside(self):
+        self.req(1, 300, "a")
+        self.req(1, 100, "a", agent="a1")
+        head, inner = self.summary(_breakdowns(self.conn, COND, PARAMS), "by-owner")
+        self.assertIn("Subagents use 25% of all tokens", head)
+        self.assertNotIn("rows sum to the total", head)
+        self.assertIn("rows sum to the total", inner)
+
+    def test_owner_finding_when_no_subagent_ran(self):
+        self.req(1, 300, "a")
+        head, _ = self.summary(_breakdowns(self.conn, COND, PARAMS), "by-owner")
+        self.assertIn("No subagent ran: the main thread has every token", head)
+
+    def test_phase_skill_and_subagent_type_findings(self):
+        self.req(1, 300, "a", phase="review")
+        self.req(1, 100, "b", phase="plan", agent="a1")
+        page = _breakdowns(self.conn, COND, PARAMS)
+        self.assertIn("review is the largest phase at 75.0%; 0.0% is carried", self.summary(page, "by-phase")[0])
+        self.assertIn("a uses 75% of all tokens; 2 skills loaded", self.summary(page, "by-skill")[0])
+        self.assertIn("1 run across 1 type; reviewer uses 100% of subagent tokens", self.summary(page, "agent-types")[0])
+
+    def test_week_finding_compares_with_the_week_before(self):
+        self.req(1, 300, "a")
+        self.req(9, 100, "a")
+        head, _ = self.summary(_breakdowns(self.conn, COND, PARAMS), "by-week")
+        self.assertIn("this week, ", head)
+        self.assertIn("on last week; a leads", head)
+
+    def test_mcp_and_tool_findings_come_from_result_size(self):
+        for name, chars in (("mcp__gh__issue", 3000), ("mcp__gh__pr", 1000), ("mcp__db__q", 6000), ("Read", 8000)):
+            self.conn.execute("INSERT INTO tool_calls (session_id, tool_use_id, name, result_chars) VALUES (?,?,?,?)",
+                              ("real", name, name, chars))
+        self.req(1, 10, None)
+        page = _breakdowns(self.conn, COND, PARAMS)
+        self.assertIn("db holds 60% of MCP result tokens across 2 servers", self.summary(page, "by-mcp")[0])
+        self.assertIn("Read returns 100% of tool result tokens across 1 tool", self.summary(page, "by-tool")[0])
+
+    def test_an_empty_range_says_what_would_appear_and_how_to_get_it(self):
+        page = _breakdowns(self.conn, COND, PARAMS)
+        for anchor, head, hint in (("by-week", "No skill loaded in the last 7 days", "tokscope ingest"),
+                                   ("by-mcp", "No MCP server called", "claude mcp add"),
+                                   ("by-tool", "No tool called", "tokscope ingest"),
+                                   ("by-phase", "No tokens in this range", "tokscope ingest"),
+                                   ("by-owner", "No tokens in this range", "tokscope ingest"),
+                                   ("by-skill", "No skill loaded", "tokscope ingest"),
+                                   ("agent-types", "No subagent ran", "tokscope ingest")):
+            h, inner = self.summary(page, anchor)
+            self.assertIn(head, h, anchor)
+            self.assertIn('<div class="empty">', inner, anchor)
+            self.assertIn(hint, inner, anchor)
+            self.assertNotIn("<table", inner, anchor)
+
+    def test_a_skill_request_with_zero_tokens_does_not_divide_by_zero(self):
+        self.req(1, 0, "a")
+        page = _breakdowns(self.conn, COND, PARAMS)
+        self.assertIn("a uses 0% of all tokens; 1 skill loaded", self.summary(page, "by-skill")[0])
+        from tokscope.report import write_report
+        self.conn.commit()
+        db = Path(self.conn.execute("PRAGMA database_list").fetchone()[2])
+        write_report(db, db.parent / "r.html", tasks_dir=db.parent)
+        self.assertIn("by-skill", (db.parent / "r.html").read_text())
+
+    def test_the_skill_count_is_not_capped_at_30_and_a_near_total_share_is_not_100(self):
+        for i in range(35):
+            self.req(1, 1, f"s{i}")
+        self.req(1, 10000, "big")
+        head, _ = self.summary(_breakdowns(self.conn, COND, PARAMS), "by-skill")
+        self.assertIn("36 skills loaded", head)
+        self.assertIn("big uses 99% of all tokens", head)
+        from tokscope.report import _pc
+        self.assertEqual((_pc(0.001), _pc(0.001, True), _pc(1)), ("&lt;1%", "under 1%", "100%"))
+
+    def test_no_changes_says_how_to_record_one(self):
+        from tokscope.report import _change_cards
+        self.assertIn('tokscope change "note" --skill NAME', _change_cards(self.conn, []).replace("&quot;", '"'))
+
+
 class ChartTest(unittest.TestCase):
     def test_change_reads_as_a_multiple_past_double(self):
         self.assertEqual(charts.change_text(0, 50), "new")
