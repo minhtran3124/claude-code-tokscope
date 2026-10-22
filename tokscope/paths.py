@@ -8,6 +8,7 @@ from pathlib import Path
 
 SRC = Path(__file__).resolve().parent.parent
 PACKAGE = Path(__file__).resolve().parent
+ASSETS = PACKAGE / "assets"  # bundled files: fonts/ and the default phases.json
 
 
 def home():
@@ -39,4 +40,4 @@ def tasks():
 def phases():
     """A phases.json in the data home overrides the one shipped with the package."""
     own = home() / "phases.json"
-    return own if own.exists() else PACKAGE / "phases.json"
+    return own if own.exists() else ASSETS / "phases.json"

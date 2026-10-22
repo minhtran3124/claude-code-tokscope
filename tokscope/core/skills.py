@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from statistics import median
 
-from . import paths
+from .. import paths
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS skill_versions (

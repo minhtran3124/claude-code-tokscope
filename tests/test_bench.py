@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tokscope import bench
-from tokscope.ingest import connect
+from tokscope.experiments import bench
+from tokscope.core.ingest import connect
 
 TASK = json.loads((Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "grader-plain.json").read_text())
 

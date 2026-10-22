@@ -1,6 +1,6 @@
 import unittest
 
-from tokscope import fonts
+from tokscope.web.theme import fonts
 from tokscope.paths import PACKAGE
 
 
@@ -20,7 +20,7 @@ class FontsTest(unittest.TestCase):
         self.assertIn("url(/fonts/IBMPlexMono-500-vietnamese.woff2)", fonts.face_css(False))
 
     def test_the_wheel_ships_the_files(self):
-        self.assertIn("fonts/*.woff2", (PACKAGE.parent / "pyproject.toml").read_text())
+        self.assertIn("assets/fonts/*.woff2", (PACKAGE.parent / "pyproject.toml").read_text())
 
 
 if __name__ == "__main__":

@@ -21,13 +21,19 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlencode, urlparse
 
-from . import charts, fonts, library, managed, markdown, optimize, paths, privacy, projects, registry, skills
-from .classic import CLASSIC_CSS, CLASSIC_DASH_CSS, SKIN_APPLY
-from .layout import LAYOUT_CSS, LAYOUT_DASH_CSS, LAYOUT_TOKEN_CSS, LAYOUT_TOKEN_DASH_CSS
-from .brand import FAVICON, MARK, favicon_link
-from .changes import BENCH_PROJECT, list_changes
-from .ingest import PROJECTS_DIR, connect, ingest
-from .pricing import API_EQ_NOTE
+from .. import paths
+from ..core import markdown, privacy, skills
+from ..experiments import optimize
+from ..features import library, projects
+from ..integrations import managed, registry
+from . import charts
+from .theme import fonts
+from .theme.classic import CLASSIC_CSS, CLASSIC_DASH_CSS, SKIN_APPLY
+from .theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS, LAYOUT_TOKEN_CSS, LAYOUT_TOKEN_DASH_CSS
+from .theme.brand import FAVICON, MARK, favicon_link
+from ..features.changes import BENCH_PROJECT, list_changes
+from ..core.ingest import PROJECTS_DIR, connect, ingest
+from ..core.pricing import API_EQ_NOTE
 from .report import (CSS, JS_BENCH, JS_CORE, JS_SESSIONS, JS_TREND, TOKENS, _benchmarks, _breakdowns, _change_cards, _section,
                      _daily_chart, _diff_html, _more, _sessions_json, _skill_versions, _table, _tok, _usd)
 from .report import SORT_SEG  # the Sessions sort control, shared with the static report
@@ -1825,7 +1831,7 @@ def serve(db, phases, port=8765, interval=10.0, open_browser=True, level="full",
     url = f"http://127.0.0.1:{port}/overview"
     log(f"tokscope dashboard on {url} (this machine only; ingests every {interval:g}s; Ctrl+C stops it)")
     if open_browser:
-        from .cli import open_in_browser
+        from ..cli import open_in_browser
         open_in_browser(url)
     try:
         server.serve_forever()

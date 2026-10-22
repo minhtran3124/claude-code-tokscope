@@ -7,13 +7,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
-from tokscope import privacy
-from tokscope.bench import BENCH_SCHEMA
-from tokscope.changes import CHANGES_SCHEMA
-from tokscope.ingest import connect
-from tokscope.replay import REPLAY_SCHEMA
-from tokscope.skills import SCHEMA as SKILLS_SCHEMA
-from tokscope.report import write_report
+from tokscope.core import privacy
+from tokscope.experiments.bench import BENCH_SCHEMA
+from tokscope.features.changes import CHANGES_SCHEMA
+from tokscope.core.ingest import connect
+from tokscope.experiments.replay import REPLAY_SCHEMA
+from tokscope.core.skills import SCHEMA as SKILLS_SCHEMA
+from tokscope.web.report import write_report
 
 NOW = datetime.now(timezone.utc)
 # strings that must never reach a report below "full"; each sits in a different text column

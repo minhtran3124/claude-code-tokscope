@@ -3,8 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tokscope import replay
-from tokscope.ingest import connect
+from tokscope.experiments import replay
+from tokscope.core.ingest import connect
 
 
 def line(rec):

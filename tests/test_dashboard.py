@@ -13,9 +13,11 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
-from tokscope import dashboard, managed, report, skills
-from tokscope.ingest import connect
-from tokscope.paths import PACKAGE
+from tokscope.core import skills
+from tokscope.integrations import managed
+from tokscope.web import dashboard, report
+from tokscope.core.ingest import connect
+from tokscope.paths import ASSETS
 
 NOW = datetime.now(timezone.utc)
 
@@ -65,7 +67,7 @@ class ServerTest(unittest.TestCase):
                          (sid, key, ts(days), skill, tokens))
         conn.commit()
         conn.close()
-        self.live = dashboard.Live(self.db, PACKAGE / "phases.json", 60, projects_dir=self.tmp / "projects")
+        self.live = dashboard.Live(self.db, ASSETS / "phases.json", 60, projects_dir=self.tmp / "projects")
         (self.tmp / "projects").mkdir()
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), dashboard.BaseHTTPRequestHandler)
         self.port = self.server.server_address[1]
@@ -233,7 +235,7 @@ class SessionsTableTest(unittest.TestCase):
         self.assertIsNone(re.search(r"easing:'ease", js))
 
     def test_rows_are_44px_and_children_keep_their_indent_in_the_layout_sheet(self):
-        from tokscope.layout import LAYOUT_CSS
+        from tokscope.web.theme.layout import LAYOUT_CSS
         block = LAYOUT_CSS.split("/* sessions:", 1)[1].split("/* end sessions */", 1)[0]
         self.assertIn("#session-list .srow>summary{height:44px", block)
         self.assertIn("padding-left:calc(var(--depth,0)*20px)", block)       # --depth is set per row by the script
@@ -244,9 +246,9 @@ class SessionsTableTest(unittest.TestCase):
         self.assertNotIn(".srow:hover>summary .split{transform", LAYOUT_CSS)    # no hover lift on a row's bar
 
     def test_each_skin_adds_only_the_look(self):
-        from tokscope.classic import CLASSIC_CSS, CLASSIC_DASH_CSS
-        from tokscope.layout import LAYOUT_TOKEN_CSS, LAYOUT_TOKEN_DASH_CSS
-        from tokscope.report import CSS
+        from tokscope.web.theme.classic import CLASSIC_CSS, CLASSIC_DASH_CSS
+        from tokscope.web.theme.layout import LAYOUT_TOKEN_CSS, LAYOUT_TOKEN_DASH_CSS
+        from tokscope.web.report import CSS
         layout = LAYOUT_TOKEN_CSS + LAYOUT_TOKEN_DASH_CSS
         # the outline, radius and label case are tokens read once in the layout sheet
         self.assertIn("#session-list{border:var(--line-w) solid var(--line-c);border-radius:var(--r-box)", layout)
@@ -264,7 +266,7 @@ class SessionsTableTest(unittest.TestCase):
         self.assertIn("<span class=d>${esc(when(s))}</span>", js)
 
     def test_hostile_session_id_reaches_the_page_only_as_json_data(self):
-        from tokscope.report import _sessions_json
+        from tokscope.web.report import _sessions_json
         with tempfile.TemporaryDirectory() as d:
             conn = connect(Path(d) / "t.db")
             bad = "<img src=x onerror=alert(1)>"
@@ -291,7 +293,7 @@ class SessionsTableTest(unittest.TestCase):
         self.assertNotIn("#060", js)
 
     def test_a_narrow_page_keeps_the_from_link_and_the_title_column(self):
-        from tokscope.layout import LAYOUT_CSS, LAYOUT_DASH_CSS
+        from tokscope.web.theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS
         block = (LAYOUT_CSS + LAYOUT_DASH_CSS).split("/* sessions:", 1)[1].split("/* end sessions */", 1)[0]
         self.assertIn("#session-list :is(.n,.sid8){display:none}", LAYOUT_DASH_CSS)       # the phone rows drop these, not the parent link
         self.assertNotIn(":is(.n,.sid8,.from)", LAYOUT_DASH_CSS)
@@ -300,7 +302,7 @@ class SessionsTableTest(unittest.TestCase):
         self.assertIn("@media (max-width:1040px)", block)
 
     def test_the_static_report_gets_the_same_sort_control(self):
-        from tokscope.report import write_report
+        from tokscope.web.report import write_report
         with tempfile.TemporaryDirectory() as d:
             db = Path(d) / "t.db"
             connect(db).close()
@@ -352,7 +354,7 @@ class SkinSwitchReportTest(unittest.TestCase):
             db = Path(d) / "t.db"
             connect(db).close()
             out = Path(d) / "r.html"
-            from tokscope.report import write_report
+            from tokscope.web.report import write_report
             write_report(db, out, tasks_dir=Path(d))
             page = out.read_text()
         self.assertIn('<style id="skin-ink">', page)
@@ -360,9 +362,9 @@ class SkinSwitchReportTest(unittest.TestCase):
         self.assertIn('id="skin"', page)
 
     def test_one_layout_sheet_comes_before_both_skins(self):
-        from tokscope.classic import CLASSIC_CSS
-        from tokscope.layout import LAYOUT_CSS
-        from tokscope.report import CSS, write_report
+        from tokscope.web.theme.classic import CLASSIC_CSS
+        from tokscope.web.theme.layout import LAYOUT_CSS
+        from tokscope.web.report import CSS, write_report
         with tempfile.TemporaryDirectory() as d:
             db = Path(d) / "t.db"
             connect(db).close()
@@ -377,8 +379,8 @@ class SkinSwitchReportTest(unittest.TestCase):
         self.assertNotIn(rule, CLASSIC_CSS)
 
     def test_classic_nests_child_sessions_like_ink(self):
-        from tokscope.classic import CLASSIC_CSS, CLASSIC_DASH_CSS
-        from tokscope.layout import LAYOUT_CSS, LAYOUT_DASH_CSS
+        from tokscope.web.theme.classic import CLASSIC_CSS, CLASSIC_DASH_CSS
+        from tokscope.web.theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS
         classic_sheets = LAYOUT_CSS + LAYOUT_DASH_CSS + CLASSIC_CSS + CLASSIC_DASH_CSS    # the sheets a Classic page applies
         for rule in (".srow.child{", ".srow.child::before{", ".btn.kids-more{", ".srow.orphan>summary .t{",
                      ".srow>summary .from{", ".srow.dim:not(:hover)"):
@@ -483,7 +485,7 @@ class OverviewTest(unittest.TestCase):
         self.assertEqual(len(labels), 4)
 
     def test_phone_section_is_in_the_layout_sheet_and_the_static_report_has_no_menu(self):
-        from tokscope.layout import LAYOUT_DASH_CSS
+        from tokscope.web.theme.layout import LAYOUT_DASH_CSS
         block = LAYOUT_DASH_CSS.split("/* phone */", 1)[1].split("/* end phone */", 1)[0]
         self.assertIn("@media (max-width:639px)", block)
         self.assertIn("min-height:44px", block)
@@ -492,8 +494,8 @@ class OverviewTest(unittest.TestCase):
         self.assertIn(".spenders td:first-child a,.spenders td:first-child span{display:inline-flex;align-items:flex-end;", block)  # name sits on its numbers, no loose gap
 
     def test_phone_breakpoint_is_639_in_css_and_script_and_the_sheet_leaves_dialog_and_select_keys_alone(self):
-        from tokscope.layout import LAYOUT_DASH_CSS
-        from tokscope.classic import CLASSIC_DASH_CSS
+        from tokscope.web.theme.layout import LAYOUT_DASH_CSS
+        from tokscope.web.theme.classic import CLASSIC_DASH_CSS
         block = LAYOUT_DASH_CSS.split("/* phone */", 1)[1].split("/* end phone */", 1)[0]
         self.assertNotIn("max-width:640px", block)
         self.assertNotIn("max-width:640px", CLASSIC_DASH_CSS.split("/* end overview */", 1)[1])
@@ -503,7 +505,7 @@ class OverviewTest(unittest.TestCase):
         self.assertIn("selOpen", keys)                                             # an open select keeps its Escape
 
     def test_classic_phone_controls_get_an_outline_that_reads_3_to_1(self):
-        from tokscope.classic import CLASSIC_DASH_CSS
+        from tokscope.web.theme.classic import CLASSIC_DASH_CSS
         rule = CLASSIC_DASH_CSS.split("the new controls have no other cue", 1)[1]
         self.assertIn("body .menu-btn", rule)
         self.assertIn("border-color:var(--muted)", rule.split("}", 1)[0])

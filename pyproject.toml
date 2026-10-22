@@ -17,11 +17,11 @@ dependencies = []
 [project.scripts]
 tokscope = "tokscope.cli:main"
 
-[tool.setuptools]
-packages = ["tokscope"]
+[tool.setuptools.packages.find]
+include = ["tokscope*"]
 
 [tool.setuptools.dynamic]
 version = { attr = "tokscope.__version__" }
 
 [tool.setuptools.package-data]
-tokscope = ["phases.json", "fonts/*.woff2"]
+tokscope = ["assets/phases.json", "assets/fonts/*.woff2"]

@@ -6,8 +6,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tokscope import dashboard, library, markdown
-from tokscope.ingest import connect
+from tokscope.core import markdown
+from tokscope.features import library
+from tokscope.web import dashboard
+from tokscope.core.ingest import connect
 
 
 def skill(folder, name, description="Does a thing.", body="# Title\n\nText.\n"):

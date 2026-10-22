@@ -1,10 +1,10 @@
 import re
 import unittest
 
-from tokscope import dashboard
-from tokscope.classic import CLASSIC_CSS, CLASSIC_DASH_CSS
-from tokscope.layout import LAYOUT_CSS, LAYOUT_DASH_CSS
-from tokscope.report import CSS
+from tokscope.web import dashboard
+from tokscope.web.theme.classic import CLASSIC_CSS, CLASSIC_DASH_CSS
+from tokscope.web.theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS
+from tokscope.web.report import CSS
 
 SHEETS = {"layout": LAYOUT_CSS, "layout-dash": LAYOUT_DASH_CSS, "ink": CSS, "ink-dash": dashboard.DASH_CSS,
           "classic": CLASSIC_CSS, "classic-dash": CLASSIC_DASH_CSS}
@@ -91,7 +91,7 @@ class MotionTokensTest(unittest.TestCase):
 
     def test_the_hero_glow_and_the_spinners_stop_under_reduced_motion(self):
         self.assertRegex(CLASSIC_CSS, r"@media \(prefers-reduced-motion:reduce\)\{\s*\.hero::before\{animation:none\}")
-        from tokscope.layout import LAYOUT_TOKEN_DASH_CSS
+        from tokscope.web.theme.layout import LAYOUT_TOKEN_DASH_CSS
         self.assertRegex(LAYOUT_TOKEN_DASH_CSS, r"@media \(prefers-reduced-motion:reduce\)\{\s*\.runbar i,\.spin,\.busy::before\{animation:none\}")
 
 

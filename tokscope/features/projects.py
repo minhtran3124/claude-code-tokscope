@@ -22,8 +22,8 @@ import tempfile
 import time
 from pathlib import Path
 
-from . import paths
-from .calls import CHARS_PER_TOKEN
+from .. import paths
+from ..core.calls import CHARS_PER_TOKEN
 
 TOKENS = "(r.input + r.cache_read + r.cache_write_5m + r.cache_write_1h + r.output)"
 HEALTH_TIMEOUT = 90

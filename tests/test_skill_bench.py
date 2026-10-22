@@ -5,8 +5,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tokscope import bench, skills
-from tokscope.ingest import connect
+from tokscope.core import skills
+from tokscope.experiments import bench
+from tokscope.core.ingest import connect
 
 
 def write(folder, text):

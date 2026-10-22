@@ -15,7 +15,7 @@ import os
 import re
 import sqlite3
 
-from . import paths
+from .. import paths
 from .calls import mcp_server
 
 LEVELS = ("full", "redacted", "numbers")

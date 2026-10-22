@@ -1,7 +1,7 @@
 """The two typefaces of the report and the dashboard: IBM Plex Mono for labels, controls,
 numbers and code; Be Vietnam Pro for sentences and names.
 
-Both are SIL Open Font License 1.1. The latin and vietnamese subsets ship in tokscope/fonts/, so no page asks another
+Both are SIL Open Font License 1.1. The latin and vietnamese subsets ship in tokscope/assets/fonts/, so no page asks another
 site for a font. The report embeds them (one file that works offline and when shared); the dashboard serves them from
 /fonts/ with a long cache."""
 
@@ -9,7 +9,7 @@ import base64
 import re
 from functools import lru_cache
 
-from . import paths
+from ... import paths
 
 SANS = "'Be Vietnam Pro',system-ui,sans-serif"
 MONO = "'IBM Plex Mono',ui-monospace,monospace"
@@ -29,7 +29,7 @@ def _name(family, weight, subset):
 @lru_cache(maxsize=None)
 def read(name):
     """The bytes of a shipped font file, or None when the name is not one of them."""
-    path = paths.PACKAGE / "fonts" / name
+    path = paths.ASSETS / "fonts" / name
     return path.read_bytes() if FILE.match(name) and path.is_file() else None
 
 

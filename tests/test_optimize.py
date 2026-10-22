@@ -11,8 +11,11 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
-from tokscope import dashboard, library, optimize, skills
-from tokscope.ingest import connect
+from tokscope.core import skills
+from tokscope.experiments import optimize
+from tokscope.features import library
+from tokscope.web import dashboard
+from tokscope.core.ingest import connect
 
 # stands in for claude -p: rewrites the target's SKILL.md in its cwd, notes its arguments, answers like --output-format json
 FAKE_CLAUDE = """#!/usr/bin/env python3

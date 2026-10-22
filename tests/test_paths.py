@@ -26,7 +26,7 @@ class PathsTest(unittest.TestCase):
 
     def test_a_phases_file_in_the_data_home_overrides_the_shipped_one(self):
         with tempfile.TemporaryDirectory() as h, mock.patch.dict(os.environ, {"TOKSCOPE_HOME": h}):
-            self.assertEqual(paths.phases(), paths.PACKAGE / "phases.json")
+            self.assertEqual(paths.phases(), paths.ASSETS / "phases.json")
             (Path(h) / "phases.json").write_text("{}")
             self.assertEqual(paths.phases(), Path(h) / "phases.json")
 

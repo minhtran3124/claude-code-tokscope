@@ -7,11 +7,11 @@ from pathlib import Path
 from unittest import mock
 
 from tokscope import paths
-from tokscope.ingest import ingest
-from tokscope.skills import canonical_name, loaded_text_hash
-from tokscope.pricing import cost_usd
+from tokscope.core.ingest import ingest
+from tokscope.core.skills import canonical_name, loaded_text_hash
+from tokscope.core.pricing import cost_usd
 
-PHASES = paths.PACKAGE / "phases.json"
+PHASES = paths.ASSETS / "phases.json"
 SID = "s1"
 
 
@@ -216,7 +216,7 @@ class IngestTest(Fixture):
 class SessionCommandTest(Fixture):
     def test_session_breakdown_is_read_fresh_from_the_transcript(self):
         from tokscope.cli import session_text
-        from tokscope.ingest import ingest_session
+        from tokscope.core.ingest import ingest_session
 
         self.write_main([human("x"), assistant("r1", tools=[("t1", "Skill", {"skill": "uat"})]), assistant("r2")])
         self.assertTrue(ingest_session(self.db, PHASES, SID, projects_dir=self.tmp / "projects"))
@@ -228,7 +228,7 @@ class SessionCommandTest(Fixture):
 
     def test_session_json_splits_main_and_subagents_and_names_the_last_prompt(self):
         from tokscope.cli import session_json
-        from tokscope.ingest import ingest_session
+        from tokscope.core.ingest import ingest_session
 
         self.write_main([human("first"), assistant("r1"), human("second ask"),
                          assistant("r2", tools=[("t1", "Agent", {"subagent_type": "Explore"})])])
@@ -243,7 +243,7 @@ class SessionCommandTest(Fixture):
 
     def test_session_turns_show_in_out_price_and_which_agents_mcp_and_tools_ran(self):
         from tokscope.cli import session_json
-        from tokscope.ingest import ingest_session
+        from tokscope.core.ingest import ingest_session
 
         self.write_main([
             human("plain question"), assistant("r1"),
@@ -366,7 +366,7 @@ class HeadlessLinkTest(Fixture):
         self.assertEqual(self.parents(), {PARENT: None, CHILD: PARENT, GRANDCHILD: PARENT})
 
     def test_command_dirs_reads_shell_words_not_prompt_text(self):
-        from tokscope.ingest import command_dirs
+        from tokscope.core.ingest import command_dirs
         cases = {
             'cd "/x" && claude -p hi': {"/x"},
             "cd '/a b/c' && claude -p hi": {"/a b/c"},
@@ -423,14 +423,14 @@ class HeadlessLinkTest(Fixture):
         self.assertEqual(self.parents(), {PARENT: None, CHILD: PARENT, GRANDCHILD: PARENT, "stranger": None})
 
     def test_commands_that_only_mention_claude_are_not_headless_runs(self):
-        from tokscope.ingest import HEADLESS_RE
+        from tokscope.core.ingest import HEADLESS_RE
 
         for cmd in ("claude -p hi", "npx claude --print 'x'", "/usr/bin/claude -p x", "(claude -p x)", "a; claude --model m -p x"):
             self.assertTrue(HEADLESS_RE.search(cmd), cmd)
         for cmd in ("ls ~/.claude -p", "cd claude-code-tokscope && ls -p", "claude --resume x", "grep claude -r . | head -p"):
             self.assertFalse(HEADLESS_RE.search(cmd), cmd)
         # quoted words and heredoc bodies are text the command passes along, not a run
-        from tokscope.ingest import is_headless
+        from tokscope.core.ingest import is_headless
         self.assertTrue(is_headless("cd /x && claude -p \"do it\" --output-format json"))
         # a script written by a heredoc and run in the same command
         self.assertTrue(is_headless("cat > $S/run.sh <<'EOF'\ncd /x && claude -p hi\nEOF\nbash $S/run.sh $S"))
@@ -440,8 +440,8 @@ class HeadlessLinkTest(Fixture):
             self.assertFalse(is_headless(cmd), cmd)
 
     def test_session_list_names_the_parent_and_an_old_database_gains_the_columns(self):
-        from tokscope.ingest import connect
-        from tokscope.report import _sessions_json
+        from tokscope.core.ingest import connect
+        from tokscope.web.report import _sessions_json
 
         old = sqlite3.connect(self.db)
         old.execute("CREATE TABLE sessions (session_id TEXT PRIMARY KEY, project TEXT, cwd TEXT, title TEXT, version TEXT,"
@@ -461,7 +461,7 @@ class HeadlessLinkTest(Fixture):
 
 
     def test_a_parent_outside_the_reports_filter_keeps_its_id_but_not_its_title(self):
-        from tokscope.report import _sessions_json
+        from tokscope.web.report import _sessions_json
 
         other = self.tmp / "projects" / "other"  # the parent lives in another project
         other.mkdir()
@@ -488,7 +488,7 @@ class HeadlessLinkTest(Fixture):
             db.execute("UPDATE sessions SET parent_session_id = NULL")
         self.assertEqual(self.run_ingest()[0], 0)
         self.assertEqual(self.parents(), {PARENT: None, CHILD: PARENT})
-        from tokscope.ingest import connect, link_sessions
+        from tokscope.core.ingest import connect, link_sessions
 
         conn = connect(self.db)
         before = conn.total_changes
