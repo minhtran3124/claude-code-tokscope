@@ -1,3 +1,4 @@
+import re
 import json
 import os
 import re
@@ -12,7 +13,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
-from tokscope import dashboard, skills
+from tokscope import dashboard, report, skills
 from tokscope.ingest import connect
 from tokscope.paths import PACKAGE
 
@@ -268,10 +269,11 @@ class SessionsTableTest(unittest.TestCase):
         self.assertNotIn("#060", js)
 
     def test_a_narrow_page_keeps_the_from_link_and_the_title_column(self):
-        from tokscope.layout import LAYOUT_CSS
-        block = LAYOUT_CSS.split("/* sessions:", 1)[1].split("/* end sessions */", 1)[0]
-        phone = block.split("@media (max-width:640px)", 1)[1]
-        self.assertNotIn(".from", phone.split("{display:none}")[0])        # the parent link stays at 375 px
+        from tokscope.layout import LAYOUT_CSS, LAYOUT_DASH_CSS
+        block = (LAYOUT_CSS + LAYOUT_DASH_CSS).split("/* sessions:", 1)[1].split("/* end sessions */", 1)[0]
+        self.assertIn("#session-list :is(.n,.sid8){display:none}", LAYOUT_DASH_CSS)       # the phone rows drop these, not the parent link
+        self.assertNotIn(":is(.n,.sid8,.from)", LAYOUT_DASH_CSS)
+        self.assertIn(".srow>summary .from{max-width:45%}", LAYOUT_DASH_CSS)
         self.assertIn("@media (max-width:1200px)", block)
         self.assertIn("@media (max-width:1040px)", block)
 
@@ -429,6 +431,62 @@ class OverviewTest(unittest.TestCase):
         self.assertRegex(body, r'class="dl"><span class="trend \w+">[+-]?[0-2]%</span>')   # a flat input reads flat (hourly samples
         self.assertNotIn("+269%", body)                                                      # leave a rounding of a percent or two)
 
+    def test_phone_menu_is_a_button_for_a_sheet_with_the_pages_filters_controls_and_privacy_note(self):
+        self.add(0)
+        body = self.page({"project": ["-home-u-app"]})
+        self.assertIn('id="menu-btn" aria-controls="sheet" aria-expanded="false"', body)
+        sheet = body.split('<div class="sheet" id="sheet">', 1)[1].split("</aside>", 1)[0]
+        self.assertIn('<nav class="toc"', sheet)                                   # the pages
+        self.assertIn('class="filters sheet-filters"', sheet)                      # the same filter form
+        self.assertIn("data-set-theme", sheet)                                      # the theme control
+        self.assertIn("Privacy level:", sheet)
+        self.assertIn("<span>Last 30 days · app</span>", body)                     # the filters as one pill
+        self.assertIn('aria-controls="sheet" aria-expanded="false" aria-haspopup="dialog"', body)
+        self.assertIn("e.key==='Escape'", dashboard.DASH_JS)                       # keyboard: Escape closes, Tab wraps, focus returns
+        self.assertIn("main.inert=on", dashboard.DASH_JS)
+
+    def test_pill_names_the_range_and_any_model_or_skill_and_the_library_only_the_project(self):
+        f = dashboard.Filters({"range": ["7"], "model": ["claude-opus-5-5"], "skill": ["plan"]})
+        self.assertEqual(dashboard._filter_pill(self.conn, f, "overview"), "Last 7 days · all projects · opus-5-5 · plan")
+        self.assertEqual(dashboard._filter_pill(self.conn, f, "library"), "all projects")
+
+    def test_daily_chart_has_a_phone_copy_of_14_days_with_4_labels(self):
+        for d in range(30):
+            self.add(d)
+        body = self.page()
+        wide, narrow = (re.search(rf'<svg class="{c}".*?</svg>', body, re.S).group(0) for c in ("wide", "narrow"))
+        self.assertEqual(narrow.count('<g class="d"'), 14)
+        self.assertEqual(wide.count('<g class="d"'), 30)
+        labels = re.findall(r'<text x="[\d.]+" y="194" text-anchor="\w+">([\d-]+)</text>', narrow)
+        self.assertEqual(len(labels), 4)
+
+    def test_phone_section_is_in_the_layout_sheet_and_the_static_report_has_no_menu(self):
+        from tokscope.layout import LAYOUT_DASH_CSS
+        block = LAYOUT_DASH_CSS.split("/* phone */", 1)[1].split("/* end phone */", 1)[0]
+        self.assertIn("@media (max-width:639px)", block)
+        self.assertIn("min-height:44px", block)
+        self.assertIn("prefers-reduced-motion:reduce", block)                      # the sheet fades, it does not travel
+        self.assertNotIn("menu-btn", report.JS)
+        self.assertIn(".spenders td:first-child a,.spenders td:first-child span{display:inline-flex;align-items:flex-end;", block)  # name sits on its numbers, no loose gap
+
+    def test_phone_breakpoint_is_639_in_css_and_script_and_the_sheet_leaves_dialog_and_select_keys_alone(self):
+        from tokscope.layout import LAYOUT_DASH_CSS
+        from tokscope.classic import CLASSIC_DASH_CSS
+        block = LAYOUT_DASH_CSS.split("/* phone */", 1)[1].split("/* end phone */", 1)[0]
+        self.assertNotIn("max-width:640px", block)
+        self.assertNotIn("max-width:640px", CLASSIC_DASH_CSS.split("/* end overview */", 1)[1])
+        self.assertIn("matchMedia('(max-width:639px)')", dashboard.DASH_JS)
+        keys = dashboard.DASH_JS.split("document.addEventListener('keydown',e=>{if(!sheet.classList.contains('open'))return;", 1)[1][:400]
+        self.assertIn("dialog[open]", keys.split("if(e.key==='Escape')", 1)[0])    # the shortcuts dialog keeps Escape and Tab
+        self.assertIn("selOpen", keys)                                             # an open select keeps its Escape
+
+    def test_classic_phone_controls_get_an_outline_that_reads_3_to_1(self):
+        from tokscope.classic import CLASSIC_DASH_CSS
+        rule = CLASSIC_DASH_CSS.split("the new controls have no other cue", 1)[1]
+        self.assertIn("body .menu-btn", rule)
+        self.assertIn("border-color:var(--muted)", rule.split("}", 1)[0])
+        self.assertIn("4.69:1", CLASSIC_DASH_CSS)                                  # the measured ratio, not 4.0
+
     def test_a_window_before_shorter_than_the_range_is_compared_per_day(self):
         self.add_hours(40 * 24)                                            # the same 100 an hour for 40 days
         body = self.page()                                                 # 30 days; only 9.96 days of data before them
@@ -558,8 +616,9 @@ class OverviewTest(unittest.TestCase):
     def test_the_seven_day_average_counts_days_off_as_zero(self):
         rows = [("2026-10-01", 1000, 0.1, 1, 0, 0, 0, 1000), ("2026-10-07", 1000, 0.1, 1, 0, 0, 0, 1000)]
         svg = dashboard._daily_stacked(rows, [], [])
-        self.assertEqual(svg.count('<g class="d"'), 7)                      # days off are empty slots
-        last = re.search(r'class="ma"[^>]*points="([^"]+)"', svg).group(1).split()[-1]
+        wide = svg.split('<svg class="narrow"')[0]                          # the phone shows a second, narrow copy
+        self.assertEqual(wide.count('<g class="d"'), 7)                     # days off are empty slots
+        last = re.search(r'class="ma"[^>]*points="([^"]+)"', wide).group(1).split()[-1]
         self.assertEqual(last.split(",")[1], f"{218 - 184 * (2000 / 7) / 1000:.1f}")  # 2000 over 7 calendar days, not 1000
 
     def test_the_y_axis_labels_the_gridlines_where_they_are(self):
