@@ -75,7 +75,7 @@ class ManagedReadTest(unittest.TestCase):
 
     def test_ant_runs_with_an_argument_list_and_a_timeout(self):
         done = subprocess.CompletedProcess([], 0, stdout='{"id": "a"}\n{"id": "b"}\n', stderr="")
-        with mock.patch.object(managed.shutil, "which", return_value="/bin/ant"), \
+        with mock.patch.object(managed, "_ant", return_value="/bin/ant"), \
                 mock.patch.object(managed.subprocess, "run", return_value=done) as run:
             self.assertEqual(managed._run(["beta:agents", "list"]), [{"id": "a"}, {"id": "b"}])
         args, kw = run.call_args
@@ -83,14 +83,28 @@ class ManagedReadTest(unittest.TestCase):
         self.assertEqual(kw["timeout"], managed.TIMEOUT)
         self.assertNotIn("shell", kw)
 
+    def test_ant_in_the_user_bin_folder_is_found_without_it_on_path(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        home, empty = Path(tmp.name) / "home", Path(tmp.name) / "path"  # an empty PATH: no other ant can be found
+        exe = home / ".local" / "bin" / "ant"
+        exe.parent.mkdir(parents=True)
+        empty.mkdir()
+        exe.write_text("#!/bin/sh\n")
+        exe.chmod(0o755)
+        with mock.patch.dict(os.environ, {"HOME": str(home), "PATH": str(empty)}):
+            self.assertEqual(managed._ant(), str(exe))
+            exe.unlink()
+            self.assertIsNone(managed._ant())
+
     def test_missing_ant_and_a_failed_command_raise_readable_errors(self):
-        with mock.patch.object(managed.shutil, "which", return_value=None):
+        with mock.patch.object(managed, "_ant", return_value=None):
             self.assertRaisesRegex(RuntimeError, "not installed", managed._run, ["beta:agents", "list"])
-        with mock.patch.object(managed.shutil, "which", return_value="/bin/ant"), \
+        with mock.patch.object(managed, "_ant", return_value="/bin/ant"), \
                 mock.patch.object(managed.subprocess, "run", side_effect=OSError(8, "Exec format error")):
             self.assertRaisesRegex(RuntimeError, "could not start: Exec format error", managed._run, ["beta:agents", "list"])
         failed = subprocess.CompletedProcess([], 1, stdout="", stderr="GET ...: 401 Unauthorized\n")
-        with mock.patch.object(managed.shutil, "which", return_value="/bin/ant"), \
+        with mock.patch.object(managed, "_ant", return_value="/bin/ant"), \
                 mock.patch.object(managed.subprocess, "run", return_value=failed):
             self.assertRaisesRegex(RuntimeError, "401 Unauthorized", managed._run, ["beta:agents", "list"])
 
