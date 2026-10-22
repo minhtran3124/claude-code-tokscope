@@ -572,6 +572,18 @@ class OverviewTest(unittest.TestCase):
         self.assertIn("xia2 bbbbbb", body)
         self.assertIn("Skill version changed", body)
 
+    def test_only_the_version_that_replaced_another_gets_a_mark(self):
+        for d in (7, 4, 1):                                                # both versions are first seen inside the chart
+            self.add(d)
+        self.conn.executescript(skills.SCHEMA)
+        self.conn.executemany("INSERT INTO skill_versions (skill, version, first_seen, source, label) VALUES (?,?,?,?,?)",
+                              [("xia2", "aaaaaa111111", self.ts(5), "disk", None), ("xia2", "bbbbbb222222", self.ts(2), "disk", None)])
+        body = self.page()
+        self.assertIn("xia2 bbbbbb", body)                                 # the second version replaced the first
+        self.assertNotIn("xia2 aaaaaa", body)                              # the first sight of a skill is not a change
+        self.assertIn('<code class="ver">bbbbbb</code>', body)             # the "New skill versions" list agrees with the lines
+        self.assertNotIn('<code class="ver">aaaaaa</code>', body)
+
     def test_top_spenders_are_one_container_with_three_columns(self):
         self.add(1, skill="xia2")
         body = self.page()
