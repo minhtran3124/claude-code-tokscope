@@ -341,7 +341,7 @@ transition:opacity var(--t-layout) var(--ease),transform var(--t-layout) var(--e
 .sheet .sheet-filters{display:flex;flex-direction:column;align-items:stretch;gap:12px;margin:20px 0 0}
 .sheet-filters .ctl-l{margin:0}
 .sheet-filters .fl{gap:4px}
-.sheet-filters select{width:100%;max-width:none;min-height:44px;font-size:16px}
+.layout .sheet-filters select{width:100%;max-width:none;min-height:44px;font-size:16px}
 .sheet-filters .chip{align-self:flex-start;justify-content:center;min-height:44px;min-width:44px;padding:0 20px;font-size:14px}
 .sheet-filters a{display:inline-flex;align-items:center;min-height:44px}
 .sheet .side-foot.ctls{margin:20px 0 0}
