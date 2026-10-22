@@ -413,6 +413,13 @@ class OverviewTest(unittest.TestCase):
         self.assertIn("dialog[open]", keys.split("if(e.key==='Escape')", 1)[0])    # the shortcuts dialog keeps Escape and Tab
         self.assertIn("selOpen", keys)                                             # an open select keeps its Escape
 
+    def test_classic_phone_controls_get_an_outline_that_reads_3_to_1(self):
+        from tokscope.classic import CLASSIC_DASH_CSS
+        rule = CLASSIC_DASH_CSS.split("the new controls have no other cue", 1)[1]
+        self.assertIn("body .menu-btn", rule)
+        self.assertIn("border-color:var(--muted)", rule.split("}", 1)[0])
+        self.assertIn("4.69:1", CLASSIC_DASH_CSS)                                  # the measured ratio, not 4.0
+
     def test_a_window_before_shorter_than_the_range_is_compared_per_day(self):
         for d in range(40):                                                 # the same 1000 a day for 40 days
             self.add(d)

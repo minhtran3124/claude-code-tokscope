@@ -454,6 +454,8 @@ border-radius:8px;padding:10px 12px;margin:0 0 16px}
 /* end overview */
 /* phone: the current page in the menu sheet is ink on the tint (the blue is 4.69:1 on it, ink reads clearer) */
 @media (max-width:639px){.sheet .toc a.on{color:var(--ink)}}
+/* phone: the new controls have no other cue than their outline, so it reads 3:1 (--edge is 1.5:1 and stays for cards and rows) */
+@media (max-width:639px){body .menu-btn,body .pill-btn,.sheet-filters select,.sheet-filters .chip,.sheet .segctl .chip{border-color:var(--muted)}}
 """
 
 SKIN_APPLY = ("<script>try{if(localStorage.getItem('tokscope-skin')==='classic'){"
