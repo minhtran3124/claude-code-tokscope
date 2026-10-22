@@ -113,7 +113,8 @@ function toggleTheme(x,y,mode){const apply=()=>setTheme(mode||(isDark()?'light':
 if(themeBtn)themeBtn.addEventListener('click',e=>{const b=themeBtn.getBoundingClientRect();toggleTheme(e.clientX||b.left+b.width/2,e.clientY||b.top+b.height/2)});
 document.querySelectorAll('[data-set-theme]').forEach(btn=>btn.addEventListener('click',e=>{const b=btn.getBoundingClientRect();
   toggleTheme(e.clientX||b.left+b.width/2,e.clientY||b.top+b.height/2,btn.dataset.setTheme)}));syncTheme();
-// Classic/Ink switch: two stylesheets, one enabled by its media attribute
+// Classic/Ink switch: two stylesheets, one enabled by its media attribute. #skin-ink and #skin-classic have no null
+// check, so a page needs both (the `s` key throws without them); #skin and [data-set-skin] are optional
 const skinBtn=document.getElementById('skin'),skinInk=document.getElementById('skin-ink'),skinClassic=document.getElementById('skin-classic');
 function setSkin(classic){skinInk.media=classic?'not all':'all';skinClassic.media=classic?'all':'not all';root.dataset.skin=classic?'classic':'';
   if(skinBtn){skinBtn.textContent=classic?'Ink':'Classic';skinBtn.setAttribute('aria-pressed',classic)}
@@ -126,7 +127,7 @@ document.querySelectorAll('[data-set-skin]').forEach(b=>{b.addEventListener('cli
 const io='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{rootMargin:'0px 0px -6% 0px'}):null;
 document.querySelectorAll('.reveal,main>details.more,#breakdowns>details').forEach(el=>{el.classList.add('reveal');io?io.observe(el):el.classList.add('in')});
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-// keyboard: t theme, g top, ? this list; pages add their own keys
+// keyboard: t theme, s design (Classic or Ink), g top, ? this list; pages add their own keys
 const keysDlg=document.getElementById('keys');
 addEventListener('keydown',e=>{const typing=/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   if(typing||e.metaKey||e.ctrlKey||e.altKey)return;
@@ -144,7 +145,7 @@ SORT_SEG = ('<span class="seg" id="s-sort" role="group" aria-label="Sort session
 JS_SESSIONS = """
 const S=JSON.parse(document.getElementById('sessions-data').textContent);
 const list=document.getElementById('session-list'),q=document.getElementById('s-q'),sortBox=document.getElementById('s-sort');
-// sort is a segmented control (Segmented control, 200 ms): Newest, Most tokens, Most subagent
+// sort is the segmented control SORT_SEG: Newest, Most tokens, Most subagent tokens
 let sortKey='recent';
 // durations come from the layout sheet's tokens, so the script and the stylesheet never disagree
 const cssVar=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -162,7 +163,8 @@ const isRoot=s=>{const seen=new Set([s.id]);for(let p=byId.get(s.parent);p;p=byI
 const hl=(text,needle)=>{if(!needle)return esc(text);const lo=text.toLowerCase(),n=needle.toLowerCase();let out='',pos=0,at;
   while((at=lo.indexOf(n,pos))>-1){out+=esc(text.slice(pos,at))+'<mark>'+esc(text.slice(at,at+n.length))+'</mark>';pos=at+n.length}
   return out+esc(text.slice(pos))};
-// the bar's length is the session's tokens against the largest in the list; the colours split it into main thread and subagents
+// the bar's length is the session's tokens against the largest session in the data (all of S, so a filter does not
+// rescale it), at least 3% so a small session still shows; the colours split it into main thread and subagents
 const MAXT=Math.max(...S.map(s=>s.tokens),1);
 function split(main,ag){const t=Math.max(main+ag,1),len=Math.max(3,100*(main+ag)/MAXT);
   return `<span class=track><span class=split style="width:${len.toFixed(1)}%" title="main ${fmt(main)} · subagents ${fmt(ag)}"><u style="width:${(100*main/t).toFixed(1)}%"></u>${ag?`<u class=a style="width:${(100*ag/t).toFixed(1)}%"></u>`:''}</span></span>`}
@@ -230,7 +232,9 @@ function moreBtn(e){let el=nodes.get('more:'+e.more.id);
 // a session and everything it started, for the day header (a collapsed "+N more" still counts)
 function tally(s,seen=new Set()){if(seen.has(s.id))return[0,0];seen.add(s.id);let n=1,t=s.tokens;
   (kids.get(s.id)||[]).forEach(k=>{const[a,b]=tally(k,seen);n+=a;t+=b});return[n,t]}
+// days are UTC days, like the time column (s.start is a UTC timestamp)
 const dayName=d=>!d?'No date':new Date(d+'T00:00:00Z').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
+// a group ranks by its root session's own numbers: a parent's totals do not include the sessions it started (DECISIONS.md, 'Headless child sessions keep their own totals')
 const SORTS={recent:['Newest first',(a,b)=>b[0].s.start.localeCompare(a[0].s.start)],tokens:['Most tokens first',(a,b)=>b[0].s.tokens-a[0].s.tokens],
   agents:['Most subagent tokens first',(a,b)=>b[0].s.agents-a[0].s.agents]};
 function headEl(){const h=document.createElement('div');h.className='shead';
@@ -254,7 +258,7 @@ function render(){
       el.classList.toggle('picked',picked.has(s.id));el.querySelector('input').checked=picked.has(s.id)}
     el.classList.toggle('child',e.d>0);el.classList.toggle('dim',e.dim);el.style.setProperty('--depth',e.d);
     return el};
-  // by day: a header for each day (its sessions and tokens), newest first. Ranked: one header, and the date moves into the time column.
+  // by day: a header for each day (all its sessions and tokens, also those past "Show more"), newest first. Ranked: one header, and the date moves into the time column.
   const els=[];
   if(page.length){els.push(headEl());
     if(sortKey==='recent'){let cur=null;page.forEach(g=>{const day=g[0].s.start.slice(0,10);

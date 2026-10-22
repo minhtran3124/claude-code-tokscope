@@ -620,6 +620,7 @@ class OverviewTest(unittest.TestCase):
         svg = dashboard._daily_stacked(rows, [], [])
         wide = svg.split('<svg class="narrow"')[0]                          # the phone shows a second, narrow copy
         self.assertEqual(wide.count('<g class="d"'), 7)                     # days off are empty slots
+        # wide chart: the baseline is y 218 (240 - pad_b 22) and the plot is 184 high (240 - 34 - 22)
         last = re.search(r'class="ma"[^>]*points="([^"]+)"', wide).group(1).split()[-1]
         self.assertEqual(last.split(",")[1], f"{218 - 184 * (2000 / 7) / 1000:.1f}")  # 2000 over 7 calendar days, not 1000
 
