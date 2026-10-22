@@ -3,8 +3,9 @@
 Pages carry both skin stylesheets: <style id="skin-ink"> and <style id="skin-classic" media="not all">. The Classic/Ink button
 (key `s`) flips their media attributes; SKIN_APPLY restores the saved choice (localStorage `tokscope-skin`) before paint.
 The code of the switch is named "skin" (`grep -rn -i skin tokscope tests`); the `s` rows of both shortcut dialogs say
-"Classic or Ink design" instead. The skin block in report.py's JS_CORE reads #skin, #skin-ink and #skin-classic
-unguarded: a page without any of them stops the page script.
+"Classic or Ink design" instead. The skin block in report.py's JS_CORE reads #skin-ink and #skin-classic
+unguarded: a page without them stops the page script. #skin (the report's button) and the dashboard's [data-set-skin]
+segments are both optional.
 
 Pages also carry <style id="layout"> (layout.py): the rules both skins share. This sheet holds the tokens and the look
 block, plus the rules that differ from Ink or that must stay after a rule of its own. New markup gets its rules in
@@ -228,6 +229,20 @@ table:has(td[data-label]:nth-child(5)) td{display:flex;justify-content:space-bet
 table:has(td[data-label]:nth-child(5)) td::before{content:attr(data-label);color:var(--muted);font-size:12px;text-align:left;flex:none}
 table:has(td[data-label]:nth-child(5)) td:first-child{font-weight:600}table:has(td[data-label]:nth-child(5)) td:first-child::before{content:none}
 table:has(td[data-label]:nth-child(5)) td:empty{display:none}}
+/* sessions look */
+#session-list{border:1px solid var(--edge);border-radius:8px;background:var(--surface)}
+#session-list .shead,#session-list .dayhd{font-size:12px;color:var(--muted)}
+#session-list .dayhd{background:var(--chip);border-top:1px solid var(--edge);border-bottom:1px solid var(--edge)}
+#session-list .dayhd b{color:var(--ink);font-weight:600}
+#session-list .shead+.dayhd{border-top:0}
+#session-list .srow>summary{box-shadow:inset 0 -1px 0 var(--edge)}
+#session-list .srow:hover{background:color-mix(in oklch,var(--mark) 5%,var(--surface))}
+#session-list .srow[open]{box-shadow:none;background:color-mix(in oklch,var(--mark) 5%,var(--surface))}
+#session-list .srow.picked{background:color-mix(in oklch,var(--mark) 10%,var(--surface));box-shadow:inset 3px 0 0 var(--mark)}
+#sessions .seg .chip{border-radius:8px}
+#sessions .pickbar{background:color-mix(in oklch,var(--mark) 10%,var(--surface));border:1px solid color-mix(in oklch,var(--mark) 45%,var(--edge));
+border-radius:12px;box-shadow:0 10px 30px -12px #0006;padding:10px 14px}
+/* end sessions look */
 """.replace("SANS", fonts.SANS).replace("MONO", fonts.MONO).replace("DARK", "--page:#151514;--surface:#1f1f1d;--ink:#ecece8;--ink2:#c9c9c3;--muted:#a5a59e;--grid:#34342f;--edge:#34342f;--mark:#0398cd;--agent:#c68206;--mark-ink:#0398cd;--agent-ink:#e0a030;--tint:#102635;--track:#2b2b28;--chip:#2b2b28;--hl:#5a4b00;--pass:#5cc183;--fail:#f08a80;--c3:#199e70;--c4:#9085e9;--c5:#d55181;--c0:#55554f;color-scheme:dark")
 
 CLASSIC_DASH_CSS = """
@@ -248,15 +263,6 @@ main a{color:var(--mark-ink);text-underline-offset:2px}
 .cols3 th:nth-child(3),.cols3 td:nth-child(3){width:48px}
 .cols3 .bar i{width:48px}
 .cols3 td:first-child{white-space:normal;overflow-wrap:anywhere}
-/* the "What changed" tables share fixed number columns so they line up one under the other */
-[data-region=changed] table{table-layout:fixed}
-[data-region=changed] td:not(:first-child){text-align:right;white-space:nowrap}
-[data-region=changed] :is(th,td):nth-child(2){width:76px}
-[data-region=changed] :is(th,td):nth-child(3){width:80px}
-[data-region=changed] :is(th,td):nth-child(4){width:80px}
-[data-region=changed] .bar i{display:none}
-[data-region=changed] td:first-child{overflow-wrap:break-word}
-@container (max-width:520px){[data-region=changed] :is(th,td):nth-child(2){width:62px}[data-region=changed] :is(th,td):is(:nth-child(3),:nth-child(4)){width:70px}}
 @media (max-width:900px){.cols2,.cols3{grid-template-columns:1fr}}
 .today-nums span{display:block;font-size:12px;color:var(--ink2)}
 .today-nums b{font-size:22px;font-variant-numeric:tabular-nums}
@@ -424,6 +430,31 @@ select option{background:var(--surface);color:var(--ink)}
 border-radius:8px;padding:10px 12px;margin:0 0 16px}
 .fm dt{color:var(--muted)}
 .fm dd{margin:0}
+/* overview: look only (the layout is in layout.py, between "overview" and "end overview") */
+.answer{border-color:color-mix(in oklch,var(--mark) 55%,var(--edge));background:linear-gradient(var(--tint),transparent 110px),var(--surface)}
+.kpis.strip{border:1px solid var(--edge);border-radius:12px}
+.card.spenders{border-radius:12px}
+.fl span,.ctl-l{font-size:12px;color:var(--ink2)}
+.cause{font-size:13px}
+.cause b{font-weight:600}
+.tband{fill:var(--tint)}
+.tline{stroke:var(--mark)}
+.tdot{fill:var(--mark);stroke:var(--surface);stroke-width:1.5}
+.tk.now{background:var(--mark)}
+.movers th{font-weight:600;font-size:12px;color:var(--ink2)}
+.tag{background:var(--tint);color:var(--mark-ink)}
+.vs .trend.up,.vs .trend.down,.vs .trend.flat{padding:1px 8px}
+.privacy b{text-transform:uppercase;font-size:11px;letter-spacing:.04em;margin:0}
+.segctl .chip[aria-pressed=true]{background:var(--tint);border-color:var(--mark);color:var(--mark-ink)}
+.segctl .chip:first-child{border-radius:8px 0 0 8px}
+.segctl .chip:last-child{border-radius:0 8px 8px 0}
+#trend svg rect.m{stroke:var(--surface);stroke-width:1}
+.key i.dash{border-top-color:var(--agent-ink)}
+/* end overview */
+/* phone: the current page in the menu sheet is ink on the tint (the blue is 4.69:1 on it, ink reads clearer) */
+@media (max-width:639px){.sheet .toc a.on{color:var(--ink)}}
+/* phone: the new controls have no other cue than their outline, so it reads 3:1 (--edge is 1.5:1 and stays for cards and rows) */
+@media (max-width:639px){body .menu-btn,body .pill-btn,.sheet-filters select,.sheet-filters .chip,.sheet .segctl .chip{border-color:var(--muted)}}
 """
 
 SKIN_APPLY = ("<script>try{if(localStorage.getItem('tokscope-skin')==='classic'){"

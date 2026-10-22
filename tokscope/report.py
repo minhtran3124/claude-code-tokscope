@@ -238,6 +238,21 @@ td.l,td.lm,td.calls,.md td{font-family:var(--sans)}
 .btn,.chip{font-weight:500}
 .primary{font-size:12px;font-weight:500}
 .tools select,.tools input[type=search]{font-size:12px;font-weight:400}
+/* sessions look */
+#session-list{border:var(--line-w) solid var(--ink);border-radius:12px;background:var(--surface)}
+#session-list .shead,#session-list .dayhd{font:11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+#session-list .dayhd{background:var(--chip);border-top:1px solid var(--grid);border-bottom:1px solid var(--grid)}
+#session-list .dayhd b{color:var(--ink);font-weight:600}
+#session-list .shead+.dayhd{border-top:0}
+#session-list .srow>summary{box-shadow:inset 0 -1px 0 var(--grid)}
+#session-list .srow.picked{outline:2px solid var(--ink);outline-offset:-2px}
+#sessions .pickbar{background:var(--ink);color:var(--page);border-radius:999px;padding:8px 10px 8px 20px;font:12px var(--mono)}
+#sessions .pickbar .btn{background:transparent;color:var(--page);border-color:var(--page)}
+#sessions .pickbar .btn:hover{background:var(--page);color:var(--ink)}
+#sessions .pickbar .primary{background:var(--page);color:var(--ink);border-color:var(--page)}
+#sessions .pickbar .primary:hover:not(:disabled){background:transparent;color:var(--page)}
+#sessions .pickbar :focus-visible{outline-color:var(--page)}
+/* end sessions look */
 """.replace("SANS", fonts.SANS).replace("MONO", fonts.MONO).replace("DARK", "--page:#1d1a15;--surface:#27231c;--ink:#f2efe7;--ink2:#d6cfc2;--muted:#b0a796;--grid:#3b3529;--edge:#4f4739;--mark:#76a0e2;--agent:#f4b829;--mark-ink:#8fb3ec;--agent-ink:#f4b829;--tint:#25304a;--track:#332e25;--chip:#332e25;--hl:#5a4500;--pass:#93d3b0;--fail:#f08a70;--c3:#c4607d;--c4:#d6cfc2;--c5:#8f8676;--c0:#5e5649;--line-w:1.5px;--shadow:#41538f;color-scheme:dark")
 
 # the page script in parts: every page takes JS_CORE; the report takes them all, a dashboard page only its own
@@ -268,21 +283,30 @@ setTimeout(()=>document.documentElement.classList.add('settled'),1500);
 const root=document.documentElement;
 const isDark=()=>root.dataset.theme?root.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;
 const themeBtn=document.getElementById('theme');
-function syncTheme(){themeBtn.innerHTML=(isDark()?'☀ Light':'☾ Dark')+' <kbd>t</kbd>'}
+// the report has one Theme button; the dashboard has a segmented control (Light, Dark, Auto) with data-set-theme buttons
+function syncTheme(){if(themeBtn)themeBtn.innerHTML=(isDark()?'☀ Light':'☾ Dark')+' <kbd>t</kbd>';
+  document.querySelectorAll('[data-set-theme]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.setTheme===(root.dataset.theme||'auto')))}
+function setTheme(mode){if(mode==='auto'){delete root.dataset.theme;try{localStorage.removeItem('tokscope-theme')}catch(_){}}
+  else{root.dataset.theme=mode;try{localStorage.setItem('tokscope-theme',mode)}catch(_){}}syncTheme()}
 // the new theme grows out of the button as a circle, where the browser has view transitions
-function toggleTheme(x,y){const apply=()=>{root.dataset.theme=isDark()?'light':'dark';try{localStorage.setItem('tokscope-theme',root.dataset.theme)}catch(_){};syncTheme()};
+function toggleTheme(x,y,mode){const apply=()=>setTheme(mode||(isDark()?'light':'dark'));
   if(!document.startViewTransition||!smoothOk())return apply();
   const r=Math.hypot(Math.max(x,innerWidth-x),Math.max(y,innerHeight-y));
   document.startViewTransition(apply).ready.then(()=>root.animate({clipPath:[`circle(0px at ${x}px ${y}px)`,`circle(${r}px at ${x}px ${y}px)`]},
     {duration:650,easing:'cubic-bezier(0.16,1,0.3,1)',pseudoElement:'::view-transition-new(root)'}))}
-themeBtn.addEventListener('click',e=>{const b=themeBtn.getBoundingClientRect();toggleTheme(e.clientX||b.left+b.width/2,e.clientY||b.top+b.height/2)});syncTheme();
+if(themeBtn)themeBtn.addEventListener('click',e=>{const b=themeBtn.getBoundingClientRect();toggleTheme(e.clientX||b.left+b.width/2,e.clientY||b.top+b.height/2)});
+document.querySelectorAll('[data-set-theme]').forEach(btn=>btn.addEventListener('click',e=>{const b=btn.getBoundingClientRect();
+  toggleTheme(e.clientX||b.left+b.width/2,e.clientY||b.top+b.height/2,btn.dataset.setTheme)}));syncTheme();
 // Classic/Ink switch: two stylesheets, one enabled by its media attribute
 const skinBtn=document.getElementById('skin'),skinInk=document.getElementById('skin-ink'),skinClassic=document.getElementById('skin-classic');
 function setSkin(classic){skinInk.media=classic?'not all':'all';skinClassic.media=classic?'all':'not all';root.dataset.skin=classic?'classic':'';
-  skinBtn.textContent=classic?'Ink':'Classic';skinBtn.setAttribute('aria-pressed',classic);
+  if(skinBtn){skinBtn.textContent=classic?'Ink':'Classic';skinBtn.setAttribute('aria-pressed',classic)}
+  document.querySelectorAll('[data-set-skin]').forEach(b=>b.setAttribute('aria-pressed',(b.dataset.setSkin==='classic')===classic));
   try{classic?localStorage.setItem('tokscope-skin','classic'):localStorage.removeItem('tokscope-skin')}catch(_){}}
 function toggleSkin(){setSkin(skinClassic.media!=='all')}
-skinBtn.addEventListener('click',toggleSkin);skinBtn.textContent=skinClassic.media==='all'?'Ink':'Classic';skinBtn.setAttribute('aria-pressed',skinClassic.media==='all');
+if(skinBtn){skinBtn.addEventListener('click',toggleSkin);skinBtn.textContent=skinClassic.media==='all'?'Ink':'Classic';skinBtn.setAttribute('aria-pressed',skinClassic.media==='all')}
+document.querySelectorAll('[data-set-skin]').forEach(b=>{b.addEventListener('click',()=>setSkin(b.dataset.setSkin==='classic'));
+  b.setAttribute('aria-pressed',(b.dataset.setSkin==='classic')===(skinClassic.media==='all'))});
 const io='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{rootMargin:'0px 0px -6% 0px'}):null;
 document.querySelectorAll('.reveal,main>details.more,#breakdowns>details').forEach(el=>{el.classList.add('reveal');io?io.observe(el):el.classList.add('in')});
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -290,16 +314,25 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const keysDlg=document.getElementById('keys');
 addEventListener('keydown',e=>{const typing=/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   if(typing||e.metaKey||e.ctrlKey||e.altKey)return;
-  if(e.key==='t'){const b=themeBtn.getBoundingClientRect();toggleTheme(b.left+b.width/2,b.top+b.height/2)}
+  if(e.key==='t'){const b=(themeBtn||document.querySelector('[data-set-theme]')).getBoundingClientRect();toggleTheme(b.left+b.width/2,b.top+b.height/2)}
   else if(e.key==='s')toggleSkin()
   else if(e.key==='g')scrollTo({top:0})
   else if(e.key==='?'){keysDlg.open?keysDlg.close():keysDlg.showModal()}});
 document.getElementById('keys-btn').addEventListener('click',()=>keysDlg.showModal());
 keysDlg.addEventListener('click',e=>{if(e.target===keysDlg)keysDlg.close()});
 """
+SORT_SEG = ('<span class="seg" id="s-sort" role="group" aria-label="Sort sessions">'
+            '<button type="button" class="chip on" data-sort="recent" aria-pressed="true">Newest</button>'
+            '<button type="button" class="chip" data-sort="tokens" aria-pressed="false">Most tokens</button>'
+            '<button type="button" class="chip" data-sort="agents" aria-pressed="false">Most subagent</button></span>')
 JS_SESSIONS = """
 const S=JSON.parse(document.getElementById('sessions-data').textContent);
-const list=document.getElementById('session-list'),q=document.getElementById('s-q'),sortSel=document.getElementById('s-sort');
+const list=document.getElementById('session-list'),q=document.getElementById('s-q'),sortBox=document.getElementById('s-sort');
+// sort is a segmented control (Segmented control, 200 ms): Newest, Most tokens, Most subagent
+let sortKey='recent';
+// durations come from the layout sheet's tokens, so the script and the stylesheet never disagree
+const cssVar=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const T_LAYOUT=parseFloat(cssVar('--t-layout'))||320,T_EXIT=(parseFloat(cssVar('--t-state'))||200)*.7;
 const picked=new Set();let limit=15;
 // a headless session (claude -p) sits under the session whose Bash call started it, indented by depth
 // only the dashboard serves /sessions; the static report keeps the parent's name as text
@@ -313,14 +346,19 @@ const isRoot=s=>{const seen=new Set([s.id]);for(let p=byId.get(s.parent);p;p=byI
 const hl=(text,needle)=>{if(!needle)return esc(text);const lo=text.toLowerCase(),n=needle.toLowerCase();let out='',pos=0,at;
   while((at=lo.indexOf(n,pos))>-1){out+=esc(text.slice(pos,at))+'<mark>'+esc(text.slice(at,at+n.length))+'</mark>';pos=at+n.length}
   return out+esc(text.slice(pos))};
-function split(main,ag){const t=Math.max(main+ag,1);return `<span class=split title="main ${fmt(main)} · subagents ${fmt(ag)}"><u style="width:${(100*main/t).toFixed(1)}%"></u>${ag?`<u class=a style="width:${(100*ag/t).toFixed(1)}%"></u>`:''}</span>`}
+// the bar's length is the session's tokens against the largest in the list; the colours split it into main thread and subagents
+const MAXT=Math.max(...S.map(s=>s.tokens),1);
+function split(main,ag){const t=Math.max(main+ag,1),len=Math.max(3,100*(main+ag)/MAXT);
+  return `<span class=track><span class=split style="width:${len.toFixed(1)}%" title="main ${fmt(main)} · subagents ${fmt(ag)}"><u style="width:${(100*main/t).toFixed(1)}%"></u>${ag?`<u class=a style="width:${(100*ag/t).toFixed(1)}%"></u>`:''}</span></span>`}
+// time of day when the list is by day; date and time when it is ranked
+const when=s=>sortKey==='recent'?s.start.slice(11,16):s.start.slice(5,16).replace('T',' ');
 function row(s){
   const d=document.createElement('details');d.className='srow'+(picked.has(s.id)?' picked':'')+(s.parent&&!byId.has(s.parent)?' orphan':'');d.dataset.id=s.id;
   const by=s.parent_title||s.parent?.slice(0,8)||'',from=s.parent?`\nstarted by ${by}${byId.has(s.parent)?'':' (outside this range)'}`:'';
   // a parent outside the range has no row to sit under, so the child names it
   d.innerHTML=`<summary><input type=checkbox aria-label="compare" ${picked.has(s.id)?'checked':''}>
-    <span class=d>${s.start.slice(0,10)}</span><span class="t${/^session [0-9a-f]{8}$/.test(s.title||'')?' sid':''}" title="${esc(s.title+from)}"><span class=tt>${s.title?hl(s.title,q.value.trim()):'(untitled)'}</span>${s.parent&&!byId.has(s.parent)?`<small class=from>from ${DASH&&s.parent?`<a href="/sessions?range=all&amp;q=${encodeURIComponent(s.parent)}" title="show the session that started this one (all time)">${esc(by)}</a>`:esc(by)}</small>`:''}</span>
-    <span class=r><b>${fmt(s.tokens)}</b></span>${split(s.main,s.agents)}<span class="r n">${s.prompts} prompts</span><span class=sk>${esc(s.top_skill||'')}</span><span class=cv aria-hidden=true>›</span></summary><div class=body></div>`;
+    <span class=d>${esc(when(s))}</span><span class="t${/^session [0-9a-f]{8}$/.test(s.title||'')?' sid':''}" title="${esc(s.title+from)}"><span class=tt>${s.title?hl(s.title,q.value.trim()):'(untitled)'}</span>${/^session [0-9a-f]{8}$/.test(s.title||'')?'':`<code class=sid8>${esc(s.id.slice(0,8))}</code>`}${s.parent&&!byId.has(s.parent)?`<small class=from>from ${DASH&&s.parent?`<a href="/sessions?range=all&amp;q=${encodeURIComponent(s.parent)}" title="show the session that started this one (all time)">${esc(by)}</a>`:esc(by)}</small>`:''}</span>
+    <span class=sk>${esc(s.top_skill||'')}</span><span class="r n">${s.prompts}</span><span class="r n" title="${s.runs||0} subagent runs" aria-label="${s.runs||0} subagent runs">${s.runs||'–'}</span><span class=r><b>${fmt(s.tokens)}</b></span>${split(s.main,s.agents)}<span class=cv aria-hidden=true>›</span></summary><div class=body></div>`;
   const cb=d.querySelector('input');
   cb.addEventListener('click',e=>e.stopPropagation());
   cb.addEventListener('change',()=>{cb.checked?picked.add(s.id):picked.delete(s.id);if(picked.size>4){picked.delete(s.id);cb.checked=false}
@@ -352,7 +390,7 @@ function detail(s){
   const turns=s.turns.map((t,k)=>`<tr><td data-label="#">${t.i??'–'}</td><td class=l data-label="prompt">${esc(t.text||(t.i===0?'(session start)':''))}</td>
     <td class=lm data-label="skill">${esc(t.skill||'')}${t.version?` <code class=ver title="${t.version[1]?'exact: hashed at the Skill call':'inferred from the kept text or the date'} · tokscope skills ${esc(t.skill)}">${esc(t.version[0].slice(0,6))}</code>`:''}</td><td data-label="tokens">${bar(t.tokens,top,t.agents_tokens,Math.min(k,12))}</td><td data-label="output">${fmt(t.output)}</td>
     <td data-label="req">${t.requests}</td><td class="lm calls" data-label="calls">${callCell(t)}</td><td class=u data-label="API-eq">${usd(t.usd)}</td></tr>${runsRow(t.runs)}`).join('');
-  return `${ids(s)}<p class=note>${s.start.replace('T',' ').slice(0,16)} → ${s.end.replace('T',' ').slice(11,16)} UTC · ${esc(s.project)} ·
+  return `${ids(s)}<p class=note>${esc(s.start.replace("T"," ").slice(0,16))} → ${esc(s.end.replace("T"," ").slice(11,16))} UTC · ${esc(s.project)} ·
     main thread <span data-count="${s.main}">${fmt(s.main)}</span> · subagents <span data-count="${s.agents}">${fmt(s.agents)}</span> (${s.runs} runs) · output <span data-count="${s.output}">${fmt(s.output)}</span> · <span class=usd>${usd(s.usd)} API-eq</span></p>
     <div class=scroll><table><tr><th>#</th><th style="text-align:left">prompt</th><th style="text-align:left">skill</th><th>tokens</th><th>output</th><th title="model requests">req</th><th style="text-align:left">calls</th><th>API-eq</th></tr>${turns}</table></div>
     <p class=note>calls: subagent tokens are measured; MCP and tool tokens marked ~ are estimated from the size of the result each call put into the context.</p>`}
@@ -373,37 +411,56 @@ function moreBtn(e){let el=nodes.get('more:'+e.more.id);
   if(!el){el=document.createElement('button');el.type='button';el.className='btn kids-more';el.dataset.id='more:'+e.more.id;
     el.addEventListener('click',()=>{const id=e.more.id;openKids.has(id)?openKids.delete(id):openKids.add(id);render();el.focus({preventScroll:true})});nodes.set('more:'+e.more.id,el)}
   el.textContent=e.open?'Show fewer':`+${e.n} more started by this session`;el.setAttribute('aria-expanded',e.open?'true':'false');el.style.setProperty('--depth',e.d);return el}
+// a session and everything it started, for the day header (a collapsed "+N more" still counts)
+function tally(s,seen=new Set()){if(seen.has(s.id))return[0,0];seen.add(s.id);let n=1,t=s.tokens;
+  (kids.get(s.id)||[]).forEach(k=>{const[a,b]=tally(k,seen);n+=a;t+=b});return[n,t]}
+const dayName=d=>!d?'No date':new Date(d+'T00:00:00Z').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
+const SORTS={recent:['Newest first',(a,b)=>b[0].s.start.localeCompare(a[0].s.start)],tokens:['Most tokens first',(a,b)=>b[0].s.tokens-a[0].s.tokens],
+  agents:['Most subagent tokens first',(a,b)=>b[0].s.agents-a[0].s.agents]};
+function headEl(){const h=document.createElement('div');h.className='shead';
+  h.innerHTML='<span></span><span class=d title="UTC">time</span><span class=t>session</span><span class=sk>top skill</span><span class="r n">prompts</span><span class="r n" title="subagent runs started in the session">subagents</span><span class=r>tokens</span><span class=track title="length is tokens against the largest session in the list">split</span><span></span>';return h}
+function dayEl(label,n,tk){const h=document.createElement('div');h.className='dayhd';
+  h.innerHTML=`<b>${esc(label)}</b><span>${n} session${n===1?'':'s'} · ${fmt(tk)} tokens</span>`;return h}
 function render(){
   const needle=q.value.toLowerCase();
   const match=s=>!needle||(s.title||'').toLowerCase().includes(needle)||s.id.startsWith(needle)||(s.top_skill||'').includes(needle);
   let rows=S.filter(isRoot).map(s=>group(s,match)).filter(g=>g.length);
-  rows.sort(sortSel.value==='tokens'?(a,b)=>b[0].s.tokens-a[0].s.tokens:(a,b)=>b[0].s.start.localeCompare(a[0].s.start));
-  const shown=rows.slice(0,limit).flat(),keep=new Set(shown.map(e=>e.s?e.s.id:'more:'+e.more.id)),anim=smoothOk(),before=new Map();
+  rows.sort(SORTS[sortKey][1]);
+  // sessions with no start go last under Newest, so "No date" never sits between two days
+  if(sortKey==='recent')rows.sort((a,b)=>!a[0].s.start-!b[0].s.start);
+  const page=rows.slice(0,limit),shown=page.flat(),keep=new Set(shown.map(e=>e.s?e.s.id:'more:'+e.more.id)),anim=smoothOk(),before=new Map();
   let top=list.getBoundingClientRect().top;
   if(anim)list.querySelectorAll(':scope>.srow:not(.ghost),:scope>.kids-more').forEach(el=>{before.set(el.dataset.id,el.getBoundingClientRect().top-top);el.getAnimations().forEach(a=>a.cancel())});
-  const els=shown.map(e=>{if(e.more)return moreBtn(e);const s=e.s;let el=nodes.get(s.id);
+  const rowFor=e=>{if(e.more)return moreBtn(e);const s=e.s;let el=nodes.get(s.id);
     if(!el){el=row(s);nodes.set(s.id,el)}
     else{el.getAnimations().forEach(a=>a.cancel());el.classList.remove('ghost');el.style.top='';
-      el.querySelector('.tt').innerHTML=s.title?hl(s.title,q.value.trim()):'(untitled)';
+      el.querySelector('.tt').innerHTML=s.title?hl(s.title,q.value.trim()):'(untitled)';el.querySelector('.d').textContent=when(s);
       el.classList.toggle('picked',picked.has(s.id));el.querySelector('input').checked=picked.has(s.id)}
     el.classList.toggle('child',e.d>0);el.classList.toggle('dim',e.dim);el.style.setProperty('--depth',e.d);
-    return el});
+    return el};
+  // by day: a header for each day (its sessions and tokens), newest first. Ranked: one header, and the date moves into the time column.
+  const els=[];
+  if(page.length){els.push(headEl());
+    if(sortKey==='recent'){let cur=null;page.forEach(g=>{const day=g[0].s.start.slice(0,10);
+      if(day!==cur){cur=day;let n=0,tk=0;rows.forEach(r=>{if(r[0].s.start.slice(0,10)===day){const[a,b]=tally(r[0].s);n+=a;tk+=b}});els.push(dayEl(dayName(day),n,tk))}
+      g.forEach(e=>els.push(rowFor(e)))})}
+    else{let n=0,tk=0;rows.forEach(r=>{const[a,b]=tally(r[0].s);n+=a;tk+=b});els.push(dayEl(SORTS[sortKey][0],n,tk));page.forEach(g=>g.forEach(e=>els.push(rowFor(e))))}}
   list.replaceChildren(...els);
   if(!rows.length){list.innerHTML=`<div class=empty><b>No sessions match “${esc(q.value)}”</b>Try part of a title, a skill name or the start of a session id.
     <p><button type=button class=btn id=s-clear>Clear the filter</button></p></div>`;
     document.getElementById('s-clear').addEventListener('click',()=>{q.value='';render();q.focus()})}
   if(anim){top=list.getBoundingClientRect().top;const vh=innerHeight,seen=y=>y+top>-200&&y+top<vh+200;let k=0;
     // new rows wait for the leaving ones to clear so the two never show text over each other
-    const wait=[...before.keys()].some(id=>!keep.has(id)&&seen(before.get(id)))?150:0;
-    els.forEach(el=>{const now=el.getBoundingClientRect().top-top,was=before.get(el.dataset.id);
+    const wait=[...before.keys()].some(id=>!keep.has(id)&&seen(before.get(id)))?T_EXIT:0;
+    els.filter(el=>el.dataset.id).forEach(el=>{const now=el.getBoundingClientRect().top-top,was=before.get(el.dataset.id);
       if(!seen(now)&&(was==null||!seen(was)))return;
-      if(was==null)el.animate([{opacity:0,transform:'translateY(10px) scale(.985)'},{opacity:1,transform:'none'}],
-        {duration:420,delay:wait+Math.min(k++,24)*22,easing:EXPO,fill:'backwards'});
-      else if(Math.abs(was-now)>1)el.animate([{transform:`translateY(${was-now}px)`},{transform:'none'}],{duration:480,easing:EXPO})});
+      if(was==null)el.animate([{opacity:0,transform:'translateY(10px)'},{opacity:1,transform:'none'}],
+        {duration:T_LAYOUT,delay:wait+Math.min(k++,24)*22,easing:EXPO,fill:'backwards'});
+      else if(Math.abs(was-now)>1)el.animate([{transform:`translateY(${was-now}px)`},{transform:'none'}],{duration:T_LAYOUT,easing:EXPO})});
     // a "+N more" button that leaves just goes; only rows fade out as ghosts
     before.forEach((y,id)=>{if(keep.has(id)||id.startsWith('more:')||!seen(y))return;const el=nodes.get(id);
       el.classList.add('ghost');el.style.top=y+'px';list.append(el);
-      el.animate([{opacity:1},{opacity:0,transform:'scale(.97)'}],{duration:160,easing:'ease-out',fill:'forwards'})
+      el.animate([{opacity:1},{opacity:0}],{duration:T_EXIT,easing:cssVar('--ease-exit'),fill:'forwards'})
         .finished.then(()=>{if(el.classList.contains('ghost'))el.remove()},()=>{})})}
   const more=document.getElementById('s-more');more.hidden=rows.length<=limit;more.textContent=`Show ${Math.min(rows.length-limit,50)} more`;
   document.getElementById('s-count').textContent=`showing ${Math.min(limit,rows.length)} of ${rows.length}`}
@@ -412,14 +469,14 @@ q.addEventListener('input',()=>{limit=15;render()});
 list.addEventListener('click',e=>{const b=e.target.closest('.cp');if(!b)return;
   navigator.clipboard.writeText(b.dataset.copy).then(()=>{b.textContent='Copied ✓';b.classList.add('ok');toast('Copied to the clipboard');
     setTimeout(()=>{b.textContent='Copy';b.classList.remove('ok')},1400)},
-    ()=>getSelection().selectAllChildren(b.previousElementSibling))});sortSel.addEventListener('change',render);render();
+    ()=>getSelection().selectAllChildren(b.previousElementSibling))});render();
 function renderCompare(){
   const box=document.getElementById('compare'),sel=S.filter(s=>picked.has(s.id));
   if(sel.length<2)return;
   const keys=(f,n)=>{const tot={};sel.forEach(s=>Object.entries(s[f]).forEach(([k,v])=>tot[k]=(tot[k]||0)+v));return Object.entries(tot).sort((a,b)=>b[1]-a[1]).slice(0,n).map(e=>e[0])};
   const line=(label,vals,low)=>{const nums=vals.map(v=>typeof v==='number'?v:null).filter(v=>v!=null),best=low&&nums.length?Math.min(...nums):null;
     return `<tr><td>${label}</td>${vals.map(v=>`<td>${typeof v==='number'?(v===best?'<b>'+fmt(v)+'</b>':fmt(v)):esc(v)}</td>`).join('')}</tr>`};
-  let h=`<tr><th></th>${sel.map(s=>`<th title="${esc(s.title)}">${esc((s.title||'').slice(0,26))}<br><span class=usd>${s.id.slice(0,8)}</span></th>`).join('')}</tr>`;
+  let h=`<tr><th></th>${sel.map(s=>`<th title="${esc(s.title)}">${esc((s.title||'').slice(0,26))}<br><span class=usd>${esc(s.id.slice(0,8))}</span></th>`).join('')}</tr>`;
   h+=line('started',sel.map(s=>s.start.slice(0,10)));h+=line('prompts',sel.map(s=>s.prompts));
   h+=line('tokens',sel.map(s=>s.tokens),1);h+=line('tokens per prompt',sel.map(s=>s.tokens/Math.max(s.prompts,1)),1);
   h+=line('output tokens',sel.map(s=>s.output),1);h+=line('subagent runs',sel.map(s=>s.runs));
@@ -430,10 +487,13 @@ function renderCompare(){
   keys('skills',8).forEach(k=>h+=line(k,sel.map(s=>s.skills[k]||0)));
   box.querySelector('table').innerHTML=h}
 // selecting only builds the pick list; the comparison runs when Compare is pressed
+sortBox.addEventListener('click',e=>{const b=e.target.closest('[data-sort]');if(!b||b.dataset.sort===sortKey)return;sortKey=b.dataset.sort;
+  sortBox.querySelectorAll('[data-sort]').forEach(x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-pressed',x===b)});render()});
 const box=document.getElementById('compare'),pickBar=document.getElementById('pickbar'),go=document.getElementById('do-compare');
 function updatePick(){
-  const n=picked.size;pickBar.hidden=!n;document.body.classList.toggle('picking',n>0);go.disabled=n<2;go.textContent=n>=2?`Compare ${n} sessions`:'Compare';
-  document.getElementById('pick-hint').textContent=n<2?`${n} selected · pick at least one more`:`${n} selected · max 4`;
+  // the tray rises when a second session is ticked and sinks again below two
+  const n=picked.size,on=n>=2;pickBar.hidden=false;pickBar.classList.toggle('show',on);pickBar.inert=!on;document.body.classList.toggle('picking',on);go.disabled=!on;
+  if(n)document.getElementById('pick-hint').textContent=`${n} of 4 picked${n>=4?' · the 5th is blocked':''}`;
   box.classList.remove('on')}  // a changed pick list makes a shown comparison stale
 go.addEventListener('click',()=>{renderCompare();box.classList.add('on');box.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})});
 document.getElementById('clear-pick').addEventListener('click',()=>{picked.clear();render();updatePick()});
@@ -520,6 +580,24 @@ def _more(title, note, inner, anchor="", is_open=False):
     ident = f' id="{anchor}"' if anchor else ""
     return (f'<details class="more"{ident}{" open" if is_open else ""}><summary><span class="ttl">{title}</span>'
             f'<span class="note">{note}</span></summary>{inner}</details>')
+
+
+def _pc(x, plain=False):
+    """A share as a whole percent; a small non-zero share reads '<1%', not '0%', and a share just under 1 never reads '100%'. plain=True gives text for an attribute."""
+    if 0 < x < 0.005:
+        return "under 1%" if plain else "&lt;1%"
+    return "99%" if 0.995 <= x < 1 else f"{x:.0%}"  # 100% only when it is exactly 100
+
+
+def _section(title, finding, how, inner, anchor="", pct=None, empty=None):
+    """A Breakdowns section: the summary line holds the finding (with a share bar when `pct` is given), and the long
+    'how this is counted' text sits inside, above the content. `empty` = (headline, hint) replaces the content."""
+    bar = (f'<span class="mini" role="img" aria-label="{_pc(pct, True)}"><i style="width:{min(max(pct, 0), 1) * 100:.1f}%"></i></span>'
+           if pct is not None else "")
+    body = (f'<div class="empty"><b>{empty[0]}</b>{empty[1]}</div>' if empty else inner)
+    return (f'<details class="more finding-sec" id="{anchor}"><summary><span class="ttl">{title}</span>'
+            f'<span class="note finding"><b>{finding}</b>{bar}</span></summary>'
+            f'<p class="note how">{how}</p>{body}</details>')
 
 
 def _daily_chart(days, changes):
@@ -655,8 +733,9 @@ def _skill_versions(conn, level="full", where=None, skill=None):
 
 def _change_cards(conn, changes):
     if not changes:
-        return ('<p class="note">No changes recorded. After editing an agent or skill, run '
-                '<code>tokscope change "reviewer: fable -&gt; opus" --agent reviewer</code>.</p>')
+        return ('<div class="empty"><b>No changes recorded</b>After editing an agent or skill, run '
+                '<code>tokscope change "note" --skill NAME</code> (or <code>--agent TYPE</code>), '
+                'and the runs before and after it show here.</div>')
     cards = []
     for change in changes:
         cid, at, note, agent_type, skill = change
@@ -885,7 +964,8 @@ def _pct(q):
 def _breakdowns(conn, cond, params):
     base = f"FROM requests r JOIN sessions s USING (session_id) {cond}"
     q = lambda sql: conn.execute(sql, params).fetchall()  # noqa: E731
-    total = q(f"SELECT sum({TOKENS}) {base}")[0][0] or 1
+    real_total = q(f"SELECT sum({TOKENS}) {base}")[0][0] or 0
+    total = real_total or 1
     share = lambda t: f"{(t or 0) / total:.1%}"  # noqa: E731
     phase = q(f"SELECT COALESCE(phase,'unscoped'), count(DISTINCT session_id), sum({TOKENS}), "
               f"sum(CASE WHEN {CARRIED} THEN {TOKENS} ELSE 0 END), sum(output), sum(cost_usd) {base} GROUP BY 1 ORDER BY 3 DESC")
@@ -931,38 +1011,96 @@ def _breakdowns(conn, cond, params):
                   (charts.change_text(last, this), "lm"))
                  for sk, ph, this, last in week]
     call_note = "~ tokens = size of the results put into the context, estimated at 4 characters per token"
+    pc = _pc
+    top = lambda groups, key: max(groups.items(), key=key)  # noqa: E731
+    # one finding per section, each worked out from the numbers the section already shows
+    if week:
+        this_t, last_t = sum(w[2] for w in week), sum(w[3] for w in week)
+        f_week = (f"{_tok(this_t)} this week, {charts.change_text(last_t, this_t)} on last week; {html.escape(week[0][0])} leads"
+                  if last_t else f"{_tok(this_t)} this week, nothing the week before; {html.escape(week[0][0])} leads")
+    srv_t = sum(c for _, _, c in servers.values())
+    tool_t = sum(c for _, _, c in tools.values())
+    f_srv = f_tool = p_srv = p_tool = None
+    if servers:
+        k, g = top(servers, lambda kv: kv[1][2])
+        p_srv = g[2] / srv_t if srv_t else 0
+        f_srv = f"{html.escape(k)} holds {pc(p_srv)} of MCP result tokens across {len(servers)} server{'s' * (len(servers) != 1)}"
+    if tools:
+        k, g = top(tools, lambda kv: kv[1][2])
+        p_tool = g[2] / tool_t if tool_t else 0
+        f_tool = f"{html.escape(k)} returns {pc(p_tool)} of tool result tokens across {len(tools)} tool{'s' * (len(tools) != 1)}"
+    has_tokens = bool(real_total)
+    if has_tokens:
+        p_phase = (phase[0][2] or 0) / real_total
+        f_phase = f"{html.escape(phase[0][0])} is the largest phase at {share(phase[0][2])}; {share(carried)} is carried"
+        sub_t = sum(t or 0 for o, t, *_ in owner if o != "main thread")
+        p_owner = sub_t / real_total
+        f_owner = (f"Subagents use {pc(p_owner)} of all tokens" if sub_t else "No subagent ran: the main thread has every token")
+    if skills:
+        p_skill = (skills[0][2] or 0) / real_total if has_tokens else 0
+        n_skills = q(f"SELECT count(DISTINCT skill) {base} AND skill IS NOT NULL")[0][0]
+        f_skill = f"{html.escape(skills[0][0])} uses {pc(p_skill)} of all tokens; {n_skills} skill{'s' * (n_skills != 1)} loaded"
+    if by_type:
+        sums = {t: sum(r[0] for r in rs) for t, rs in by_type.items()}
+        all_runs, all_t = sum(len(rs) for rs in by_type.values()), sum(sums.values())
+        k = max(sums, key=sums.get)
+        p_type = sums[k] / all_t if all_t else 0
+        f_type = (f"{all_runs:,} run{'s' * (all_runs != 1)} across {len(by_type)} type{'s' * (len(by_type) != 1)}; "
+                  f"{html.escape(str(k))} uses {pc(p_type)} of subagent tokens")
+    ingest = "Run <code>tokscope ingest</code> after a Claude Code session to fill it."
     return "".join([
-        _more("Week over week", "the last 7 days against the 7 before, per skill; ranked by this week",
-              (charts.dumbbell([(sk, last, this) for sk, _, this, last in week], "tokens")
-               + _table(["skill", "phase", "this week", "last week", "change"], week_rows, 2)) if week
-              else "<p class='note'>No skill was loaded in the last 7 days.</p>", "by-week"),
-        _more("By MCP server", call_note + "; the bar is each server's share of all MCP result tokens",
-              charts.share_bar([(k, est_tokens(c)) for k, (_, _, c) in servers.items()], "~result tokens")
-              + _table(["server", "calls", "sessions", "~result tokens", "per call"], call_rows(servers), 3), "by-mcp"),
-        _more("By tool", call_note + "; Agent calls are under subagent types. Top right = called often and heavy each time",
-              charts.scatter(usage(tools), "calls", "~tokens per call")
-              + _table(["tool", "calls", "sessions", "~result tokens", "per call"], call_rows(tools), 3), "by-tool"),
-        _more("By phase", f"direct = the phase's skill ran in that prompt; carried = a later prompt with no skill, which keeps "
-              f"the last phase ({share(carried)} of all tokens); rows sum to the total; the chart splits each calendar week",
-              charts.weekly_columns(_weekly_phases(conn, cond, params), "tokens")
-              + _table(["phase", "sessions", "tokens", "direct", "carried", "output", "API-eq", "share"],
-                       [(p, s, t, _tok((t or 0) - (cr or 0)), f"{_tok(cr)} ({(cr or 0) / (t or 1):.0%})" if cr else "–",
-                         _tok(o), (_usd(c), "u"), share(t)) for p, s, t, cr, o, c in phase], 2), "by-phase"),
-        _more("By owner", "main thread vs each subagent type; rows sum to the total",
-              charts.share_bar([(o, t or 0) for o, t, *_ in owner], "tokens")
-              + _table(["owner", "tokens", "output", "API-eq", "share"],
-                       [(o, t, _tok(x), (_usd(c), "u"), share(t)) for o, t, x, c in owner[:20]], 1), "by-owner"),
-        _more("By skill", "requests while a skill was loaded in that prompt. tokens = main thread + the subagents the skill "
-              "started; the subagents column is also counted under By owner, so do not add the two tables. "
-              "Top right = loaded often and heavy each time",
-              charts.scatter([(sk, loads.get(sk, 0), (t or 0) / loads[sk], t or 0) for sk, _, t, *_ in skills if loads.get(sk)],
-                             "loads", "tokens per load")
-              + _table(["skill", "loads", "sessions", "tokens", "main thread", "subagents", "per load", "API-eq"],
-                       [(sk, loads.get(sk, 0), s, t, _tok(m), _tok(a) if a else "–", _tok((t or 0) / max(loads.get(sk, 0), 1)),
-                         (_usd(c), "u")) for sk, s, t, c, m, a in skills], 3), "by-skill"),
-        _more("Subagent types", "one run = one subagent transcript; the line spans p10 to p90 of a run, the dot is the median",
-              charts.ranges(spread[:12], "tokens")
-              + _table(["agent type", "runs", "tokens", "median", "p90", "median API-eq", "models"], agent_rows, 2), "agent-types"),
+        _section("Week over week", f_week if week else "No skill loaded in the last 7 days",
+                 "the last 7 days against the 7 before, per skill; ranked by this week",
+                 (charts.dumbbell([(sk, last, this) for sk, _, this, last in week], "tokens")
+                  + _table(["skill", "phase", "this week", "last week", "change"], week_rows, 2)) if week else "", "by-week",
+                 empty=None if week else ("Nothing to compare yet",
+                                          "A skill that loads in the last 7 days shows here against the 7 before. " + ingest)),
+        _section("By MCP server", f_srv or "No MCP server called",
+                 call_note + "; the bar is each server's share of all MCP result tokens",
+                 charts.share_bar([(k, est_tokens(c)) for k, (_, _, c) in servers.items()], "~result tokens")
+                 + _table(["server", "calls", "sessions", "~result tokens", "per call"], call_rows(servers), 3), "by-mcp", p_srv,
+                 empty=None if servers else ("No MCP calls yet",
+                                             "Each MCP server a session calls shows here with its result size. Add one with "
+                                             "<code>claude mcp add</code>, use it, then run <code>tokscope ingest</code>.")),
+        _section("By tool", f_tool or "No tool called",
+                 call_note + "; Agent calls are under subagent types. Top right = called often and heavy each time",
+                 charts.scatter(usage(tools), "calls", "~tokens per call")
+                 + _table(["tool", "calls", "sessions", "~result tokens", "per call"], call_rows(tools), 3), "by-tool", p_tool,
+                 empty=None if tools else ("No tool calls yet", "Every tool a session calls (Read, Bash, Grep) shows here. " + ingest)),
+        _section("By phase", f_phase if has_tokens else "No tokens in this range",
+                 f"direct = the phase's skill ran in that prompt; carried = a later prompt with no skill, which keeps "
+                 f"the last phase ({share(carried)} of all tokens); rows sum to the total; the chart splits each calendar week",
+                 charts.weekly_columns(_weekly_phases(conn, cond, params), "tokens")
+                 + _table(["phase", "sessions", "tokens", "direct", "carried", "output", "API-eq", "share"],
+                          [(p, s, t, _tok((t or 0) - (cr or 0)), f"{_tok(cr)} ({(cr or 0) / (t or 1):.0%})" if cr else "–",
+                            _tok(o), (_usd(c), "u"), share(t)) for p, s, t, cr, o, c in phase], 2), "by-phase",
+                 p_phase if has_tokens else None,
+                 empty=None if has_tokens else ("No phases yet", "A phase appears once a skill in the workflow runs. " + ingest)),
+        _section("By owner", f_owner if has_tokens else "No tokens in this range",
+                 "main thread vs each subagent type; rows sum to the total",
+                 charts.share_bar([(o, t or 0) for o, t, *_ in owner], "tokens")
+                 + _table(["owner", "tokens", "output", "API-eq", "share"],
+                          [(o, t, _tok(x), (_usd(c), "u"), share(t)) for o, t, x, c in owner[:20]], 1), "by-owner",
+                 p_owner if has_tokens else None,
+                 empty=None if has_tokens else ("No tokens yet", "The main thread and each subagent type show here. " + ingest)),
+        _section("By skill", f_skill if skills else "No skill loaded",
+                 "requests while a skill was loaded in that prompt. tokens = main thread + the subagents the skill "
+                 "started; the subagents column is also counted under By owner, so do not add the two tables. "
+                 "Top right = loaded often and heavy each time",
+                 charts.scatter([(sk, loads.get(sk, 0), (t or 0) / loads[sk], t or 0) for sk, _, t, *_ in skills if loads.get(sk)],
+                                "loads", "tokens per load")
+                 + _table(["skill", "loads", "sessions", "tokens", "main thread", "subagents", "per load", "API-eq"],
+                          [(sk, loads.get(sk, 0), s, t, _tok(m), _tok(a) if a else "–", _tok((t or 0) / max(loads.get(sk, 0), 1)),
+                            (_usd(c), "u")) for sk, s, t, c, m, a in skills], 3), "by-skill", p_skill if skills else None,
+                 empty=None if skills else ("No skill has loaded yet", "Load a skill in Claude Code (a slash command or the Skill tool) "
+                                            "and its tokens show here. " + ingest)),
+        _section("Subagent types", f_type if by_type else "No subagent ran",
+                 "one run = one subagent transcript; the line spans p10 to p90 of a run, the dot is the median",
+                 charts.ranges(spread[:12], "tokens")
+                 + _table(["agent type", "runs", "tokens", "median", "p90", "median API-eq", "models"], agent_rows, 2), "agent-types",
+                 p_type if by_type else None,
+                 empty=None if by_type else ("No subagent runs yet", "Each subagent type shows here once Claude Code starts one "
+                                             "(the Agent tool). " + ingest)),
     ])
 
 
@@ -1033,12 +1171,12 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 Open a row to see each prompt, its skill, tokens and calls. Tick 2 to 4 rows, then press Compare.
 Sessions do different work, so a comparison describes them; for a controlled before/after use a benchmark.</p>
 <div class="tools"><input type="search" id="s-q" placeholder="Filter by title, skill or session id  ( / )">
-<select id="s-sort"><option value="recent">Newest first</option><option value="tokens">Most tokens first</option></select>
+{SORT_SEG}
 <span class="note" id="s-count"></span></div>
 <section class="card" id="compare"><h3>Compare</h3>
 <p class="note">Bold = fewest. Tokens per prompt evens out sessions of different length.</p><table></table></section>
 <div id="session-list"></div>
-<div class="pickbar" id="pickbar" hidden><span id="pick-hint"></span><span class="acts"><button class="btn" id="clear-pick">Clear</button>
+<div class="pickbar" id="pickbar" role="region" aria-label="Compare sessions" hidden><span id="pick-hint"></span><span class="acts"><button class="btn" id="clear-pick">Clear</button>
 <button class="primary" id="do-compare" disabled>Compare</button></span></div>
 <p><button class="btn" id="s-more">Show more</button></p></section>
 

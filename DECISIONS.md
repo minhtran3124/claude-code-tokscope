@@ -15,6 +15,13 @@
 | Three duration tokens (`--t-fast` 120 ms, `--t-state` 200 ms, `--t-layout` 320 ms) and `--ease-exit` live in the layout sheet. Entrances play on the first paint only (`html.settled`). A live value changes at once and shows a delta chip. | The 2 s poll swaps regions, so every entrance, blur-in and count-up replayed on each update. About 30 durations made the motion uneven. | Keeping the count-up for live values; a duration per rule. |
 | Reduced motion: the entrance, chip, ring and toast keyframes have an opacity-only twin in the layout sheet; the spinner, run bar and Classic hero glow are switched off by their own rule; there is no global `animation:none`. | An update must still show for a person who asks for less motion. A global off switch hid it. | `*{animation:none!important}` (what it was). |
 
+## 2026-10-22 · Overview answers "is today normal?" (issue #23, step 2)
+
+| Decision | Why | Rejected |
+| --- | --- | --- |
+| A typical day is the median of the last 14 active days (a day with at least one request), cumulative to the same local time, shown with a p25 to p75 band only when more than 7 days are active. (Chosen by the owner, 2026-10-22.) | Days off would pull a calendar-day median down and make every working day read as "above typical". | All calendar days; the same weekday only (needs about 4 weeks of history). |
+| A change chip shows only with more than 7 days of history, counted as elapsed time from the first request, and when the window before the range holds at least one full day. It compares the average per day in the range with the average per day in the window before it, over the elapsed time that window has data. A sentence under the strip says so once. Sessions and runs count once per day they appear. From cache is the exception: its chip is the relative change of its share of all tokens, and the same sentence says so. | A 30-day range with 10 days before it must not read as -67%. | "History starts ... too short to compare" on every tile. |
+
 ## 2026-10-21 · Headless child sessions keep their own totals
 
 | Decision | Why | Rejected |
