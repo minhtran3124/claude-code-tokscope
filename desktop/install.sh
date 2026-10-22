@@ -17,13 +17,20 @@ fi
 command -v npm >/dev/null 2>&1 || { echo "error: npm (Node.js) is required" >&2; exit 1; }
 (cd "$HERE" && npm install --no-audit --no-fund)
 
+# the electron binary itself: the .bin/electron script needs `node` on the PATH, which the app menu does not give.
+# --no-sandbox: the downloaded chrome-sandbox is not setuid, and Ubuntu 24.04 blocks the user-namespace fallback.
+# The window only loads the loopback dashboard; every other link opens in your browser.
+EXEC="$HERE/node_modules/electron/dist/electron"
+[ -x "$EXEC" ] || { echo "error: $EXEC is missing; npm install did not finish" >&2; exit 1; }
+case "$HERE" in *[\"\\\`\$%]*) echo "error: the folder path has a quote, backslash, backtick, dollar or percent sign; move the clone" >&2; exit 1;; esac
+
 mkdir -p "$APPS"
 cat > "$ENTRY" <<DESKTOP
 [Desktop Entry]
 Type=Application
 Name=tokscope
 Comment=Token usage per skill, subagent and phase for Claude Code
-Exec=$HERE/node_modules/.bin/electron $HERE
+Exec="$EXEC" --no-sandbox "$HERE"
 Icon=$HERE/icon.svg
 Terminal=false
 Categories=Development;Utility;

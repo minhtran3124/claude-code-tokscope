@@ -32,7 +32,10 @@ function waitFor(url, tries = 100) {
 
 async function start() {
   const port = await freePort();
-  server = spawn(path.join(ROOT, "bin", "tokscope"), ["serve", "--no-open", "--port", String(port)], { stdio: "inherit" });
+  // The server runs under a small sh that stops it when this process is gone, however it went (a quit, a signal,
+  // SIGKILL, a crash). Killing the sh runs its trap, which stops the server.
+  const guard = 'trap \'kill "$S" 2>/dev/null\' EXIT TERM INT HUP; "$@" & S=$!; while kill -0 "$PPID" 2>/dev/null && kill -0 "$S" 2>/dev/null; do sleep 1; done; kill "$S" 2>/dev/null; wait "$S"';
+  server = spawn("sh", ["-c", guard, "sh", path.join(ROOT, "bin", "tokscope"), "serve", "--no-open", "--port", String(port)], { stdio: "inherit" });
   server.once("exit", (code) => { server = null; if (code) app.exit(code); });
   const url = `http://127.0.0.1:${port}/`;
   await waitFor(url);
@@ -50,5 +53,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
   app.whenReady().then(start).catch((e) => { console.error(`tokscope: ${e.message}`); app.exit(1); });
   app.on("window-all-closed", () => app.quit());
-  app.on("will-quit", () => { if (server) server.kill(); });
+  // every way out stops the server: a normal quit, app.exit() on a failed start, and a signal (not SIGKILL)
+  process.on("exit", () => { if (server) server.kill(); });
+  for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"]) process.on(sig, () => app.quit());
 }
