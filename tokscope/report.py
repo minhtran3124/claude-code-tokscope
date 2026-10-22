@@ -50,10 +50,10 @@ background:var(--surface);box-shadow:10px 12px 0 var(--shadow)}
 .kpi b{font-size:19px;font-variant-numeric:tabular-nums}
 .card{background:var(--surface);border:var(--line-w) solid var(--ink);border-radius:14px;padding:14px 16px;margin-bottom:14px;overflow-x:auto}
 details.more{background:var(--surface);border:var(--line-w) solid var(--ink);border-radius:14px;padding:10px 16px;margin-bottom:10px}
-details.more>summary::before{content:"›";display:inline-block;color:var(--mark-ink);font-weight:600;transition:transform .2s var(--ease)}
+details.more>summary::before{content:"›";display:inline-block;color:var(--mark-ink);font-weight:600;transition:transform var(--t-state) var(--ease)}
 details.more>summary .note{flex:1 1 18em;min-width:0;overflow-wrap:anywhere;font-weight:400;margin:0}
 @media (max-width:640px){details.more>summary .note{flex-basis:100%}}
-details::details-content{block-size:0;overflow:hidden;transition:block-size .3s var(--ease),content-visibility .3s allow-discrete}
+details::details-content{block-size:0;overflow:hidden;transition:block-size var(--t-layout) var(--ease),content-visibility var(--t-layout) allow-discrete}
 details[open]::details-content{block-size:auto}
 table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
 th{color:var(--muted);font-weight:500;font-size:12px;border-bottom:1px solid var(--grid)}
@@ -62,15 +62,15 @@ td.l{text-align:left;white-space:normal;color:var(--ink2);min-width:220px}
 td.u{color:var(--muted);font-size:12px}
 td.lm{text-align:left;white-space:normal;color:var(--ink2);font-size:12px}
 .bar i{display:flex;gap:2px;width:90px;height:10px;background:var(--track);border-radius:5px;overflow:hidden}
-.bar i u{display:block;height:100%;background:var(--mark);box-shadow:inset 0 0 0 1px var(--ink);border-radius:0 4px 4px 0;transform-origin:left;animation:grow .5s var(--ease-expo) both;animation-delay:calc(var(--i,0)*25ms)}
+.bar i u{display:block;height:100%;background:var(--mark);box-shadow:inset 0 0 0 1px var(--ink);border-radius:0 4px 4px 0;transform-origin:left;animation:grow var(--t-layout) var(--ease-expo) both;animation-delay:calc(var(--i,0)*25ms)}
 .bar i u.a{background:var(--agent);border-radius:0 4px 4px 0}
 .bar i u:has(+u.a){border-radius:0}
 .key i{width:12px;height:12px;border-radius:3px;background:var(--mark);box-shadow:inset 0 0 0 1px var(--ink)}
 .key i.a{background:var(--agent)}
-svg rect.m{fill:var(--mark);stroke:var(--ink);stroke-width:1;transform-box:fill-box;transform-origin:bottom;transition:opacity .15s}
+svg rect.m{fill:var(--mark);stroke:var(--ink);stroke-width:1;transform-box:fill-box;transform-origin:bottom;transition:opacity var(--t-fast)}
 svg rect.hit{fill:transparent}
 #tip{position:fixed;pointer-events:none;background:var(--surface);border:var(--line-w) solid var(--ink);border-radius:8px;padding:6px 9px;font-size:12px;
-max-width:320px;opacity:0;transform:translateY(4px);transition:opacity .15s var(--ease),transform .15s var(--ease);z-index:30}
+max-width:320px;opacity:0;transform:translateY(6px);z-index:30}
 #tip.on{opacity:1;transform:none}
 .pass,.fail{font-weight:600;padding:0 7px;border-radius:999px}
 .pass{color:var(--pass);background:color-mix(in oklch,var(--pass) 13%,transparent)}
@@ -81,22 +81,21 @@ mark{background:var(--hl);color:inherit;border-radius:2px}
 .tools input[type=search],.tools select{font:inherit;padding:6px 14px;border:var(--line-w) solid var(--ink);border-radius:999px;background:var(--surface);color:var(--ink)}
 .tools input[type=search]:focus,.tools select:focus{outline:2px solid var(--ink);outline-offset:2px}
 .srow{border:var(--line-w) solid var(--ink);border-radius:12px;background:var(--surface);margin-bottom:8px;
-transition:box-shadow .2s var(--ease),transform .2s var(--ease),background .2s var(--ease)}
+transition:background var(--t-state) var(--ease)}
 .srow.ghost{position:absolute;left:0;right:0;margin:0;pointer-events:none;z-index:0}
-.srow:hover{transform:translate(-2px,-2px);box-shadow:5px 6px 0 var(--shadow)}
+.srow:hover{background:color-mix(in oklch,var(--mark) 4%,var(--surface))}
 .srow[open]{background:color-mix(in oklch,var(--mark) 4%,var(--surface))}
-.srow[open]:hover{transform:none;box-shadow:none}
 .srow.picked{outline:2px solid var(--ink);outline-offset:2px}
 .srow>summary{display:grid;grid-template-columns:22px 92px 1fr 90px 74px 92px 150px 14px;gap:8px;align-items:center;padding:9px 10px;cursor:pointer;list-style:none;border-radius:10px}
 .srow>summary:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .srow:hover>summary .t{color:var(--mark-ink)}
-.cv{color:var(--muted);font-weight:600;text-align:center;transition:transform .2s var(--ease),color .15s var(--ease)}
-.srow:hover .cv{color:var(--mark-ink);transform:translateX(2px)}
+.cv{color:var(--muted);font-weight:600;text-align:center;transition:transform var(--t-state) var(--ease),color var(--t-fast) var(--ease)}
+.srow:hover .cv{color:var(--mark-ink)}
 .srow[open] .cv{transform:rotate(90deg);color:var(--mark-ink)}
 .side{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:28px 12px 20px 16px;border-right:1px solid var(--edge);background:var(--page);z-index:10}
 .brand{font-weight:600;font-size:13px;color:var(--ink);margin:0 0 14px 10px;display:flex;align-items:center;gap:7px}
 .toc a{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;color:var(--ink2);text-decoration:none;
-font-size:14px;transition:background .15s var(--ease),color .15s var(--ease),transform .15s var(--ease)}
+font-size:14px;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease),transform var(--t-fast) var(--ease)}
 .toc a:hover{background:color-mix(in oklch,var(--mark) 10%,transparent);color:var(--ink);transform:translateX(2px)}
 .toc a.on{background:color-mix(in oklch,var(--mark) 15%,transparent);color:var(--mark-ink);font-weight:600}
 .toc a:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
@@ -106,7 +105,7 @@ font-size:14px;transition:background .15s var(--ease),color .15s var(--ease),tra
 .totop{position:fixed;right:22px;bottom:22px;z-index:25;width:44px;height:44px;border-radius:50%;font:700 18px/1 inherit;
 border:var(--line-w) solid var(--ink);background:var(--surface);color:var(--ink);
 opacity:0;visibility:hidden;transform:translateY(10px);
-transition:opacity .2s var(--ease),transform .2s var(--ease),visibility .2s,bottom .2s var(--ease),background .15s var(--ease),color .15s var(--ease)}
+transition:opacity var(--t-state) var(--ease),transform var(--t-state) var(--ease),visibility var(--t-state),bottom var(--t-state) var(--ease),background var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
 .totop.show{opacity:1;visibility:visible;transform:none}
 .totop.show:hover{background:var(--ink);color:var(--page);transform:translateY(-2px)}
 .totop:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
@@ -120,10 +119,10 @@ a,summary,label,select,button:not(:disabled),input[type=checkbox],svg [data-chan
 /* a scrolling card would stop the pick bar from sticking */
 .pickbar{position:sticky;bottom:12px;z-index:20;display:flex;gap:10px;align-items:center;justify-content:space-between;margin:4px 0 8px;
 padding:10px 14px;border:var(--line-w) solid var(--ink);border-radius:12px;background:var(--surface);
-animation:pop .25s var(--ease) both}
+animation:pop var(--t-state) var(--ease) both}
 .pickbar[hidden]{display:none}
 .primary{all:unset;cursor:pointer;font-weight:600;font-size:13px;padding:6px 14px;border:var(--line-w) solid var(--ink);border-radius:999px;background:var(--ink);color:var(--page);
-transition:background .15s var(--ease),color .15s var(--ease),opacity .15s var(--ease)}
+transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease),opacity var(--t-fast) var(--ease)}
 .primary:hover:not(:disabled){background:var(--surface);color:var(--ink)}
 .primary:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .primary:disabled{opacity:.45;cursor:not-allowed}
@@ -141,7 +140,7 @@ border-left:var(--line-w) solid var(--grid);border-bottom:var(--line-w) solid va
 .split u.a{background:var(--agent)}
 .srow .body td.calls{min-width:300px}
 .run{display:grid;grid-template-columns:minmax(0,max-content) minmax(0,1fr) auto auto;column-gap:10px;align-items:baseline;
-padding:3px 8px 3px calc(8px + var(--d,0)*16px);border-radius:6px;line-height:1.5;transition:background .15s var(--ease)}
+padding:3px 8px 3px calc(8px + var(--d,0)*16px);border-radius:6px;line-height:1.5;transition:background var(--t-fast) var(--ease)}
 .run .rt{color:var(--agent-ink);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px}
 tr.runs-row td{border-top:0;padding-top:0}
 .runs{border:var(--line-w) solid var(--ink);border-radius:8px;padding:4px;
@@ -158,8 +157,8 @@ background:var(--surface);border:var(--line-w) solid var(--ink);border-radius:12
 .ids dt:first-child,.ids dt:first-child+dd .code{font-weight:600;color:var(--ink)}
 .code{font:12px var(--mono);background:var(--chip);padding:2px 6px;border-radius:4px;user-select:all}
 #compare{display:none}
-#compare.on{display:block;animation:pop .25s var(--ease) both}
-.btn{all:unset;cursor:pointer;display:inline-block;font-size:12px;line-height:1.45;color:var(--ink);padding:5px 12px;border:var(--line-w) solid var(--ink);border-radius:999px;background:var(--surface);transition:background .15s var(--ease),color .15s var(--ease)}
+#compare.on{display:block;animation:pop var(--t-state) var(--ease) both}
+.btn{all:unset;cursor:pointer;display:inline-block;font-size:12px;line-height:1.45;color:var(--ink);padding:5px 12px;border:var(--line-w) solid var(--ink);border-radius:999px;background:var(--surface);transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
 .btn:hover{background:var(--ink);color:var(--page)}
 .btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 @media (max-width:640px){.srow>summary{grid-template-columns:22px 1fr 80px 14px}.srow>summary .d,.srow>summary .sk,.srow>summary .n,.srow>summary .split{display:none}
@@ -167,53 +166,53 @@ background:var(--surface);border:var(--line-w) solid var(--ink);border-radius:12
 .srow.orphan>summary .t{flex-direction:column;align-items:stretch;gap:0}.srow>summary .from{max-width:100%}}
 #progress{position:fixed;inset:0 0 auto 0;height:3px;z-index:40;transform-origin:0 50%;transform:scaleX(0);
 background:var(--mark)}
-.hero{animation:rise-in .7s var(--ease-expo) backwards}
-.kpi{position:relative;overflow:hidden;animation:rise-in .6s var(--ease-expo) backwards;animation-delay:calc(120ms + var(--i,0)*70ms)}
+.hero{animation:rise-in var(--t-layout) var(--ease-expo) backwards}
+.kpi{position:relative;overflow:hidden;animation:rise-in var(--t-layout) var(--ease-expo) backwards;animation-delay:calc(120ms + var(--i,0)*70ms)}
 /* sidebar: one pill slides to the section in view */
 .toc{position:relative}
 .toc a{position:relative;z-index:1}
 .toc-pill{position:absolute;left:0;top:0;border-radius:8px;pointer-events:none;
 background:color-mix(in oklch,var(--mark) 15%,transparent);box-shadow:inset 3px 0 0 var(--mark);
-transition:transform .35s var(--ease-expo),width .35s var(--ease-expo),height .35s var(--ease-expo),opacity .2s}
+transition:transform var(--t-layout) var(--ease-expo),width var(--t-layout) var(--ease-expo),height var(--t-layout) var(--ease-expo),opacity var(--t-state)}
 .has-pill .toc a.on{background:transparent}
 .side-foot{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0 0 4px}
 .chip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);padding:5px 12px;border:var(--line-w) solid var(--ink);border-radius:999px;background:var(--surface);
-transition:color .15s var(--ease),background .15s var(--ease)}
+transition:color var(--t-fast) var(--ease),background var(--t-fast) var(--ease)}
 .chip:hover,.chip.on,.chip[aria-pressed=true]{background:var(--ink);color:var(--page)}
 .chip:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .chip kbd,.keys kbd{font:600 11px var(--mono);padding:1px 6px;border-radius:5px;border:1px solid var(--edge);border-bottom-width:2px;background:var(--surface);color:var(--ink)}
 ::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
 /* chart: 7-day average draws itself in; a guide follows the pointer */
 svg .ma{fill:none;stroke:var(--agent-ink);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:0}
-#trend[open] svg .ma{animation:draw 1.4s var(--ease-expo) .25s backwards}
+#trend[open] svg .ma{animation:draw calc(var(--t-layout)*2) var(--ease-expo) var(--t-state) backwards}
 .key i.ln{height:3px;border-radius:2px;background:var(--agent-ink);box-shadow:none}
 /* copy feedback, empty state, shortcuts dialog */
-.btn.ok{color:var(--pass);background:color-mix(in oklch,var(--pass) 14%,transparent);animation:pop .25s var(--ease) both}
+.btn.ok{color:var(--pass);background:color-mix(in oklch,var(--pass) 14%,transparent);animation:pop var(--t-state) var(--ease) both}
 #toast{position:fixed;left:50%;bottom:26px;z-index:50;transform:translate(-50%,16px);opacity:0;pointer-events:none;padding:9px 16px;border-radius:999px;
-background:var(--ink);color:var(--page);font-size:13px;font-weight:600;transition:opacity .2s var(--ease),transform .3s var(--ease-expo)}
+background:var(--ink);color:var(--page);font-size:13px;font-weight:600}
 #toast.on{opacity:1;transform:translate(-50%,0)}
-.empty{text-align:center;padding:34px 12px;color:var(--muted);border:1px dashed var(--grid);border-radius:12px;animation:reveal .3s var(--ease) both}
+.empty{text-align:center;padding:34px 12px;color:var(--muted);border:1px dashed var(--grid);border-radius:12px;animation:reveal var(--t-layout) var(--ease) both}
 .empty b{display:block;color:var(--ink);font-size:15px;margin-bottom:4px}
 #s-more{padding:6px 14px}
 dialog.keys{border:var(--line-w) solid var(--ink);border-radius:14px;background:var(--surface);color:var(--ink);padding:18px 22px;min-width:300px}
-dialog.keys[open]{animation:pop-in .3s var(--ease-expo) both}
+dialog.keys[open]{animation:pop-in var(--t-layout) var(--ease-expo) both}
 dialog.keys::backdrop{background:#0005}
 dialog.keys dd{margin:0;color:var(--ink2)}
 .legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--ink2);margin:8px 0 10px}
 .legend .key i.was{background:var(--surface);border-radius:50%}
 .legend b{color:var(--ink);font-weight:600}
 .share{display:flex;gap:2px;height:16px;border-radius:4px;overflow:hidden;margin-top:6px}
-.share i{display:block;min-width:3px;box-shadow:inset 0 0 0 1px var(--ink);transform-origin:left;transition:filter .15s}
-.viz .dot{fill:var(--c1);stroke:var(--ink);stroke-width:1.5px;transition:r .15s var(--ease)}
+.share i{display:block;min-width:3px;box-shadow:inset 0 0 0 1px var(--ink);transform-origin:left;transition:filter var(--t-fast)}
+.viz .dot{fill:var(--c1);stroke:var(--ink);stroke-width:1.5px;transition:r var(--t-fast) var(--ease)}
 .viz .dot:not(.hi){fill:color-mix(in oklch,var(--c1) 55%,var(--surface))}
 .viz .dot.was{fill:var(--surface)}
 .viz circle.hit,.viz rect.hit{fill:transparent}
 .viz g.rg:hover rect.hit,.viz g.db:hover rect.hit{fill:color-mix(in oklch,var(--mark) 6%,transparent)}
 .viz g.seg path,.viz g.seg rect:not(.hit){stroke:var(--ink);stroke-width:1}
-#breakdowns details[open] .share i{animation:grow .7s var(--ease-expo) both;animation-delay:calc(var(--i,0)*60ms)}
-#breakdowns details[open] .viz g.seg{transform-box:fill-box;transform-origin:bottom;animation:rise .6s var(--ease-expo) both;animation-delay:calc(var(--i,0)*70ms)}
-#breakdowns details[open] .viz g.pt,#breakdowns details[open] .viz g.rg,#breakdowns details[open] .viz g.db{animation:rise-in .5s var(--ease-expo) both;animation-delay:calc(min(var(--i,0),20)*25ms)}
-#breakdowns details[open] .viz g.rg .span,#breakdowns details[open] .viz g.db .span{animation:draw .8s var(--ease-expo) both;animation-delay:calc(var(--i,0)*30ms + .1s)}
+#breakdowns details[open] .share i{animation:grow var(--t-layout) var(--ease-expo) both;animation-delay:calc(var(--i,0)*60ms)}
+#breakdowns details[open] .viz g.seg{transform-box:fill-box;transform-origin:bottom;animation:rise var(--t-layout) var(--ease-expo) both;animation-delay:calc(var(--i,0)*70ms)}
+#breakdowns details[open] .viz g.pt,#breakdowns details[open] .viz g.rg,#breakdowns details[open] .viz g.db{animation:rise-in var(--t-layout) var(--ease-expo) both;animation-delay:calc(min(var(--i,0),20)*25ms)}
+#breakdowns details[open] .viz g.rg .span,#breakdowns details[open] .viz g.db .span{animation:draw calc(var(--t-layout)*2) var(--ease-expo) both;animation-delay:calc(var(--i,0)*30ms + .1s)}
 td:first-child{white-space:normal;overflow-wrap:anywhere;min-width:8ch}
 @container (max-width:1000px){.bar i{width:56px}td.l{min-width:160px}.srow .body td.calls{min-width:200px}}
 @container (max-width:860px){.bar i{display:none}.srow .body td.calls{min-width:0}td.lm,td.calls{white-space:normal}td.l{min-width:120px}}
@@ -241,9 +240,6 @@ td.l,td.lm,td.calls,.md td{font-family:var(--sans)}
 .btn,.chip{font-weight:500}
 .primary{font-size:12px;font-weight:500}
 .tools select,.tools input[type=search]{font-size:12px;font-weight:400}
-@media (prefers-reduced-motion:reduce){*,*::before,*::after,::details-content{animation:none!important;transition:none!important}
-.srow:hover,a.sk:hover,.totop.show:hover,.toc a:hover,.srow:hover .cv,.srow:hover>summary .split{transform:none!important}
-.js .reveal{opacity:1;transform:none}html{scroll-behavior:auto}}
 """.replace("SANS", fonts.SANS).replace("MONO", fonts.MONO).replace("DARK", "--page:#1d1a15;--surface:#27231c;--ink:#f2efe7;--ink2:#d6cfc2;--muted:#b0a796;--grid:#3b3529;--edge:#4f4739;--mark:#76a0e2;--agent:#f4b829;--mark-ink:#8fb3ec;--agent-ink:#f4b829;--tint:#25304a;--track:#332e25;--chip:#332e25;--hl:#5a4500;--pass:#93d3b0;--fail:#f08a70;--c3:#c4607d;--c4:#d6cfc2;--c5:#8f8676;--c0:#5e5649;--line-w:1.5px;--shadow:#41538f;color-scheme:dark")
 
 # the page script in parts: every page takes JS_CORE; the report takes them all, a dashboard page only its own
@@ -267,7 +263,10 @@ function countUp(el,delay,dur=1200){const end=el.dataset.end??(el.dataset.end=el
   const run=el._run=(el._run||0)+1;
   el.textContent=f(0);setTimeout(()=>{const t0=performance.now();const step=now=>{if(el._run!==run)return;const p=Math.min(1,Math.max(0,(now-t0)/dur));
     el.textContent=p<1?f(raw*(1-Math.pow(1-p,4))):end;if(p<1)requestAnimationFrame(step)};requestAnimationFrame(step)},delay)}
-document.querySelectorAll('[data-count]').forEach((el,k)=>countUp(el,150+k*70));
+// a live value (data-key, on the dashboard) shows its real number at once; the count-up is for the static report and the rows you open
+document.querySelectorAll('[data-count]:not([data-key])').forEach((el,k)=>countUp(el,150+k*70));
+// the entrances (CSS under html:not(.settled)) belong to the first paint; a region that a poll swaps in must not replay them
+setTimeout(()=>document.documentElement.classList.add('settled'),1500);
 const root=document.documentElement;
 const isDark=()=>root.dataset.theme?root.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;
 const themeBtn=document.getElementById('theme');
