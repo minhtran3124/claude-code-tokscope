@@ -3,6 +3,27 @@
 Versions follow [semver](https://semver.org). Before 1.0 a minor bump may break things; each break is listed.
 The version lives in `tokscope/__init__.py`; `mod/.claude-plugin/plugin.json` must carry the same number.
 
+## 0.2.0 - 2026-10-22
+
+The dashboard redesign (#23). No data, CLI or database changes: the numbers are the same, the screens are new.
+
+Dashboard:
+- One layout stylesheet for both skins (Ink and Classic). A skin is now tokens plus a short look block: Ink went from
+  400 to 69 rules and Classic from 385 to 87.
+- Overview answers first: the headline, then the cause and notes, with elapsed-time deltas, exact local hours, a
+  calendar 7-day average and the level spenders.
+- Sessions is a dense table, grouped by day (UTC), with a tray cue and a no-date group.
+- Breakdowns show their findings next to each table: the zero-token skill case, the true skill count and exact
+  percentages.
+- A motion system with a reduced-motion fallback, including the Classic hero glow.
+- A phone layout under 640 px: a filter sheet, the top spenders name sits on its numbers, and the Classic controls
+  keep a 3:1 outline.
+
+Fixes:
+- A skill's first version is no longer counted as a version change, in the Overview chart or in the skill versions
+  list.
+- Ids are escaped in the Sessions table.
+
 ## 0.1.0 - 2026-10-21
 
 First public release.
