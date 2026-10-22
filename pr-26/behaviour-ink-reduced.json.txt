@@ -1,0 +1,75 @@
+{
+ "t0_running": [
+  "rise-in",
+  "rise-in",
+  "rise-in",
+  "rise-in",
+  "rise-in",
+  "rise-in"
+ ],
+ "kf0": [
+  "rise-in:opacity"
+ ],
+ "settled": true,
+ "after_first_paint_running": [],
+ "after_refresh1_text": "NEW1500000",
+ "kf1": [
+  "chip-in:opacity"
+ ],
+ "chip1": [
+  "+1.5M|chip-in",
+  "+1.5M|chip-in"
+ ],
+ "entrance_after_refresh1": [],
+ "all_anims_after_refresh1": [
+  [
+   "chip-in",
+   "running",
+   1
+  ],
+  [
+   "chip-in",
+   "running",
+   1
+  ]
+ ],
+ "chip2": [
+  "+3.0M",
+  "+3.0M"
+ ],
+ "entrance_after_refresh2": [],
+ "kf_ring": [
+  "ring:opacity",
+  "chip-in:opacity"
+ ],
+ "ring": [
+  [
+   "ring",
+   1,
+   600
+  ]
+ ],
+ "dot_after": [
+  [
+   "ring",
+   "running",
+   0
+  ]
+ ],
+ "dot_class": "dot ring",
+ "ring_cleared": false,
+ "infinite": [],
+ "chip_gone": 0,
+ "offline_dot": [
+  "rgba(0, 0, 0, 0)",
+  "rgb(102, 94, 81) 0px 0px 0px 1.5px inset"
+ ],
+ "durations": [
+  "0s/0s",
+  "0s/0.32s, 0.32s",
+  "0s/0.12s, 0.12s",
+  "0.6s/0s",
+  "0s/0.12s",
+  "0s/0.2s, 0.2s"
+ ]
+}

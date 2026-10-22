@@ -1,0 +1,178 @@
+{
+ "t0_running": [
+  "pulse",
+  "rise-in",
+  "focus",
+  "rise-in",
+  "focus",
+  "rise-in",
+  "focus",
+  "rise-in",
+  "focus",
+  "rise-in",
+  "focus",
+  "rise-in",
+  "focus",
+  "pulse"
+ ],
+ "kf0": [
+  "pulse:opacity",
+  "rise-in:transform+opacity",
+  "focus:filter+opacity"
+ ],
+ "settled": false,
+ "after_first_paint_running": [
+  "rise-in",
+  "focus",
+  "rise-in",
+  "focus",
+  "rise-in",
+  "focus",
+  "rise-in",
+  "focus",
+  "rise-in",
+  "focus",
+  "rise-in",
+  "focus",
+  "pulse"
+ ],
+ "after_refresh1_text": "NEW1500000",
+ "kf1": [
+  "flash:backgroundClip+backgroundColor+backgroundImage+backgroundOrigin+backgroundPositionX+backgroundPositionY+backgroundRepeat+backgroundSize+backgroundAttachment",
+  "focus:filter+opacity",
+  "rise-in:transform+opacity",
+  "pulse:opacity"
+ ],
+ "chip1": [],
+ "entrance_after_refresh1": [
+  "focus",
+  "rise-in",
+  "focus",
+  "rise-in",
+  "focus",
+  "rise-in",
+  "focus",
+  "rise-in",
+  "focus",
+  "rise-in",
+  "focus"
+ ],
+ "all_anims_after_refresh1": [
+  [
+   "flash",
+   "running",
+   1
+  ],
+  [
+   "focus",
+   "running",
+   1
+  ],
+  [
+   "rise-in",
+   "running",
+   1
+  ],
+  [
+   "focus",
+   "running",
+   1
+  ],
+  [
+   "rise-in",
+   "running",
+   1
+  ],
+  [
+   "focus",
+   "running",
+   1
+  ],
+  [
+   "rise-in",
+   "running",
+   1
+  ],
+  [
+   "focus",
+   "running",
+   1
+  ],
+  [
+   "rise-in",
+   "running",
+   1
+  ],
+  [
+   "focus",
+   "running",
+   1
+  ],
+  [
+   "rise-in",
+   "running",
+   1
+  ],
+  [
+   "focus",
+   "running",
+   1
+  ],
+  [
+   "pulse",
+   "running",
+   null
+  ],
+  [
+   "flash",
+   "running",
+   1
+  ]
+ ],
+ "chip2": [],
+ "entrance_after_refresh2": [
+  "focus",
+  "rise-in",
+  "focus",
+  "rise-in",
+  "focus",
+  "rise-in",
+  "focus",
+  "rise-in",
+  "focus",
+  "rise-in",
+  "focus"
+ ],
+ "ringerr": "ReferenceError: ring is not defined",
+ "kf_ring": [
+  "flash:backgroundClip+backgroundColor+backgroundImage+backgroundOrigin+backgroundPositionX+backgroundPositionY+backgroundRepeat+backgroundSize+backgroundAttachment",
+  "focus:filter+opacity",
+  "rise-in:transform+opacity",
+  "pulse:opacity"
+ ],
+ "ring": [],
+ "dot_after": [],
+ "dot_class": "dot",
+ "ring_cleared": true,
+ "infinite": [
+  "pulse"
+ ],
+ "chip_gone": 0,
+ "offline_dot": [
+  "rgb(102, 94, 81)",
+  "none"
+ ],
+ "durations": [
+  "0s/0s",
+  "0s/0.35s, 0.35s",
+  "0s/0.15s, 0.15s, 0.15s",
+  "0s/0.15s, 0.15s",
+  "1.2s/0s",
+  "0.7s/0s",
+  "0.6s/0s",
+  "2s/0s",
+  "0.5s/0s",
+  "0s/0.15s",
+  "0s/0.2s, 0.3s"
+ ]
+}
