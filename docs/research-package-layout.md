@@ -43,7 +43,8 @@ Dependency rule, checked by `tests/test_layout.py`:
 ## Not done here (follow-ups)
 
 - ~~Split `web/dashboard.py`~~ Done: `web/dashboard/` is a package with `common`, `pages/` (one module per page),
-  `scripts`, `shell` and `server`; every page renders byte-identical HTML. Still to do: split `web/report.py`
-  (1,022 lines) the same way.
+  `scripts`, `shell` and `server`; every page renders byte-identical HTML. ~~Split `web/report.py`~~ Done the same way:
+  `web/report/` has `common`, `styles`, `scripts`, `widgets`, `sections/` (one module per section) and `writer`; the
+  report is byte-identical at all three privacy levels.
 - `core/ingest.py` and `core/skills.py` import each other inside functions. That cycle could break up with a
   small `core/transcript.py` for the shared regexes.

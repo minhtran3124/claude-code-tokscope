@@ -3,7 +3,9 @@
 import html
 
 from ....features.changes import list_changes
-from ...report import _breakdowns, _change_cards, _section
+from ...report.sections.breakdowns import _breakdowns
+from ...report.sections.skills import _change_cards
+from ...report.widgets import _section
 
 
 def page_breakdowns(conn, f):

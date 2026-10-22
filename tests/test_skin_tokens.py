@@ -2,7 +2,8 @@
 import re
 import unittest
 
-from tokscope.web import dashboard, report
+from tokscope.web import dashboard
+from tokscope.web.report import styles as report_styles
 from tokscope.web.theme import layout
 from tokscope.web.theme.classic import CLASSIC_CSS, CLASSIC_DASH_CSS
 
@@ -33,7 +34,7 @@ def rules(css):
 
 
 LAYOUT = layout.LAYOUT_CSS + layout.LAYOUT_DASH_CSS + layout.LAYOUT_TOKEN_CSS + layout.LAYOUT_TOKEN_DASH_CSS
-SKINS = {"Ink": report.CSS + dashboard.DASH_CSS, "Classic": CLASSIC_CSS + CLASSIC_DASH_CSS}
+SKINS = {"Ink": report_styles.CSS + dashboard.DASH_CSS, "Classic": CLASSIC_CSS + CLASSIC_DASH_CSS}
 
 
 def root_tokens(css):
@@ -54,7 +55,7 @@ class SkinTokensTest(unittest.TestCase):
             self.assertLess(len(rules(css)), 140, f"{name} grew back: move a rule that differs only in value into layout.py and read a token")
 
     def test_every_look_token_is_defined_in_both_skins(self):
-        ink, classic = root_tokens(report.CSS), root_tokens(CLASSIC_CSS)
+        ink, classic = root_tokens(report_styles.CSS), root_tokens(CLASSIC_CSS)
         used = set(re.findall(r"var\((--[\w-]+)\)", layout.LAYOUT_TOKEN_CSS + layout.LAYOUT_TOKEN_DASH_CSS))
         # tokens the layout sheet defines itself (motion, per-element values set inline or by a rule)
         own = {"--t-fast", "--t-state", "--t-layout", "--ease-exit", "--i", "--d", "--depth", "--n", "--mx", "--my", "--scols", "--tok-accent"}
@@ -65,7 +66,7 @@ class SkinTokensTest(unittest.TestCase):
 
     def test_the_dark_theme_leaves_the_shape_tokens_alone(self):
         # the look tokens sit in the light :root and hold in dark too: the dark rules must not need to repeat them
-        for css in (report.CSS, CLASSIC_CSS):
+        for css in (report_styles.CSS, CLASSIC_CSS):
             dark = re.search(r":root\[data-theme=dark\]\{(.*?)\}", css, re.S).group(1)
             for tok in re.findall(r"(--[\w-]+):", dark):
                 self.assertNotRegex(tok, r"^--(r-|lab-|pad-|ctl-|num-|cell-)", f"{tok} belongs in the light :root only")

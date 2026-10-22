@@ -6,7 +6,7 @@ from datetime import datetime
 from urllib.parse import quote
 
 from ....integrations import managed
-from ...report import _table, _tok, _usd
+from ...report.widgets import _table, _tok, _usd
 from ..common import _dur
 
 

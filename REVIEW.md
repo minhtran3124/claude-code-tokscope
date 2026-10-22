@@ -17,7 +17,7 @@ Spend reviewers only where they can find something. Before any review (in or out
 | Docs or rules only | `*.md`, `.claude/` | 1: consistency, so no contradiction or gap with `CLAUDE.md`, factory `SKILL.md`, `REVIEW.md`, and true statements about the code | No |
 | Tests only | `tests/` | 1: each test can fail, and tests the claim in its name | No |
 | Bug fix | `tokscope/` | 2: bugs (the fix covers the failing input and its neighbours, and a test proves it), history (it does not undo an earlier fix) | Yes, when it touches a High or Medium path |
-| UI change | `tokscope/web/report.py`, `tokscope/web/dashboard/`, `tokscope/web/charts.py` markup, CSS, page script | 2: bugs (each template branch and state, JS ids, escaping), comments (rules in code comments, such as textContent only) | Yes, when it renders data, adds a form or adds script |
+| UI change | `tokscope/web/report/`, `tokscope/web/dashboard/`, `tokscope/web/charts.py` markup, CSS, page script | 2: bugs (each template branch and state, JS ids, escaping), comments (rules in code comments, such as textContent only) | Yes, when it renders data, adds a form or adds script |
 | New feature | `tokscope/` plus tests | All 5: claude-md, bugs, history, prior-prs, comments | Yes |
 | Risky path | the High row of "Risk by path" | All 5, whatever the type | Yes |
 
@@ -44,7 +44,7 @@ Go up one step when the diff is large or a cheaper run missed something on this 
 | Risk | Paths |
 | --- | --- |
 | High | code that writes files or runs `claude -p` (`tokscope/experiments/bench.py`, `replay.py`, `optimize.py`), `bin/tokscope`, `setup.sh`, the `host`/`port` handling and the POST handlers in `tokscope/web/dashboard/server.py`, `tokscope/core/privacy.py` |
-| Medium | the rest of `tokscope/` (`ingest.py`, `charts.py`, `report.py`, `cli.py`, parsing, markup) |
+| Medium | the rest of `tokscope/` (`ingest.py`, `charts.py`, `report/`, `cli.py`, parsing, markup) |
 | Low | docs, `*.md`, `.claude/`, tests only |
 
 A PR takes the highest risk of any path it changes.

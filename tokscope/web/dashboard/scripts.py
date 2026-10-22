@@ -1,4 +1,4 @@
-"""The dashboard's own stylesheet and page scripts (the report's shared CSS and JS live in web/report.py)."""
+"""The dashboard's own stylesheet and page scripts (the report's shared CSS and JS live in web/report/styles.py and web/report/scripts.py)."""
 
 
 

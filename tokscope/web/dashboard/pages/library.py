@@ -11,7 +11,8 @@ from urllib.parse import urlencode
 from ....core import markdown, skills
 from ....experiments import optimize
 from ....features import library
-from ...report import _diff_html, _more, _skill_versions, _tok, _usd
+from ...report.sections.skills import _skill_versions
+from ...report.widgets import _diff_html, _more, _tok, _usd
 from ..common import _dur
 
 

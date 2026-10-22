@@ -15,17 +15,18 @@ from unittest import mock
 
 from tokscope.core import skills
 from tokscope.integrations import managed
-from tokscope.web import dashboard, report
+from tokscope.web import dashboard
+from tokscope.web.report import scripts as report_scripts
 from http.server import BaseHTTPRequestHandler
 from tokscope.core import privacy as core_privacy
 from tokscope.features import library as features_library
 from tokscope.features import projects as features_projects
 from tokscope.web.dashboard import shell
 from tokscope.web.dashboard.pages import overview as overview_page
-from tokscope.web.report import JS_BENCH
-from tokscope.web.report import JS_CORE
-from tokscope.web.report import JS_SESSIONS
-from tokscope.web.report import JS_TREND
+from tokscope.web.report.scripts import JS_BENCH
+from tokscope.web.report.scripts import JS_CORE
+from tokscope.web.report.scripts import JS_SESSIONS
+from tokscope.web.report.scripts import JS_TREND
 from tokscope.core.ingest import connect
 from tokscope.paths import ASSETS
 
@@ -258,7 +259,7 @@ class SessionsTableTest(unittest.TestCase):
     def test_each_skin_adds_only_the_look(self):
         from tokscope.web.theme.classic import CLASSIC_CSS, CLASSIC_DASH_CSS
         from tokscope.web.theme.layout import LAYOUT_TOKEN_CSS, LAYOUT_TOKEN_DASH_CSS
-        from tokscope.web.report import CSS
+        from tokscope.web.report.styles import CSS
         layout = LAYOUT_TOKEN_CSS + LAYOUT_TOKEN_DASH_CSS
         # the outline, radius and label case are tokens read once in the layout sheet
         self.assertIn("#session-list{border:var(--line-w) solid var(--line-c);border-radius:var(--r-box)", layout)
@@ -276,7 +277,7 @@ class SessionsTableTest(unittest.TestCase):
         self.assertIn("<span class=d>${esc(when(s))}</span>", js)
 
     def test_hostile_session_id_reaches_the_page_only_as_json_data(self):
-        from tokscope.web.report import _sessions_json
+        from tokscope.web.report.sections.sessions import _sessions_json
         with tempfile.TemporaryDirectory() as d:
             conn = connect(Path(d) / "t.db")
             bad = "<img src=x onerror=alert(1)>"
@@ -374,7 +375,8 @@ class SkinSwitchReportTest(unittest.TestCase):
     def test_one_layout_sheet_comes_before_both_skins(self):
         from tokscope.web.theme.classic import CLASSIC_CSS
         from tokscope.web.theme.layout import LAYOUT_CSS
-        from tokscope.web.report import CSS, write_report
+        from tokscope.web.report import write_report
+        from tokscope.web.report.styles import CSS
         with tempfile.TemporaryDirectory() as d:
             db = Path(d) / "t.db"
             connect(db).close()
@@ -500,7 +502,7 @@ class OverviewTest(unittest.TestCase):
         self.assertIn("@media (max-width:639px)", block)
         self.assertIn("min-height:44px", block)
         self.assertIn("prefers-reduced-motion:reduce", block)                      # the sheet fades, it does not travel
-        self.assertNotIn("menu-btn", report.JS)
+        self.assertNotIn("menu-btn", report_scripts.JS)
         self.assertIn(".spenders td:first-child a,.spenders td:first-child span{display:inline-flex;align-items:flex-end;", block)  # name sits on its numbers, no loose gap
 
     def test_phone_breakpoint_is_639_in_css_and_script_and_the_sheet_leaves_dialog_and_select_keys_alone(self):

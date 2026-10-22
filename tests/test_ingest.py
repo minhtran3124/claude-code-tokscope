@@ -441,7 +441,7 @@ class HeadlessLinkTest(Fixture):
 
     def test_session_list_names_the_parent_and_an_old_database_gains_the_columns(self):
         from tokscope.core.ingest import connect
-        from tokscope.web.report import _sessions_json
+        from tokscope.web.report.sections.sessions import _sessions_json
 
         old = sqlite3.connect(self.db)
         old.execute("CREATE TABLE sessions (session_id TEXT PRIMARY KEY, project TEXT, cwd TEXT, title TEXT, version TEXT,"
@@ -461,7 +461,7 @@ class HeadlessLinkTest(Fixture):
 
 
     def test_a_parent_outside_the_reports_filter_keeps_its_id_but_not_its_title(self):
-        from tokscope.web.report import _sessions_json
+        from tokscope.web.report.sections.sessions import _sessions_json
 
         other = self.tmp / "projects" / "other"  # the parent lives in another project
         other.mkdir()

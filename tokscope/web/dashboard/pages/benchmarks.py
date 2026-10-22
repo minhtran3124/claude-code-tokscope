@@ -1,7 +1,8 @@
 """The Benchmarks page."""
 
 from .... import paths
-from ...report import _benchmarks, _more
+from ...report.sections.benchmarks import _benchmarks
+from ...report.widgets import _more
 
 
 def page_benchmarks(conn, f):

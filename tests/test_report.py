@@ -6,7 +6,7 @@ from pathlib import Path
 from tokscope.web import charts
 from tokscope.core.ingest import connect
 from tokscope.core.ingest import CARRIED
-from tokscope.web.report import _breakdowns, _week_skills, _weekly_phases
+from tokscope.web.report.sections.breakdowns import _breakdowns, _week_skills, _weekly_phases
 
 NOW = datetime(2026, 10, 20, 12, tzinfo=timezone.utc)  # a Tuesday
 COND, PARAMS = "WHERE s.project NOT LIKE ?", ("%bench%",)
@@ -142,11 +142,11 @@ class FindingTest(WeekTest):
         head, _ = self.summary(_breakdowns(self.conn, COND, PARAMS), "by-skill")
         self.assertIn("36 skills loaded", head)
         self.assertIn("big uses 99% of all tokens", head)
-        from tokscope.web.report import _pc
+        from tokscope.web.report.widgets import _pc
         self.assertEqual((_pc(0.001), _pc(0.001, True), _pc(1)), ("&lt;1%", "under 1%", "100%"))
 
     def test_no_changes_says_how_to_record_one(self):
-        from tokscope.web.report import _change_cards
+        from tokscope.web.report.sections.skills import _change_cards
         self.assertIn('tokscope change "note" --skill NAME', _change_cards(self.conn, []).replace("&quot;", '"'))
 
 
