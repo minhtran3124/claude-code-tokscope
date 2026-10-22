@@ -9,15 +9,16 @@ updated_by: claude   # claude | manual
 # claude-code-tokscope — Status
 
 ## Summary
-The ink redesign and headless child sessions are on `main`; the Classic/Ink switch is permanent (#18) and the Library holds the skills (#22). Issue #23 (dashboard UI/UX update) is under way: steps 0 to 5 (layout sheet, motion, Overview, Sessions, Breakdowns, phone layout) are open as stacked PRs.
+The ink redesign, headless child sessions, the Classic/Ink switch (#18) and the Library (#22) are on `main`. Issue #23 (dashboard UI/UX update, steps 0 to 5 plus skin tokens) is merged: #25 to #29, #31, #33, #32, #36 and #37.
 
 ## Next step
-Merge the #23 PRs in order (#25, #26, #27/#28/#29, #31, #33, then #32 and #34); all are reviewed and their findings fixed.
+Close #23 after a look at the dashboard on `main` at 1440 and 375 px; fix CI billing so Actions run.
 
 ## Blockers
 - GitHub Actions jobs do not start: account payment or spending limit (see Settings > Billing).
 
 ## Recent
+- 2026-10-22: merged the whole #23 stack into main (#25 to #29, #31, #33, #32; #31 and #34 had to land again as #36 and #37 because their stack base had already merged); main passes 271 tests.
 - 2026-10-22: #23 reviews done and findings fixed; skin-tokens token test made strict (no longer skips tokens neither skin defines); merging the stack.
 - 2026-10-22: #23 step 0 part 2: skins are tokens plus a look block (Ink 400 to 69 rules, Classic 385 to 87; value-only rules written once in layout.py); screenshots and computed styles identical to the base (PR open, on top of the stack).
 - 2026-10-22: #23 step 5: phone layout under 640 px (52 px top bar, menu sheet, filter pill, 2-column KPIs, two-line table rows, 14-day chart) (PR open, stacked on step 1).
