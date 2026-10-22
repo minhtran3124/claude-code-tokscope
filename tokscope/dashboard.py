@@ -1174,7 +1174,7 @@ document.querySelectorAll('form.filters').forEach(fm=>fm.addEventListener('submi
   location.href=fm.getAttribute('action')+(q.toString()?'?'+q:'')}));
 const freshEl=document.getElementById('fresh'),page=document.body.dataset.page;let stamp=document.body.dataset.stamp,seenAt=Date.now();
 const ago=t=>{const s=Math.round((Date.now()-t)/1000);return s<60?'just now':s<3600?Math.round(s/60)+' min ago':Math.round(s/3600)+' h ago'};
-function fresh(ok){freshEl.classList.toggle('stale',!ok);freshEl.lastChild.textContent=ok?' live · updated '+ago(seenAt):' offline · '+ago(seenAt)}
+function fresh(ok){freshEl.classList.toggle('stale',!ok);document.body.classList.toggle('offline',!ok);freshEl.lastChild.textContent=ok?' live · updated '+ago(seenAt):' offline · '+ago(seenAt)}
 // a live value changes at once; a chip beside it says by how much for 2 s (in --t-state, out 0.7 times that), in every motion setting
 const CHIP_MS=2000,CHIP_OUT_MS=140;
 function deltaChip(el,from){const to=+el.dataset.count,d=to-from;if(!d)return;
