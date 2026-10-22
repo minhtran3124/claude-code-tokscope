@@ -164,6 +164,7 @@ background:linear-gradient(90deg,var(--mark),var(--agent));box-shadow:0 0 12px c
 background:radial-gradient(30% 40% at 30% 40%,color-mix(in oklch,var(--mark) 22%,transparent),transparent 70%),
 radial-gradient(25% 35% at 70% 60%,color-mix(in oklch,var(--agent) 20%,transparent),transparent 70%);animation:drift 18s ease-in-out infinite alternate}
 @keyframes drift{to{transform:translate(6%,-4%) rotate(8deg) scale(1.08)}}
+@media (prefers-reduced-motion:reduce){.hero::before{animation:none}}  /* the glow travels, rotates and scales: still under reduced motion */
 .hero>*{position:relative}
 .hero{animation:rise-in var(--t-layout) var(--ease-expo) backwards}
 .hero .big em{background:linear-gradient(90deg,var(--mark),color-mix(in oklch,var(--mark) 45%,var(--agent)));-webkit-background-clip:text;background-clip:text;color:transparent}

@@ -263,7 +263,7 @@ function countUp(el,delay,dur=1200){const end=el.dataset.end??(el.dataset.end=el
     el.textContent=p<1?f(raw*(1-Math.pow(1-p,4))):end;if(p<1)requestAnimationFrame(step)};requestAnimationFrame(step)},delay)}
 // a live value (data-key, on the dashboard) shows its real number at once; the count-up is for the static report and the rows you open
 document.querySelectorAll('[data-count]:not([data-key])').forEach((el,k)=>countUp(el,150+k*70));
-// the entrances (CSS under html:not(.settled)) belong to the first paint; a region that a poll swaps in must not replay them
+// the entrances belong to the first paint (CSS: `html.settled [data-region] ...` turns them off); a region that a poll swaps in must not replay them
 setTimeout(()=>document.documentElement.classList.add('settled'),1500);
 const root=document.documentElement;
 const isDark=()=>root.dataset.theme?root.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;
