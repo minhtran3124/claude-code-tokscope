@@ -401,6 +401,7 @@ class OverviewTest(unittest.TestCase):
         self.assertIn("min-height:44px", block)
         self.assertIn("prefers-reduced-motion:reduce", block)                      # the sheet fades, it does not travel
         self.assertNotIn("menu-btn", report.JS)
+        self.assertIn(".spenders td:first-child a,.spenders td:first-child span{display:inline-flex;align-items:flex-end;", block)  # name sits on its numbers, no loose gap
 
     def test_phone_breakpoint_is_639_in_css_and_script_and_the_sheet_leaves_dialog_and_select_keys_alone(self):
         from tokscope.layout import LAYOUT_DASH_CSS

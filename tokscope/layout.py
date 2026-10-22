@@ -377,12 +377,12 @@ main{padding:16px 12px 72px}
 .spenders tr{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;align-items:baseline;padding:2px 0;border-top:1px solid var(--grid)}
 .spenders td{padding:0;white-space:nowrap}
 .spenders .cols3 td:first-child{grid-column:1/-1;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:break-word;text-align:left}
-.spenders td:first-child a,.spenders td:first-child span{display:inline-flex;align-items:center;min-height:44px}
+.spenders td:first-child a,.spenders td:first-child span{display:inline-flex;align-items:flex-end;min-height:44px;padding-bottom:2px}
 .spenders td:nth-child(2){text-align:left}
 .spenders .bar{justify-content:flex-start}
 .spenders .bar i{display:none}
-.spenders td:nth-child(3){text-align:right;padding-bottom:6px}
-.spenders td:nth-child(2){padding-bottom:6px}
+.spenders td:nth-child(3){text-align:right;padding-bottom:8px}
+.spenders td:nth-child(2){padding-bottom:8px}
 /* daily chart: a phone shows the 14-day chart with 4 labels, not the wide one */
 #trend svg.wide{display:none}
 #trend svg.narrow{display:block}
