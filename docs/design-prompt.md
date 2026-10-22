@@ -62,7 +62,26 @@ Shapes
   1.5px one; a hollow dot (paper fill) marks the earlier value. Thin bars are at least 10px
   tall. Lines (sparkline, 7-day average) use the text-safe tokens (--mark-ink, --agent-ink).
 - Selection (picked row) = 2px ink outline, never a ring of tint. Primary button is a filled pill
-  that inverts to paper on hover. Pulse = opacity only. Diff gap cells are flat chip colour.
+  that inverts to paper on hover. Session rows do not lift on hover (colour only). Diff gap cells are flat chip colour.
+
+Motion (working tool: state changes are fast, nothing loops)
+- Three durations, as CSS tokens in the layout sheet (`tokscope/layout.py`): --t-fast 120ms (press, hover colour),
+  --t-state 200ms (toggles, segments, tooltips, delta chip), --t-layout 320ms (row open, sheet, toast, first-paint
+  entrances). An exit is 0.7 times its entrance on --ease-exit cubic-bezier(.55,.06,.68,.19); entrances use --ease.
+  Any other duration needs a comment that says why (the 600ms live-dot ring, the endless spinner).
+- Entrances play on the first paint only. A region that the 2 s poll swaps never replays one. No blur-in, no count-up.
+- A live value changes at once; a chip ("+1.2M") shows beside it for 2s: in 200ms, out 140ms.
+- The live dot is still. One ring (600ms) shows when a poll finds new data. Offline is a hollow dot.
+- Reduced motion keeps opacity and colour and removes travel and scale; an update still shows. The entrance, chip, ring and toast
+  keyframes each have an opacity-only twin inside `@media (prefers-reduced-motion:reduce)`; the endless motions (spinner,
+  run bar, Classic hero glow) are switched off by their own rule in that media query. There is no global `animation:none`.
+- Event map (names after motion-prompt, github.com/showheyohtaki/motion-prompt). Built now: #052 Accordion (open a
+  session row or a fold, 320ms), #054 Tooltip (hover or focus a chart bar, 200ms, rises 6px), #056 Toast ("New data
+  · reload" and copy feedback, 320ms), #060 Segmented control (range, sort, grouping, 200ms), #068 Step indicator
+  (bench and optimize steps), #070 Spinner (inside buttons only), #071 Badge (delta chip, 200ms in, 140ms out),
+  #072 Empty state (320ms, first paint), #125 Pulse (live dot, one ring, 600ms), #004 Line draw (first paint only,
+  640ms, 2 x --t-layout; published 1.55s). Token only, until the screen exists: #055 Popover (filter list, 280ms), #069 Skeleton
+  (static, no shine), #144 Split screen and #057 Tabs (compare).
 
 Content rules
 - Up and down are an arrow plus a number ("▲ 59.8×", "▼ 8%"), never colour alone. Up in
@@ -82,7 +101,7 @@ Layout
 - KPI tiles: auto-fill grid, min 160px; cards: auto-fill, min 400px, 22px gaps; one column
   under 640px. Wide tables scroll inside their card, never the page.
 - Touch targets at least 32px tall; everything reachable by keyboard with a visible focus
-  ring; aria-pressed on toggles; reduced motion turns off hover movement and the live pulse.
+  ring; aria-pressed on toggles; reduced motion removes travel and scale and keeps opacity and colour (see Motion).
 
 Don't
 - No gradients, glows, emoji or blurred shadows (this removes the report hero's radial

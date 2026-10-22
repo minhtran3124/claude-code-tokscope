@@ -8,6 +8,13 @@
 | Classic is a token set and a look block (`tokscope/classic.py`), not a frozen copy. Both skins load one layout stylesheet (`tokscope/layout.py`, `<style id="layout">`) for grid, sizes, spacing and structure. New markup gets its layout rules there, so Classic shows it without a copy. (Owner, 2026-10-22, issue #23, option A.) | The copies drifted: about 35 Ink selectors had no Classic match, and each redesign step would have doubled the CSS work. | Copying rules into Classic in each PR; waiting until Classic looks broken. |
 | A rule moves into the layout sheet only when both skins have it word for word and no earlier skin rule sets the same property on the same element. | The skin sheets load after the layout sheet. A rule that came later in a skin sheet would lose to the skin rule it used to beat. | Moving every identical rule (changed the phone nav, the Today bars and the reduced-motion fallback). |
 
+## 2026-10-22 · Motion system (issue #23, step 1)
+
+| Decision | Why | Rejected |
+| --- | --- | --- |
+| Three duration tokens (`--t-fast` 120 ms, `--t-state` 200 ms, `--t-layout` 320 ms) and `--ease-exit` live in the layout sheet. Entrances play on the first paint only (`html.settled`). A live value changes at once and shows a delta chip. | The 2 s poll swaps regions, so every entrance, blur-in and count-up replayed on each update. About 30 durations made the motion uneven. | Keeping the count-up for live values; a duration per rule. |
+| Reduced motion: the entrance, chip, ring and toast keyframes have an opacity-only twin in the layout sheet; the spinner, run bar and Classic hero glow are switched off by their own rule; there is no global `animation:none`. | An update must still show for a person who asks for less motion. A global off switch hid it. | `*{animation:none!important}` (what it was). |
+
 ## 2026-10-21 · Headless child sessions keep their own totals
 
 | Decision | Why | Rejected |

@@ -836,10 +836,7 @@ main a{color:var(--mark-ink);text-underline-offset:2px}
 .filters a{font-size:12px;color:var(--muted)}
 .fresh{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--pass);margin-right:8px}
-.fresh .dot,h2>.dot{animation:pulse 2s infinite}
 .fresh .dot{margin:0}
-.fresh.stale .dot{background:var(--muted);animation:none}
-@keyframes pulse{50%{opacity:.35}}
 [data-region=kpis] .kpi{min-width:0}
 .kpi{position:relative}
 .kpi .dl{display:block;font-size:11px;color:var(--muted);margin-top:2px}
@@ -867,14 +864,12 @@ main a{color:var(--mark-ink);text-underline-offset:2px}
 .latest a{color:var(--ink);text-decoration:none}
 .latest a:hover b{color:var(--mark-ink)}
 ul.plain li{padding:4px 0;border-bottom:1px solid var(--grid)}
-.flash{animation:flash 1.2s var(--ease)}
 #newdata{position:fixed;right:20px;bottom:20px;z-index:40}
-@media (prefers-reduced-motion:reduce){.fresh .dot,h2>.dot,.dot,.flash{animation:none}}
 .libtools input[type=search]{min-width:min(100%,280px);padding:6px 14px;border:var(--line-w) solid var(--ink);border-radius:999px}
 .live-card{box-shadow:10px 12px 0 var(--shadow);margin:0 10px 12px 0}
 .libgroup h2 .note{margin:0 0 0 8px;font-weight:400}
 a.sk{display:flex;flex-direction:column;gap:6px;background:var(--surface);border:var(--line-w) solid var(--ink);border-radius:12px;padding:12px 14px;
-color:var(--ink);text-decoration:none;transition:transform .15s var(--ease),box-shadow .15s var(--ease)}
+color:var(--ink);text-decoration:none;transition:transform var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease)}
 a.sk:hover{transform:translate(-2px,-2px);box-shadow:5px 6px 0 var(--shadow)}
 a.sk b{font-size:14px;overflow-wrap:anywhere}
 a.sk p{margin:0;color:var(--ink2);font-size:12.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
@@ -933,7 +928,7 @@ background:var(--chip);color:var(--ink2);border:1px solid transparent}
 .st.warn .pill{background:color-mix(in oklch,var(--agent) 18%,transparent);border-color:color-mix(in oklch,var(--agent) 50%,transparent);color:var(--ink)}
 .st.bad .pill{background:color-mix(in oklch,var(--fail) 18%,transparent);border-color:color-mix(in oklch,var(--fail) 50%,transparent);color:var(--ink)}
 .st.off .pill{font-weight:500}
-table.mcp tbody tr{transition:background .15s var(--ease)}
+table.mcp tbody tr{transition:background var(--t-fast) var(--ease)}
 table.mcp tbody tr:hover td:first-child{color:var(--mark-ink)}
 .badge.flag{color:var(--agent-ink)}
 code.login{display:block;margin-top:2px;font-size:11.5px;color:var(--ink2);overflow-wrap:anywhere}
@@ -952,7 +947,7 @@ background:var(--surface);color:var(--ink);min-width:0}
 #mcp-form .namefield input{flex:1;min-width:12em}
 .pair input{flex:1 1 12em}
 .ask{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:10px 0;padding:10px 12px;border:var(--line-w) solid var(--ink);border-radius:12px;
-background:color-mix(in oklch,var(--mark) 9%,var(--surface));animation:reveal .2s var(--ease) both}
+background:color-mix(in oklch,var(--mark) 9%,var(--surface));animation:reveal var(--t-state) var(--ease) both}
 .ask p{margin:0;flex:1 1 20em}
 .busy{position:relative;padding-left:30px!important;opacity:.9;cursor:progress}
 .busy::before{content:"";position:absolute;left:11px;top:50%;width:11px;height:11px;margin-top:-7px;border:2px solid currentColor;border-right-color:transparent;
@@ -974,7 +969,7 @@ ol.steps li:is(.error,.denied) span{color:var(--fail)}
 ol.steps li.retry span{color:var(--agent-ink)}
 ol.steps li.start span,ol.steps li.end span{font-weight:600}
 .outcome{display:flex;flex-direction:column;gap:4px;margin:12px 0 6px;padding:12px 14px;border:var(--line-w) solid var(--ink);border-radius:12px;
-animation:reveal .3s var(--ease) both}
+animation:reveal var(--t-layout) var(--ease) both}
 .outcome b{font-size:15px}
 .outcome span{overflow-wrap:anywhere}
 .outcome.ok{background:color-mix(in oklch,var(--pass) 12%,transparent)}
@@ -999,7 +994,7 @@ table.sbs tr.fold td{color:var(--muted);text-align:center;font-family:var(--sans
 /* the decision stays in sight while you read the comparison */
 .decide{position:sticky;bottom:12px;z-index:6;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;
 margin:14px 0 0;padding:10px 14px;border:var(--line-w) solid var(--ink);border-radius:12px;background:var(--surface);
-animation:reveal .3s var(--ease) both}
+animation:reveal var(--t-layout) var(--ease) both}
 .decide .note{margin-left:6px}
 .btn.danger{color:var(--fail)}
 .btn.danger:hover{background:var(--ink);color:var(--page)}
@@ -1179,25 +1174,30 @@ document.querySelectorAll('form.filters').forEach(fm=>fm.addEventListener('submi
   location.href=fm.getAttribute('action')+(q.toString()?'?'+q:'')}));
 const freshEl=document.getElementById('fresh'),page=document.body.dataset.page;let stamp=document.body.dataset.stamp,seenAt=Date.now();
 const ago=t=>{const s=Math.round((Date.now()-t)/1000);return s<60?'just now':s<3600?Math.round(s/60)+' min ago':Math.round(s/3600)+' h ago'};
-function fresh(ok){freshEl.classList.toggle('stale',!ok);freshEl.lastChild.textContent=ok?' live · updated '+ago(seenAt):' offline · '+ago(seenAt)}
-// counts from the value on screen to the new one; reduced motion writes the new text at once
-function countFrom(el,from){const to=+el.dataset.count;if(from===to||!smoothOk())return;
-  const kind=el.dataset.kind,f={int:v=>Math.round(v).toLocaleString('en-US'),tok:fmt,pct:v=>Math.round(v)+'%',
-    usd:v=>'$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}[kind]||fmt,end=el.textContent,t0=performance.now();
-  el.closest('.kpi,.today-nums>div')?.classList.add('flash');
-  const step=now=>{const p=Math.min(1,(now-t0)/900);el.textContent=p<1?f(from+(to-from)*(1-Math.pow(1-p,3))):end;if(p<1)requestAnimationFrame(step)};
-  requestAnimationFrame(step)}
-// overview: swap each region for its new render and count the numbers on; other pages offer a reload
-async function refresh(){const url=location.pathname+location.search+(location.search?'&':'?')+'partial=1';
+function fresh(ok){freshEl.classList.toggle('stale',!ok);document.body.classList.toggle('offline',!ok);freshEl.lastChild.textContent=ok?' live · updated '+ago(seenAt):' offline · '+ago(seenAt)}
+// a live value changes at once; a chip beside it says by how much for 2 s (in --t-state, out 0.7 times that), in every motion setting
+const CHIP_MS=2000,CHIP_OUT_MS=140;
+function deltaChip(el,from){const to=+el.dataset.count,d=to-from;if(!d)return;
+  const f={int:v=>Math.round(v).toLocaleString('en-US'),tok:fmt,pct:v=>Math.round(v)+'%',
+    usd:v=>'$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}[el.dataset.kind]||fmt;
+  const host=el.closest('.kpi,.today-nums>div');if(!host)return;host.querySelectorAll('.dchip').forEach(c=>c.remove());
+  const c=document.createElement('small');c.className='dchip';c.textContent=(d>0?'+':'\u2212')+f(Math.abs(d));
+  c.setAttribute('aria-hidden','true');(el.closest('.today-nums')?el.after(c):host.append(c));
+  setTimeout(()=>c.classList.add('out'),CHIP_MS-CHIP_OUT_MS);setTimeout(()=>c.remove(),CHIP_MS)}
+// the live dot gives one ring when a poll finds new data (never a loop)
+function ring(){document.querySelectorAll('.fresh .dot,h2>.dot').forEach(d=>{d.classList.remove('ring');void d.offsetWidth;d.classList.add('ring');
+  setTimeout(()=>d.classList.remove('ring'),700)})}
+// overview: swap each region for its new render and show a delta chip on the numbers; other pages offer a reload
+async function refresh(){document.documentElement.classList.add('settled');const url=location.pathname+location.search+(location.search?'&':'?')+'partial=1';
   const doc=new DOMParser().parseFromString(await (await fetch(url)).text(),'text/html');
   document.querySelectorAll('[data-region]').forEach(r=>{const next=doc.querySelector(`[data-region="${r.dataset.region}"]`);if(!next||next.innerHTML===r.innerHTML)return;
     const old={};r.querySelectorAll('[data-key]').forEach(el=>old[el.dataset.key]=+el.dataset.count);
-    r.innerHTML=next.innerHTML;bindTips(r);r.querySelectorAll('[data-key]').forEach(el=>{if(el.dataset.key in old)countFrom(el,old[el.dataset.key])})})}
+    r.innerHTML=next.innerHTML;bindTips(r);r.querySelectorAll('[data-key]').forEach(el=>{if(el.dataset.key in old)deltaChip(el,old[el.dataset.key])})})}
 function offerReload(){if(document.getElementById('newdata'))return;const b=document.createElement('button');b.id='newdata';b.className='primary';
   b.textContent='New data · reload';b.addEventListener('click',()=>location.reload());document.body.append(b)}
 async function poll(){if(document.hidden)return;
   try{const j=await (await fetch('/api/version')).json();seenAt=Date.now();
-    if(j.stamp!==stamp){stamp=j.stamp;page==='overview'?await refresh():offerReload()}fresh(true)}catch(_){fresh(false)}}
+    if(j.stamp!==stamp){stamp=j.stamp;page==='overview'?await refresh():offerReload();ring()}fresh(true)}catch(_){fresh(false)}}
 setInterval(poll,2000);setInterval(()=>fresh(!freshEl.classList.contains('stale')),30000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});
 """
