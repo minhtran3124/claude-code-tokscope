@@ -6,6 +6,7 @@ with an argument list (no shell) and a timeout. A failure comes back as text to 
 Results are kept CACHE_S seconds; refresh=True reads again, and a write clears them."""
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -16,12 +17,19 @@ CACHE_S = 60.0
 SESSIONS = 100  # the latest sessions read; deployment and agent totals count these only
 ACTIONS = ("pause", "unpause")
 DEPLOYMENT_ID = re.compile(r"^depl_[A-Za-z0-9]{8,64}$")
+# where ant's installer puts it; a systemd user service (the desktop app's server) runs with a PATH that has neither
+USER_BIN = ("~/.local/bin", "~/bin")
 _cache = {}
+
+
+def _ant():
+    """The ant executable: on PATH, else in a user bin folder; None when neither has it."""
+    return shutil.which("ant") or shutil.which("ant", path=os.pathsep.join(os.path.expanduser(d) for d in USER_BIN))
 
 
 def _run(args):
     """One `ant` command as a list of objects; jsonl prints one object per line."""
-    exe = shutil.which("ant")
+    exe = _ant()
     if not exe:
         raise RuntimeError("ant is not installed")
     try:
