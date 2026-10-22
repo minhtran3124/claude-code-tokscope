@@ -12,12 +12,14 @@ updated_by: claude   # claude | manual
 The ink redesign and headless child sessions are on `main`; the Classic/Ink switch is permanent (#18) and the Library holds the skills (#22). Issue #23 (dashboard UI/UX update) is under way: steps 0 to 5 (layout sheet, motion, Overview, Sessions, Breakdowns, phone layout) are open as stacked PRs.
 
 ## Next step
-Review and merge the #23 PRs in order (steps 0, 1, then 2 to 4, then the phone layout, step 5). Moving the remaining look rules of Ink and Classic into tokens is a follow-up.
+Merge the #23 PRs in order (#25, #26, #27/#28/#29, #31, #33, then #32 and #34); all are reviewed and their findings fixed.
 
 ## Blockers
 - GitHub Actions jobs do not start: account payment or spending limit (see Settings > Billing).
 
 ## Recent
+- 2026-10-22: #23 reviews done and findings fixed; skin-tokens token test made strict (no longer skips tokens neither skin defines); merging the stack.
+- 2026-10-22: #23 step 0 part 2: skins are tokens plus a look block (Ink 400 to 69 rules, Classic 385 to 87; value-only rules written once in layout.py); screenshots and computed styles identical to the base (PR open, on top of the stack).
 - 2026-10-22: #23 step 5: phone layout under 640 px (52 px top bar, menu sheet, filter pill, 2-column KPIs, two-line table rows, 14-day chart) (PR open, stacked on step 1).
 - 2026-10-22: #23 step 2: answer-first Overview (typical-day line and band, one KPI strip with per-day deltas, biggest movers, stacked daily tokens, one spenders container, labelled filters, segmented sidebar controls) (PR open).
 - 2026-10-22: #23 step 4: Breakdowns sections show their finding in the summary line (share bar, empty-state hints); PR open on #26.
