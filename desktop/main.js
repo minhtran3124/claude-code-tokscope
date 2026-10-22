@@ -5,7 +5,8 @@ const net = require("net");
 const http = require("http");
 const path = require("path");
 
-const ROOT = path.resolve(__dirname, "..");
+// a clone keeps bin/ and tokscope/ next to desktop/; the .deb puts them in resources/
+const ROOT = app.isPackaged ? process.resourcesPath : path.resolve(__dirname, "..");
 let server = null;
 let win = null;
 

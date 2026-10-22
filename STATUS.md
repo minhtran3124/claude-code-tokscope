@@ -18,6 +18,7 @@ Close #23 after a look at the dashboard on `main` at 1440 and 375 px; fix CI bil
 - GitHub Actions jobs do not start: account payment or spending limit (see Settings > Billing).
 
 ## Recent
+- 2026-10-22: desktop `.deb` (electron-builder): bundles the app and the CLI, depends on python3 >= 3.10, setuid sandbox, user service enabled by postinst; installed and served on a clean ubuntu:22.04 in Docker (PR to `desktop-app`).
 - 2026-10-22: desktop app background service: `tokscope.service` (systemd user) keeps `tokscope serve` on 127.0.0.1:8770, the window reuses it (PR to `desktop-app`).
 - 2026-10-22: desktop app: Electron window in `desktop/` that starts `tokscope serve`, launcher installed and pinned to the GNOME dock (PR open).
 - 2026-10-22: released v0.2.0 (the #23 dashboard redesign): version bump and changelog entry (PR #40); tag v0.2.0 and GitHub release follow the merge.
@@ -27,4 +28,3 @@ Close #23 after a look at the dashboard on `main` at 1440 and 375 px; fix CI bil
 - 2026-10-22: #23 step 5: phone layout under 640 px (52 px top bar, menu sheet, filter pill, 2-column KPIs, two-line table rows, 14-day chart) (PR open, stacked on step 1).
 - 2026-10-22: #23 step 2: answer-first Overview (typical-day line and band, one KPI strip with per-day deltas, biggest movers, stacked daily tokens, one spenders container, labelled filters, segmented sidebar controls) (PR open).
 - 2026-10-22: #23 step 4: Breakdowns sections show their finding in the summary line (share bar, empty-state hints); PR open on #26.
-- 2026-10-22: #23 step 3: Sessions is a 44 px table grouped by day, with a sort control and a compare tray (PR open, stacked on step 1).
