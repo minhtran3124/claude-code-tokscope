@@ -1,10 +1,12 @@
 """Read your Managed Agents (Claude Developer Platform) through the `ant` CLI, for the dashboard's Managed page.
 
 tokscope never sees a token: `ant` signs in, refreshes and picks the workspace, and tokscope reads what its list
-commands print. Only list commands run here, each with an argument list (no shell) and a timeout. A failure comes back
-as text to show, so the page still answers. Results are kept CACHE_S seconds; refresh=True reads again."""
+commands print. The list commands and one write, pausing or unpausing a deployment (act), are all that run here, each
+with an argument list (no shell) and a timeout. A failure comes back as text to show, so the page still answers.
+Results are kept CACHE_S seconds; refresh=True reads again, and a write clears them."""
 
 import json
+import re
 import shutil
 import subprocess
 import time
@@ -12,6 +14,8 @@ import time
 TIMEOUT = 30
 CACHE_S = 60.0
 SESSIONS = 100  # the latest sessions read; deployment and agent totals count these only
+ACTIONS = ("pause", "unpause")
+DEPLOYMENT_ID = re.compile(r"^depl_[A-Za-z0-9]{8,64}$")
 _cache = {}
 
 
@@ -115,3 +119,17 @@ def read(refresh=False, run=None):
 
 def forget():
     _cache.clear()
+
+
+def act(action, dep_id, run=None):
+    """Pause or unpause one deployment and return its new status. ValueError: not an action or not a deployment id,
+    checked before ant runs; RuntimeError: ant failed."""
+    if action not in ACTIONS:
+        raise ValueError("pause or unpause only")
+    if not isinstance(dep_id, str) or not DEPLOYMENT_ID.match(dep_id):
+        raise ValueError("not a deployment id")
+    try:
+        out = (run or _run)(["beta:deployments", action, "--deployment-id", dep_id])
+    finally:
+        forget()  # whatever ant did, the next read shows it
+    return (out[0].get("status") if out and isinstance(out[0], dict) else None) or ""
