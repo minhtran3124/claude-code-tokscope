@@ -7,6 +7,11 @@ property on the same element: a skin sheet loads after this one and would win. N
 and reads tokens (`--line-w`, `--radius-*`) instead of a skin's colours or sizes."""
 
 LAYOUT_CSS = """
+/* motion tokens, shared by both skins. --t-fast: press, hover colour. --t-state: toggles, segments, tooltips, delta chip.
+   --t-layout: row open, sheet, toast, first-paint entrances. An exit is 0.7 times its entrance (calc(var(--t-state)*.7)).
+   Not tokens, on purpose: the stagger delays (a step per item, not a duration), the endless spinner and run bar (they
+   show that work is going on), the one-ring live dot (600 ms, #125 Pulse) and the Classic hero glow (ambient). */
+:root{--t-fast:120ms;--t-state:200ms;--t-layout:320ms;--ease-exit:cubic-bezier(.55,.06,.68,.19)}
 b,strong{font-weight:600}
 .kpi b,.hero .big em,.delta{font-family:var(--mono)}
 .kpi b{font-weight:600}
@@ -26,11 +31,9 @@ details.more>summary{cursor:pointer;font-weight:600;list-style:none;display:flex
 details.more>summary::-webkit-details-marker{display:none}
 details.more[open]>summary::before{transform:rotate(90deg)}
 details.more>summary .ttl{flex:none;white-space:nowrap}
-details[open]>:not(summary){animation:reveal .28s var(--ease) both}
+details[open]>:not(summary){animation:reveal var(--t-layout) var(--ease) both}
 @keyframes reveal{from{opacity:.4;transform:translateY(-4px)}}
-/* the number is always the real value; only its focus animates, so a paused frame never shows wrong data */
-.kpi b,.hero .big em{display:inline-block;animation:focus .7s var(--ease-expo) both}
-@keyframes focus{from{filter:blur(2px);opacity:.6}}
+.kpi b,.hero .big em{display:inline-block}
 th,td{padding:5px 8px;text-align:right;white-space:nowrap;vertical-align:top}
 td:first-child,th:first-child{text-align:left}
 .bar{display:flex;align-items:center;gap:8px;justify-content:flex-end}
@@ -38,7 +41,7 @@ td:first-child,th:first-child{text-align:left}
 .key{display:inline-flex;align-items:center;gap:4px;margin-right:10px}
 svg text{fill:var(--muted);font-size:11px}
 svg .g{stroke:var(--grid)}
-#trend[open] svg rect.m{animation:rise .55s var(--ease-expo) both;animation-delay:calc(var(--i,0)*12ms)}
+#trend[open] svg rect.m{animation:rise var(--t-layout) var(--ease-expo) both;animation-delay:calc(var(--i,0)*12ms)}
 @keyframes rise{from{transform:scaleY(0)}}
 svg .chg{stroke:var(--agent);stroke-width:1.5;stroke-dasharray:3 3}
 svg text.chg-l{fill:var(--agent-ink);font-weight:600}
@@ -50,10 +53,10 @@ svg g.d:hover rect.m{opacity:1}
 #session-list{position:relative}
 .bar [data-count],.note [data-count]{font-variant-numeric:tabular-nums}
 .srow>summary input{accent-color:var(--mark);cursor:pointer}
-.srow>summary .t{transition:color .15s var(--ease)}
-.srow>summary .split{transition:transform .2s var(--ease);transform-origin:left}
+.srow>summary .t{transition:color var(--t-fast) var(--ease)}
+.srow>summary .split{transition:transform var(--t-state) var(--ease);transform-origin:left}
 .srow:hover>summary .split{transform:scaleY(1.35)}
-.srow .body tr td{transition:background .15s var(--ease)}
+.srow .body tr td{transition:background var(--t-fast) var(--ease)}
 .srow .body tr:hover td{background:color-mix(in oklch,var(--mark) 7%,transparent)}
 /* left sidebar: every section one click away; the link of the section in view is highlighted */
 .layout>main{min-width:0}
@@ -82,12 +85,12 @@ svg g.d:hover rect.m{opacity:1}
 @keyframes pop{from{opacity:.4;transform:translateY(-6px)}}
 /* motion layer: entrance, scroll reveal; all of it off under reduced motion */
 html{scroll-behavior:smooth}
-body{transition:background-color .35s var(--ease),color .35s var(--ease)}
+body{transition:background-color var(--t-layout) var(--ease),color var(--t-layout) var(--ease)}
 @keyframes rise-in{from{opacity:0;transform:translateY(12px) scale(.98)}}
-.js .reveal{opacity:0;transform:translateY(16px);transition:opacity .6s var(--ease-expo),transform .6s var(--ease-expo)}
+.js .reveal{opacity:0;transform:translateY(16px);transition:opacity var(--t-layout) var(--ease-expo),transform var(--t-layout) var(--ease-expo)}
 .js .reveal.in{opacity:1;transform:none}
 @keyframes draw{from{stroke-dashoffset:1}}
-svg .guide{stroke:var(--ink2);stroke-width:1;stroke-dasharray:2 3;opacity:0;transition:opacity .15s}
+svg .guide{stroke:var(--ink2);stroke-width:1;stroke-dasharray:2 3;opacity:0;transition:opacity var(--t-fast)}
 svg:hover .guide{opacity:.6}
 @keyframes pop-in{from{opacity:0;transform:translateY(8px) scale(.97)}}
 dialog.keys dl{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;margin:10px 0 0}
@@ -109,6 +112,36 @@ the palest tint; neighbours in the share bar differ by at least 1.5:1 in luminan
    instead of scrolling sideways; the numbers always stay */
 th{white-space:normal}
 .card,.srow .body,details.more{container-type:inline-size}
+/* #054 Tooltip rises 6 px in --t-state; #056 Toast rises in --t-layout; each leaves in 0.7 times that, on the exit curve */
+#tip{transition:opacity calc(var(--t-state)*.7) var(--ease-exit),transform calc(var(--t-state)*.7) var(--ease-exit)}
+#tip.on{transition:opacity var(--t-state) var(--ease),transform var(--t-state) var(--ease)}
+#toast{transition:opacity calc(var(--t-state)*.7) var(--ease-exit),transform calc(var(--t-layout)*.7) var(--ease-exit)}
+#toast.on{transition:opacity var(--t-state) var(--ease),transform var(--t-layout) var(--ease-expo)}
+/* first paint only: <html> gets .settled once the entrances are done (and before the first poll swaps a region), and a
+   region that a poll swaps in never plays an entrance again. The ids and classes beat the skin rules by specificity. */
+html.settled [data-region] :is(.hero,.kpi,.empty,.bar i u){animation:none}
+/* reduced motion: opacity and colour stay, travel and scale go. A keyframes set below replaces the one above, so each
+   entrance still fades in and an update still shows; transitions lose their transform and keep colour and opacity.
+   Selectors start with `html` to beat the skin rules that load after this sheet. */
+@media (prefers-reduced-motion:reduce){
+html{scroll-behavior:auto}
+@keyframes reveal{from{opacity:.4}}
+@keyframes pop{from{opacity:.4}}
+@keyframes pop-in{from{opacity:0}}
+@keyframes rise-in{from{opacity:0}}
+@keyframes rise{from{opacity:0}}
+@keyframes grow{from{opacity:0}}
+@keyframes draw{from{opacity:0}}
+html.js .reveal{transform:none;transition:opacity var(--t-layout) var(--ease)}
+html .toc a,html a.sk{transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+html .toc a:hover,html a.sk:hover,html .totop.show:hover,html .srow:hover>summary .split,html .kpi:hover,html .primary:hover:not(:disabled){transform:none}
+html .toc-pill{transition:opacity var(--t-state)}
+html .cv{transition:color var(--t-fast) var(--ease)}
+html #tip,html #toast,html .totop{transform:none;transition:opacity var(--t-state) var(--ease),visibility var(--t-state)}
+html #toast{transform:translate(-50%,0)}
+html details::details-content{transition:content-visibility var(--t-state) allow-discrete}
+html details.more>summary::before{transition:none}
+}
 """
 
 LAYOUT_DASH_CSS = """
@@ -130,7 +163,6 @@ h2.sec{font-size:15px;margin:6px 0 10px}
 .card h2{display:flex;align-items:center}
 .today-nums{display:flex;gap:22px;flex-wrap:wrap;margin:6px 0 12px}
 ul.plain{list-style:none;margin:0;padding:0}
-@keyframes flash{from{background:color-mix(in oklch,var(--pass) 18%,transparent)}}
 .libtools{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 14px}
 .libtools .chip input{margin:0}
 .libgroup{margin:0 0 18px}
@@ -165,4 +197,26 @@ table.sbs td.add{background:color-mix(in oklch,var(--pass) 12%,transparent)}
 .optform{display:flex;flex-direction:column;gap:8px}
 .opt{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .optrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+/* a poll that finds new data: the live dot gives one ring (#125 Pulse, 600 ms, not a token), never a loop; offline shows a hollow dot */
+@keyframes ring{from{box-shadow:0 0 0 0 color-mix(in oklch,var(--pass) 60%,transparent)}to{box-shadow:0 0 0 8px transparent}}
+.dot.ring{animation:ring 600ms var(--ease) 1}
+.fresh.stale .dot{background:transparent;box-shadow:inset 0 0 0 1.5px var(--muted)}
+/* a live value changes at once; this chip says by how much for 2 s (#071 Badge: in --t-state, out 0.7 times that) */
+.kpi,.today-nums>div{position:relative}
+.dchip{font:600 11px/1.5 var(--mono);padding:0 7px;border-radius:999px;background:var(--chip);color:var(--ink);white-space:nowrap;
+pointer-events:none;animation:chip-in var(--t-state) var(--ease) both}
+.kpi .dchip{position:absolute;top:8px;right:8px}
+.today-nums .dchip{margin-left:6px;vertical-align:4px}
+.dchip.out{animation:chip-out calc(var(--t-state)*.7) var(--ease-exit) both}
+@keyframes chip-in{from{opacity:0;transform:translateY(4px)}}
+@keyframes chip-out{to{opacity:0;transform:translateY(-4px)}}
+/* #056 Toast: "New data · reload" on the pages that do not refresh themselves */
+#newdata{animation:toast-in var(--t-layout) var(--ease-expo) both}
+@keyframes toast-in{from{opacity:0;transform:translateY(12px)}}
+@media (prefers-reduced-motion:reduce){
+@keyframes ring{from{opacity:.35}}
+@keyframes chip-in{from{opacity:0}}
+@keyframes chip-out{to{opacity:0}}
+@keyframes toast-in{from{opacity:0}}
+}
 """
