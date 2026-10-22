@@ -579,6 +579,8 @@ class OverviewTest(unittest.TestCase):
         body = self.page()
         self.assertIn("xia2 bbbbbb", body)                                 # the second version replaced the first
         self.assertNotIn("xia2 aaaaaa", body)                              # the first sight of a skill is not a change
+        self.assertIn('<code class="ver">bbbbbb</code>', body)             # the "New skill versions" list agrees with the lines
+        self.assertNotIn('<code class="ver">aaaaaa</code>', body)
 
     def test_top_spenders_are_one_container_with_three_columns(self):
         self.add(1, skill="xia2")

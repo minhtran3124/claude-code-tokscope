@@ -377,7 +377,8 @@ def _new_versions(conn, f):
         return "<p class='note'>No skill versions yet.</p>"
     since = _iso(f.now - timedelta(days=f.days)) if f.days else ""
     rows = _q(conn, "SELECT v.skill, v.version, v.first_seen, v.label FROM skill_versions v WHERE v.source != 'transcript' "
-                    "AND v.first_seen >= ? AND EXISTS (SELECT 1 FROM skill_versions o WHERE o.skill = v.skill AND o.version != v.version) "
+                    "AND v.first_seen >= ? AND EXISTS (SELECT 1 FROM skill_versions o WHERE o.skill = v.skill AND o.version != v.version "
+                    "AND o.first_seen < v.first_seen) "
                     "ORDER BY v.first_seen DESC LIMIT 6", (since,))
     if not rows:
         return "<p class='note'>No skill changed in this range.</p>"
