@@ -28,8 +28,9 @@ from .brand import FAVICON, MARK, favicon_link
 from .changes import BENCH_PROJECT, list_changes
 from .ingest import PROJECTS_DIR, connect, ingest
 from .pricing import API_EQ_NOTE
-from .report import (CSS, JS_BENCH, JS_CORE, JS_SESSIONS, JS_TREND, TOKENS, _benchmarks, _breakdowns, _change_cards,
+from .report import (CSS, JS_BENCH, JS_CORE, JS_SESSIONS, JS_TREND, TOKENS, _benchmarks, _breakdowns, _change_cards, _section,
                      _daily_chart, _diff_html, _more, _sessions_json, _skill_versions, _table, _tok, _usd)
+from .report import SORT_SEG  # the Sessions sort control, shared with the static report
 
 PAGES = {"overview": "Overview", "projects": "Projects", "sessions": "Sessions", "library": "Library",
          "benchmarks": "Benchmarks", "breakdowns": "Breakdowns"}
@@ -503,10 +504,9 @@ def page_sessions(conn, f, qs):
     return (f'<section class="card" id="sessions"><p class="note"><span class="key"><i></i>main thread</span><span class="key">'
             f'<i class="a"></i>subagents</span> Sessions with activity in {f.label()}. Open a row for each prompt; tick 2 to 4 to compare.</p>'
             f'<div class="tools"><input type="search" id="s-q" value="{prefill}" placeholder="Filter by title, skill or session id  ( / )">'
-            '<select id="s-sort"><option value="recent">Newest first</option><option value="tokens">Most tokens first</option></select>'
-            '<span class="note" id="s-count"></span></div><section class="card" id="compare"><h3>Compare</h3>'
+            + SORT_SEG + '<span class="note" id="s-count"></span></div><section class="card" id="compare"><h3>Compare</h3>'
             '<p class="note">Bold = fewest. Tokens per prompt evens out sessions of different length.</p><table></table></section>'
-            '<div id="session-list"></div><div class="pickbar" id="pickbar" hidden><span id="pick-hint"></span><span class="acts">'
+            '<div id="session-list"></div><div class="pickbar" id="pickbar" role="region" aria-label="Compare sessions" hidden><span id="pick-hint"></span><span class="acts">'
             '<button class="btn" id="clear-pick">Clear</button><button class="primary" id="do-compare" disabled>Compare</button></span></div>'
             '<p><button class="btn" id="s-more">Show more</button></p></section>'
             f'<script type="application/json" id="sessions-data">{data}</script>')
@@ -1069,7 +1069,9 @@ def page_breakdowns(conn, f):
     cond, params = f.cond()
     changes = list_changes(conn)
     return (f'<div id="breakdowns">{_breakdowns(conn, cond, params)}</div>'
-            + _more("Config changes", f"{len(changes)} recorded; before/after medians per run", _change_cards(conn, changes), "changes"))
+            + _section("Config changes",
+                       (f"{len(changes)} recorded; latest: {html.escape(changes[-1][2])}" if changes else "None recorded yet"),
+                       "before/after medians per run", _change_cards(conn, changes), "changes"))
 
 
 DASH_CSS = """
