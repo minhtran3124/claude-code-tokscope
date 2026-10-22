@@ -57,7 +57,7 @@ def session(s):
     usage = s.get("usage") or {}
     return {"id": s.get("id", ""), "title": s.get("title") or "", "status": s.get("status") or "",
             "created_at": s.get("created_at") or "", "agent": _ref(s.get("agent")) or "",
-            "deployment": s.get("deployment_id") or "", "active_s": usage.get("active_seconds"),
+            "deployment": s.get("deployment_id") or "", "active_s": float(usage.get("active_seconds") or 0),
             "tokens": _tokens(usage), "cost": _cents(usage.get("list_cost"))}
 
 
@@ -106,6 +106,8 @@ def read(refresh=False, run=None):
                 "agents": [agent(a, by_agent) for a in agents]}
     except RuntimeError as e:
         data = {"error": str(e)}
+    except (AttributeError, KeyError, TypeError, ValueError) as e:  # a field of a shape this code does not know
+        data = {"error": f"ant printed data tokscope cannot read ({type(e).__name__}: {str(e)[:200]})"}
     data["read_at"] = time.time()
     _cache["all"] = (time.monotonic(), data)
     return data

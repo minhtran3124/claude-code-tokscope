@@ -105,6 +105,10 @@ class ServerTest(unittest.TestCase):
             opener.open(req)
         self.assertEqual((e.exception.code, e.exception.headers["Location"]), (302, "/managed"))
         self.assertEqual(managed._cache, {})
+        code, body = self.get("/managed")                                 # where the redirect lands: a fresh read
+        self.assertEqual(code, 200)
+        self.assertIn("ant is not run in tests", body)
+        self.assertEqual(managed._cache["all"][1]["error"], "ant is not run in tests")
 
     def test_pages_carry_both_skins_and_the_switch_button(self):
         _, page = self.get("/overview")

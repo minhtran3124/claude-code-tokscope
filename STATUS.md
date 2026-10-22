@@ -18,8 +18,7 @@ Review the #63 PR (read-only Managed page), then step 2: Pause / Unpause on depl
 - GitHub Actions jobs do not start: account payment or spending limit (see Settings > Billing).
 
 ## Recent
-- 2026-10-22: #63 Managed page (read only): `tokscope/managed.py` reads deployments, sessions and agents through `ant`, full level only; researched managing Managed Agents from the dashboard via the `ant` CLI (list agents/sessions/deployments, pause/unpause): feasible, write-up in `docs/research-ant-managed-agents.md` (PR for #63).
-- 2026-10-22: released v0.2.0 (the #23 dashboard redesign): version bump and changelog entry (PR #40); tag v0.2.0 and GitHub release follow the merge.
+- 2026-10-22: released v0.2.0 (the #23 dashboard redesign): version bump and changelog entry (PR #40); tag v0.2.0 and GitHub release follow the merge; #63 Managed page (read only, PR #64): `tokscope/managed.py` reads deployments, sessions and agents through `ant`, full level only; review findings 1-4 fixed (unknown data shape shows as text, note wording, refresh test checks the fresh read); research in `docs/research-ant-managed-agents.md`.
 - 2026-10-22: checked the subagents; all three (2 factory-implementer, 1 general-purpose) had already completed, nothing to close; merged the whole #23 stack into main (#25 to #29, #31, #33, #32; #31 and #34 had to land again as #36 and #37 because their stack base had already merged); main passes 271 tests.
 - 2026-10-22: #23 reviews done and findings fixed; skin-tokens token test made strict (no longer skips tokens neither skin defines); merging the stack.
 - 2026-10-22: #23 step 0 part 2: skins are tokens plus a look block (Ink 400 to 69 rules, Classic 385 to 87; value-only rules written once in layout.py); screenshots and computed styles identical to the base (PR open, on top of the stack).

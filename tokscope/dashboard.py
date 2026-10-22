@@ -1110,7 +1110,7 @@ def page_managed(qs, level):
     empty = lambda what: f'<div class="empty"><b>No {what}</b>None in this workspace yet.</div>'  # noqa: E731
     return "".join([
         head,
-        f'<section class="card" id="deployments"><h2>Deployments</h2><p class="note">{len(deps)} scheduled; {note}</p>'
+        f'<section class="card" id="deployments"><h2>Deployments</h2><p class="note">{len(deps)} in this workspace; {note}</p>'
         + (_table(["Deployment", "Status", "Schedule", "Next run", "Budget", "Sessions", "Tokens", "Cost", "ID"], dep_rows, 6)
            if deps else empty("deployments")) + '</section>',
         f'<section class="card" id="managed-sessions"><h2>Sessions</h2><p class="note">The latest {len(sessions)}, newest first</p>'

@@ -57,6 +57,12 @@ class ManagedReadTest(unittest.TestCase):
             raise RuntimeError("401 Unauthorized")
         self.assertEqual(managed.read(run=broken)["error"], "401 Unauthorized")
 
+    def test_data_of_an_unknown_shape_becomes_text_to_show(self):
+        for bad in ([ses("sesn_1") | {"usage": {"input_tokens": "many"}}], ["not an object"],
+                    [ses("sesn_1") | {"usage": {"active_seconds": "long"}}]):
+            managed.forget()
+            self.assertIn("cannot read", managed.read(run=fake(sessions=bad))["error"])
+
     def test_ant_runs_with_an_argument_list_and_a_timeout(self):
         done = subprocess.CompletedProcess([], 0, stdout='{"id": "a"}\n{"id": "b"}\n', stderr="")
         with mock.patch.object(managed.shutil, "which", return_value="/bin/ant"), \
