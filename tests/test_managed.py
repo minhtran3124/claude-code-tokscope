@@ -1,8 +1,18 @@
+import json
+import os
 import subprocess
+import tempfile
+import threading
 import unittest
+import urllib.error
+import urllib.request
+from http.server import ThreadingHTTPServer
+from pathlib import Path
 from unittest import mock
 
 from tokscope import dashboard, managed
+from tokscope.ingest import connect
+from tokscope.paths import PACKAGE
 
 DEP = {"id": "depl_01Abc", "name": "Daily brief", "status": "paused", "paused_reason": {"type": "manual"},
        "agent": {"id": "agent_01A", "type": "agent", "version": 1}, "budget": {"type": "limit", "max_list_cost": {"amount": "2500", "currency": "USD"}},
@@ -76,10 +86,108 @@ class ManagedReadTest(unittest.TestCase):
     def test_missing_ant_and_a_failed_command_raise_readable_errors(self):
         with mock.patch.object(managed.shutil, "which", return_value=None):
             self.assertRaisesRegex(RuntimeError, "not installed", managed._run, ["beta:agents", "list"])
+        with mock.patch.object(managed.shutil, "which", return_value="/bin/ant"), \
+                mock.patch.object(managed.subprocess, "run", side_effect=OSError(8, "Exec format error")):
+            self.assertRaisesRegex(RuntimeError, "could not start: Exec format error", managed._run, ["beta:agents", "list"])
         failed = subprocess.CompletedProcess([], 1, stdout="", stderr="GET ...: 401 Unauthorized\n")
         with mock.patch.object(managed.shutil, "which", return_value="/bin/ant"), \
                 mock.patch.object(managed.subprocess, "run", return_value=failed):
             self.assertRaisesRegex(RuntimeError, "401 Unauthorized", managed._run, ["beta:agents", "list"])
+
+
+class ActTest(unittest.TestCase):
+    def setUp(self):
+        managed.forget()
+        self.addCleanup(managed.forget)
+
+    def test_pause_runs_one_deployment_command_and_clears_the_cache(self):
+        managed.read(run=fake())
+        calls = []
+        status = managed.act("pause", "depl_01Abcdefgh", run=lambda a: calls.append(a) or [{"status": "paused"}])
+        self.assertEqual(status, "paused")
+        self.assertEqual(calls, [["beta:deployments", "pause", "--deployment-id", "depl_01Abcdefgh"]])
+        self.assertEqual(managed._cache, {})                     # the next read shows the new status
+
+    def test_a_failed_write_still_clears_the_cache(self):
+        managed.read(run=fake())
+        def broken(args):
+            raise RuntimeError("409 Conflict")
+        self.assertRaisesRegex(RuntimeError, "409", managed.act, "unpause", "depl_01Abcdefgh", broken)
+        self.assertEqual(managed._cache, {})
+
+    def test_a_failure_after_the_write_landed_counts_as_done(self):
+        calls = []
+        def late(args):
+            calls.append(args[:2])
+            if args[1] == "pause":
+                raise RuntimeError("ant did not answer in 30 s")
+            return [{"status": "paused"}]
+        self.assertEqual(managed.act("pause", "depl_01Abcdefgh", late), "paused")
+        self.assertEqual(calls, [["beta:deployments", "pause"], ["beta:deployments", "retrieve"]])
+
+    def test_a_failure_that_left_the_state_alone_is_still_an_error(self):
+        def refused(args):
+            if args[1] == "unpause":
+                raise RuntimeError("409 Conflict")
+            return [{"status": "paused"}]
+        self.assertRaisesRegex(RuntimeError, "409", managed.act, "unpause", "depl_01Abcdefgh", refused)
+
+    def test_only_pause_and_unpause_of_a_deployment_id_reach_ant(self):
+        never = mock.Mock(side_effect=AssertionError("ran ant"))
+        for action, dep in (("archive", "depl_01Abcdefgh"), ("run", "depl_01Abcdefgh"), ("pause", "depl_01Abc --profile x"),
+                            ("pause", "agent_01Abcdefgh"), ("pause", "--help"), ("pause", "depl_01Abcdefgh\n"), ("pause", None), ("pause", ["depl_01Abcdefgh"])):
+            self.assertRaises(ValueError, managed.act, action, dep, never)
+        never.assert_not_called()
+
+
+class WriteRouteTest(unittest.TestCase):
+    def setUp(self):
+        managed.forget()
+        self.addCleanup(managed.forget)
+        self.tmp = Path(tempfile.mkdtemp())
+        env = mock.patch.dict(os.environ, {"TOKSCOPE_HOME": str(self.tmp / "home"), "HOME": str(self.tmp / "h")})
+        env.start()
+        self.addCleanup(env.stop)
+        self.calls = []
+        ant = mock.patch.object(managed, "_run", lambda a: self.calls.append(a) or [{"status": "paused"}])
+        ant.start()
+        self.addCleanup(ant.stop)
+        connect(self.tmp / "t.db").close()
+        (self.tmp / "projects").mkdir()
+        self.live = dashboard.Live(self.tmp / "t.db", PACKAGE / "phases.json", 60, projects_dir=self.tmp / "projects")
+        self.serve("full")
+
+    def serve(self, level):
+        server = ThreadingHTTPServer(("127.0.0.1", 0), dashboard.BaseHTTPRequestHandler)
+        self.port = server.server_address[1]
+        server.RequestHandlerClass = dashboard.handler(self.tmp / "t.db", self.live, self.port, level, token="tok")
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.good = {"Origin": f"http://127.0.0.1:{self.port}", "X-Tokscope-Token": "tok", "Content-Type": "application/json"}
+
+    def post(self, path, body, headers):
+        req = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}", data=json.dumps(body).encode(), method="POST", headers=headers)
+        try:
+            with urllib.request.urlopen(req) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+
+    def test_the_write_needs_this_origin_the_page_token_and_a_deployment_id(self):
+        url, body = "/api/managed/deployments/pause", {"id": "depl_01Abcdefgh"}
+        self.assertEqual(self.post(url, body, {**self.good, "Origin": "https://evil.example"})[0], 403)
+        self.assertEqual(self.post(url, body, {**self.good, "X-Tokscope-Token": "guess"})[0], 403)
+        self.assertEqual(self.post(url, {"id": "depl_x; rm -rf ~"}, self.good)[0], 400)
+        self.assertEqual(self.post("/api/managed/deployments/archive", body, self.good)[0], 404)
+        self.assertEqual(self.calls, [])                          # nothing ran yet
+        self.assertEqual(self.post(url, body, self.good), (200, {"status": "paused"}))
+        self.assertEqual(self.calls, [["beta:deployments", "pause", "--deployment-id", "depl_01Abcdefgh"]])
+
+    def test_below_full_the_write_is_refused(self):
+        self.serve("redacted")
+        self.assertEqual(self.post("/api/managed/deployments/unpause", {"id": "depl_01Abcdefgh"}, self.good)[0], 403)
+        self.assertEqual(self.calls, [])
 
 
 class ManagedPageTest(unittest.TestCase):
@@ -90,10 +198,24 @@ class ManagedPageTest(unittest.TestCase):
     def test_the_full_level_lists_all_three_and_escapes_names(self):
         with mock.patch.object(managed, "_run", fake()):
             body = dashboard.page_managed({}, "full")
-        for part in ('id="deployments"', 'id="managed-sessions"', 'id="agents"', "<code>depl_01Abc</code>", "paused (manual)",
+        for part in ('id="deployments"', 'id="managed-sessions"', 'id="agents"', "<code>depl_01Abc</code>", "dep-st\">paused <button",
                      "45 7 * * 1-5 Asia/Ho_Chi_Minh", "$25.00", "Brief &lt;writer&gt;", "haiku-5-5 · medium"):
             self.assertIn(part, body)
         self.assertNotIn("secret prompt", body)
+        self.assertIn('data-dep-act="unpause" data-dep="depl_01Abc" data-name="Daily brief">Unpause</button>', body)
+
+    def test_only_active_and_paused_deployments_get_a_button(self):
+        deps = [DEP | {"id": "depl_01Act", "status": "active", "name": 'A "quoted" <one>'}, DEP | {"id": "depl_01Arc", "status": "archived"}]
+        with mock.patch.object(managed, "_run", lambda a: {"beta:deployments": deps}.get(a[0], [])):
+            body = dashboard.page_managed({}, "full")
+        self.assertIn('data-dep-act="pause" data-dep="depl_01Act" data-name="A &quot;quoted&quot; &lt;one&gt;">Pause</button>', body)
+        self.assertEqual(body.count("data-dep-act="), 1)            # archived: no write
+
+    def test_a_reason_other_than_manual_sits_outside_the_unbreakable_part(self):
+        deps = [DEP | {"paused_reason": {"type": "budget_reached"}}]
+        with mock.patch.object(managed, "_run", lambda a: {"beta:deployments": deps}.get(a[0], [])):
+            body = dashboard.page_managed({}, "full")
+        self.assertIn('>Unpause</button></span> <span class="note dep-why">(budget reached)</span>', body)
 
     def test_below_full_the_page_never_runs_ant(self):
         with mock.patch.object(managed, "_run", side_effect=AssertionError("ran ant")):

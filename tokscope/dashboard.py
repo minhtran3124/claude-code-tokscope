@@ -1086,6 +1086,20 @@ def _id_cell(v):
     return (f"<code>{html.escape(v)}</code>", "raw")
 
 
+def _dep_status(d):
+    """The status, with Pause for an active deployment and Unpause for a paused one; no write for any other state.
+    The button shares the status cell, and a manual pause (the usual one) names no reason, so the table still fits.
+    Any other reason follows on its own and may wrap, so a long one cannot widen a phone card."""
+    reason = (f' <span class="note dep-why">({html.escape(d["paused"].replace("_", " "))})</span>'
+              if d["paused"] not in ("", "manual") else "")
+    action = {"active": "pause", "paused": "unpause"}.get(d["status"])
+    if not action:
+        return (html.escape(d["status"]) + reason, "raw")
+    return (f'<span class="dep-st">{html.escape(d["status"])} <button type="button" class="btn" data-dep-act="{action}" '
+            f'data-dep="{html.escape(d["id"])}" data-name="{html.escape(d["name"] or d["id"])}">{action.capitalize()}</button></span>'
+            + reason, "raw")
+
+
 def page_managed(qs, level):
     if level != "full":
         return (f'<div class="empty"><b>Managed agents are hidden</b>This page reads your Claude Developer Platform account '
@@ -1099,7 +1113,7 @@ def page_managed(qs, level):
                 f'<code>ant auth login</code>, then refresh. ant said: {html.escape(data["error"])}</div>')
     deps, sessions, agents = data["deployments"], data["sessions"], data["agents"]
     note = f'tokens and cost count the latest {managed.SESSIONS} sessions'
-    dep_rows = [(d["name"] or d["id"], d["status"] + (f' ({d["paused"]})' if d["paused"] else ""),
+    dep_rows = [(d["name"] or d["id"], _dep_status(d),
                  f'{d["cron"]} {d["tz"]}'.strip() or "–", _when(d["next"]) if d["status"] != "paused" else "–",
                  _usd(d["budget"]), d["sessions"], d["tokens"], _usd(d["cost"]), _id_cell(d["id"])) for d in deps]
     ses_rows = [(s["title"] or s["id"], s["status"], _when(s["created_at"]), _dur(s["active_s"]), s["tokens"],
@@ -1112,7 +1126,7 @@ def page_managed(qs, level):
         head,
         f'<section class="card" id="deployments"><h2>Deployments</h2><p class="note">{len(deps)} in this workspace; {note}</p>'
         + (_table(["Deployment", "Status", "Schedule", "Next run", "Budget", "Sessions", "Tokens", "Cost", "ID"], dep_rows, 6)
-           if deps else empty("deployments")) + '</section>',
+           if deps else empty("deployments")) + '<p class="err" id="dep-err" role="alert" hidden></p></section>',
         f'<section class="card" id="managed-sessions"><h2>Sessions</h2><p class="note">The latest {len(sessions)}, newest first</p>'
         + (_table(["Session", "Status", "Started", "Active", "Tokens", "Cost", "ID"], ses_rows, 4) if sessions else empty("sessions"))
         + '</section>',
@@ -1289,6 +1303,17 @@ document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',(
   document.querySelectorAll('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==b.dataset.view)}));
 """
 
+MANAGED_JS = """
+// managed: pause or unpause a deployment after a question on the page; LIB_JS's send() carries this page's token
+document.querySelectorAll('[data-dep-act]').forEach(b=>b.addEventListener('click',async()=>{const act=b.dataset.depAct,pause=act==='pause';
+  const err=document.getElementById('dep-err');if(err)err.hidden=true;
+  if(!await ask(b.closest('table'),pause?`Pause ${b.dataset.name}? Scheduled runs stop until you unpause it; sessions already running go on.`
+    :`Unpause ${b.dataset.name}? It runs again from its next scheduled time; runs missed while paused are not made up.`,pause?'Pause':'Unpause'))return;
+  busy(b,pause?'Pausing…':'Unpausing…');
+  try{await send(`/api/managed/deployments/${act}`,{id:b.dataset.dep});location.reload()}
+  catch(e){idle(b);if(err){err.textContent=e.message;err.hidden=false}}}));
+"""
+
 DASH_JS = """
 // Apply keeps only the filters set, so the URL reads like the view (range=30 is the default)
 document.querySelectorAll('form.filters').forEach(fm=>fm.addEventListener('submit',e=>{e.preventDefault();const q=new URLSearchParams();
@@ -1442,7 +1467,7 @@ def render(conn, name, qs, stamp, level="full", token=""):
     if (qs.get("partial") or [""])[0]:
         return body
     scripts = (JS_CORE + (JS_SESSIONS if name == "sessions" else "") + JS_TREND + (JS_BENCH if name == "benchmarks" else "")
-               + (LIB_JS if name in ("library", "projects") else "") + DASH_JS)
+               + (LIB_JS if name in ("library", "projects", "managed") else "") + (MANAGED_JS if name == "managed" else "") + DASH_JS)
     # on the Library, ?skill= is a skill's id, not the filter bar's skill name: other pages must not get it
     navf = Filters({**qs, "skill": [""]}) if name == "library" else f
     counts = _nav_counts(conn, level)
@@ -1543,7 +1568,7 @@ class Live:
 
 
 def post(db, path, body, level):
-    """(code, JSON) for a write: start, apply or discard an optimize job."""
+    """(code, JSON) for a write: an optimize job, a project's MCP servers, or pausing or unpausing a Managed Agents deployment."""
     if level != "full":
         return 403, {"error": "writes need the full privacy level"}
     if m := re.match(r"^api/projects/([0-9a-f]{10})/health$", path):
@@ -1576,6 +1601,13 @@ def post(db, path, body, level):
         except ValueError as e:
             return 400, {"error": str(e)}
         except (OSError, RuntimeError, subprocess.TimeoutExpired) as e:
+            return 502, {"error": str(e)}
+    if m := re.match(r"^api/managed/deployments/(pause|unpause)$", path):
+        try:
+            return 200, {"status": managed.act(m.group(1), body.get("id"))}
+        except ValueError as e:
+            return 400, {"error": str(e)}
+        except RuntimeError as e:
             return 502, {"error": str(e)}
     if path == "api/optimize":
         conn = connect(db)
