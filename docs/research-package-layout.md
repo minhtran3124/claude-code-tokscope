@@ -42,8 +42,8 @@ Dependency rule, checked by `tests/test_layout.py`:
 
 ## Not done here (follow-ups)
 
-- **Split `web/dashboard.py`** (1,835 lines) into a server module, one module per page, and the page scripts.
-  Split `web/report.py` (1,022 lines) the same way. This is the larger maintainability gain. It touches every UI
-  test, so it needs its own PR with screenshots.
+- ~~Split `web/dashboard.py`~~ Done: `web/dashboard/` is a package with `common`, `pages/` (one module per page),
+  `scripts`, `shell` and `server`; every page renders byte-identical HTML. Still to do: split `web/report.py`
+  (1,022 lines) the same way.
 - `core/ingest.py` and `core/skills.py` import each other inside functions. That cycle could break up with a
   small `core/transcript.py` for the shared regexes.

@@ -1,7 +1,7 @@
 """The layout both skins share: grid, sizes, spacing, structure and every rule that differs between the skins only in value,
 as one stylesheet (<style id="layout">).
 
-Each page loads it once, before the skin sheets. A skin (Ink in report.py and dashboard.py, Classic in classic.py) is its
+Each page loads it once, before the skin sheets. A skin (Ink in report.py and dashboard/scripts.py, Classic in classic.py) is its
 tokens (the :root rules) plus a short look block: only what differs in kind, such as the answer-card emphasis, the hero glow,
 hover and pressed looks, and the few rules where one skin sets a value the other leaves to the browser. A rule that reads the
 same in both skins, or differs only in a value, lives here and reads a token (`border:var(--line-w) solid var(--line-c)`). The

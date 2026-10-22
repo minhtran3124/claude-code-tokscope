@@ -11,7 +11,7 @@ A reusable prompt for designing a tokscope screen (dashboard page or the HTML re
 
 ```text
 Design [SCREEN, e.g. "the Overview page" | "the Sessions page" | "the HTML report"] for tokscope in its "ink" style.
-Output: [mockup on a design canvas | CSS and markup changes in tokscope/web/report.py and tokscope/web/dashboard.py].
+Output: [mockup on a design canvas | CSS and markup changes in tokscope/web/report.py and tokscope/web/dashboard/].
 
 ## Product
 tokscope measures the tokens Claude Code uses: per session, skill, subagent and phase. It reads

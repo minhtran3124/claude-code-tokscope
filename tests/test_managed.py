@@ -12,6 +12,7 @@ from unittest import mock
 
 from tokscope.integrations import managed
 from tokscope.web import dashboard
+from http.server import BaseHTTPRequestHandler
 from tokscope.core.ingest import connect
 from tokscope.paths import ASSETS
 
@@ -182,7 +183,7 @@ class WriteRouteTest(unittest.TestCase):
         self.serve("full")
 
     def serve(self, level):
-        server = ThreadingHTTPServer(("127.0.0.1", 0), dashboard.BaseHTTPRequestHandler)
+        server = ThreadingHTTPServer(("127.0.0.1", 0), BaseHTTPRequestHandler)
         self.port = server.server_address[1]
         server.RequestHandlerClass = dashboard.handler(self.tmp / "t.db", self.live, self.port, level, token="tok")
         threading.Thread(target=server.serve_forever, daemon=True).start()
