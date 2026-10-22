@@ -13,7 +13,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
-from tokscope import dashboard, report, skills
+from tokscope import dashboard, managed, report, skills
 from tokscope.ingest import connect
 from tokscope.paths import PACKAGE
 
@@ -51,6 +51,10 @@ class ServerTest(unittest.TestCase):
         env = mock.patch.dict(os.environ, {"TOKSCOPE_HOME": str(self.tmp / "home"), "HOME": str(self.tmp / "h")})
         env.start()
         self.addCleanup(env.stop)
+        ant = mock.patch.object(managed, "_run", side_effect=RuntimeError("ant is not run in tests"))  # the Managed page
+        ant.start()
+        self.addCleanup(ant.stop)
+        self.addCleanup(managed.forget)
         self.db = self.tmp / "t.db"
         conn = connect(self.db)
         conn.executemany("INSERT INTO sessions (session_id, project, cwd, title, prompts) VALUES (?,?,?,?,1)",
@@ -92,6 +96,15 @@ class ServerTest(unittest.TestCase):
             self.assertEqual(code, 200, name)
             self.assertIn(f"<title>tokscope · {title}</title>", body)
             self.assertIn(f'href="/{name}" class=on aria-current=page', body)
+
+    def test_managed_refresh_reads_again_and_drops_the_query(self):
+        managed._cache["all"] = (1e18, {"error": "old", "read_at": 0})
+        req = urllib.request.Request(f"http://127.0.0.1:{self.port}/managed?refresh=1")
+        opener = urllib.request.build_opener(type("NoRedirect", (urllib.request.HTTPRedirectHandler,), {"redirect_request": lambda *a: None}))
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            opener.open(req)
+        self.assertEqual((e.exception.code, e.exception.headers["Location"]), (302, "/managed"))
+        self.assertEqual(managed._cache, {})
 
     def test_pages_carry_both_skins_and_the_switch_button(self):
         _, page = self.get("/overview")

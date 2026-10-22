@@ -217,7 +217,10 @@ The dashboard is a local web server. It reads the database for each request. It 
 2. Open `http://127.0.0.1:8765/overview` if the browser does not open.
 3. Press Ctrl+C in the terminal to stop the dashboard.
 
-The dashboard has six pages: Overview, Projects, Sessions, Library, Benchmarks and Breakdowns.
+The dashboard has seven pages: Overview, Projects, Sessions, Library, Benchmarks, Breakdowns and Managed.
+Managed lists your Managed Agents deployments, sessions and agents (Claude Developer Platform), with tokens and cost.
+It reads them with the `ant` CLI, so install it and run `ant auth login` first.
+It shows at the `full` privacy level only.
 A filter bar at the top sets the range, project, model and skill for every number on the page. The URL keeps the filters.
 The range is the last 7, 30 or 90 days, or all time. The default range is the last 30 days.
 

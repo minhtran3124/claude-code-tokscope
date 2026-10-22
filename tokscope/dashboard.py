@@ -21,7 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlencode, urlparse
 
-from . import charts, fonts, library, markdown, optimize, paths, privacy, projects, registry, skills
+from . import charts, fonts, library, managed, markdown, optimize, paths, privacy, projects, registry, skills
 from .classic import CLASSIC_CSS, CLASSIC_DASH_CSS, SKIN_APPLY
 from .layout import LAYOUT_CSS, LAYOUT_DASH_CSS, LAYOUT_TOKEN_CSS, LAYOUT_TOKEN_DASH_CSS
 from .brand import FAVICON, MARK, favicon_link
@@ -33,7 +33,7 @@ from .report import (CSS, JS_BENCH, JS_CORE, JS_SESSIONS, JS_TREND, TOKENS, _ben
 from .report import SORT_SEG  # the Sessions sort control, shared with the static report
 
 PAGES = {"overview": "Overview", "projects": "Projects", "sessions": "Sessions", "library": "Library",
-         "benchmarks": "Benchmarks", "breakdowns": "Breakdowns"}
+         "benchmarks": "Benchmarks", "breakdowns": "Breakdowns", "managed": "Managed"}
 RANGES = {"7": "Last 7 days", "30": "Last 30 days", "90": "Last 90 days", "all": "All time"}
 
 
@@ -1074,6 +1074,54 @@ def page_projects(conn, f, qs, level):
     return _project_view(g) if g else _projects_list(found)
 
 
+def _when(iso):
+    """An API timestamp as local "23 Oct 07:45"; blank or unreadable stays as it is."""
+    try:
+        return datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone().strftime("%d %b %H:%M")
+    except (AttributeError, ValueError):
+        return iso or "–"
+
+
+def _id_cell(v):
+    return (f"<code>{html.escape(v)}</code>", "raw")
+
+
+def page_managed(qs, level):
+    if level != "full":
+        return (f'<div class="empty"><b>Managed agents are hidden</b>This page reads your Claude Developer Platform account '
+                f'through the ant CLI, so it shows at the full level only (now {level}).</div>')
+    data = managed.read()
+    read_at = datetime.fromtimestamp(data["read_at"]).strftime("%H:%M:%S")
+    head = (f'<p class="note">Read through <code>ant</code> at {read_at}; kept {managed.CACHE_S:g} s. '
+            '<a href="/managed?refresh=1">Refresh</a></p>')
+    if "error" in data:
+        return (head + '<div class="empty"><b>ant could not read your account</b>Install the ant CLI and sign in with '
+                f'<code>ant auth login</code>, then refresh. ant said: {html.escape(data["error"])}</div>')
+    deps, sessions, agents = data["deployments"], data["sessions"], data["agents"]
+    note = f'tokens and cost count the latest {managed.SESSIONS} sessions'
+    dep_rows = [(d["name"] or d["id"], d["status"] + (f' ({d["paused"]})' if d["paused"] else ""),
+                 f'{d["cron"]} {d["tz"]}'.strip() or "–", _when(d["next"]) if d["status"] != "paused" else "–",
+                 _usd(d["budget"]), d["sessions"], d["tokens"], _usd(d["cost"]), _id_cell(d["id"])) for d in deps]
+    ses_rows = [(s["title"] or s["id"], s["status"], _when(s["created_at"]), _dur(s["active_s"]), s["tokens"],
+                 _usd(s["cost"]), _id_cell(s["id"])) for s in sessions]
+    agent_rows = [(a["name"] or a["id"], " · ".join(x for x in (a["model"].removeprefix("claude-"), a["effort"]) if x) or "–",
+                   ", ".join(a["mcp"]) or "–", ", ".join(a["skills"]) or "–", a["sessions"], a["tokens"], _usd(a["cost"]),
+                   _id_cell(a["id"])) for a in agents]
+    empty = lambda what: f'<div class="empty"><b>No {what}</b>None in this workspace yet.</div>'  # noqa: E731
+    return "".join([
+        head,
+        f'<section class="card" id="deployments"><h2>Deployments</h2><p class="note">{len(deps)} scheduled; {note}</p>'
+        + (_table(["Deployment", "Status", "Schedule", "Next run", "Budget", "Sessions", "Tokens", "Cost", "ID"], dep_rows, 6)
+           if deps else empty("deployments")) + '</section>',
+        f'<section class="card" id="managed-sessions"><h2>Sessions</h2><p class="note">The latest {len(sessions)}, newest first</p>'
+        + (_table(["Session", "Status", "Started", "Active", "Tokens", "Cost", "ID"], ses_rows, 4) if sessions else empty("sessions"))
+        + '</section>',
+        f'<section class="card" id="agents"><h2>Agents</h2><p class="note">{len(agents)} defined; {note}</p>'
+        + (_table(["Agent", "Model", "MCP servers", "Skills", "Sessions", "Tokens", "Cost", "ID"], agent_rows, 5)
+           if agents else empty("agents")) + '</section>',
+    ])
+
+
 def page_benchmarks(conn, f):
     head, detail = _benchmarks(conn, paths.tasks())
     return f'<section class="card" id="benchmarks">{head}</section>{_more("Benchmark details", "every run and answer", detail)}'
@@ -1389,7 +1437,8 @@ def render(conn, name, qs, stamp, level="full", token=""):
             "library": lambda: page_library(conn, f, qs, level),
             "projects": lambda: page_projects(conn, f, qs, level),
             "benchmarks": lambda: page_benchmarks(conn, f),
-            "breakdowns": lambda: page_breakdowns(conn, f)}[name]()
+            "breakdowns": lambda: page_breakdowns(conn, f),
+            "managed": lambda: page_managed(qs, level)}[name]()
     if (qs.get("partial") or [""])[0]:
         return body
     scripts = (JS_CORE + (JS_SESSIONS if name == "sessions" else "") + JS_TREND + (JS_BENCH if name == "benchmarks" else "")
@@ -1401,7 +1450,7 @@ def render(conn, name, qs, stamp, level="full", token=""):
                   + (f'<span class="cnt" title="All time, not filtered">{counts[p]:,}</span>' if p in counts else "") + "</a>" for p, t in PAGES.items())
     reset = f' <a href="/{name}">clear filters</a>' if (f.project if name == "library" else f.query()) else ""
     # a skill page or an optimize run has its own header; a ?skill= that matches no skill falls back to the list, with the bar
-    bar = ("" if name == "projects" or (name == "library" and 'class="card libhead"' in body) else
+    bar = ("" if name in ("projects", "managed") or (name == "library" and 'class="card libhead"' in body) else
            f'<form class="filters" method="get" action="/{name}">{_options(conn, f, "project" if name == "library" else None)}'
            f'<button type="submit" class="chip">Apply</button>{reset}</form>')
     chip = "" if level == "full" else f'<span class="privacy" role="note" title="Names and text follow the {level} level"><b>{level}</b></span>'
@@ -1627,6 +1676,9 @@ def handler(db, live, port, level, token=None):
                 out.update(steps=shown, nsteps=total, idle=idle,
                            files=[[rel, kind] for rel, kind, _ in optimize.changes(m.group(1))] if data["state"] == "running" else [])
                 return self._send(200, json.dumps(out), "application/json")
+            if name == "managed" and qs.get("refresh"):  # read ant again, then drop ?refresh so a reload does not
+                managed.forget()
+                return self._redirect("/managed")
             if name == "api/version":
                 # pages poll this every 2 s: answer before the database (a redacted copy is a full backup)
                 return self._send(200, json.dumps({"stamp": live.stamp}), "application/json")
