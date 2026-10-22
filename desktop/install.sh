@@ -50,7 +50,7 @@ Exec="$EXEC" --no-sandbox "$HERE"
 Icon=$HERE/icon.svg
 Terminal=false
 Categories=Development;Utility;
-StartupWMClass=tokscope-desktop
+StartupWMClass=tokscope
 DESKTOP
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APPS" 2>/dev/null || true
 # keep `tokscope serve` running in the background from login, so the data is always fresh and the window opens at once

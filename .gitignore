@@ -25,3 +25,5 @@ projects.json
 .playwright-mcp/
 # temporary agent worktrees
 .claude/worktrees/
+# the .deb maintainer scripts live in desktop/build/ (the rule above is for Python build output)
+!desktop/build/
