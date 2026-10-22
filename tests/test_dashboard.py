@@ -224,16 +224,18 @@ class SessionsTableTest(unittest.TestCase):
         self.assertNotIn(".srow:hover>summary .split{transform", LAYOUT_CSS)    # no hover lift on a row's bar
 
     def test_each_skin_adds_only_the_look(self):
-        from tokscope.classic import CLASSIC_CSS
+        from tokscope.classic import CLASSIC_CSS, CLASSIC_DASH_CSS
+        from tokscope.layout import LAYOUT_TOKEN_CSS, LAYOUT_TOKEN_DASH_CSS
         from tokscope.report import CSS
-        ink = CSS.split("/* sessions look */", 1)[1].split("/* end sessions look */", 1)[0]
-        classic = CLASSIC_CSS.split("/* sessions look */", 1)[1].split("/* end sessions look */", 1)[0]
-        self.assertIn("#session-list{border:var(--line-w) solid var(--ink);border-radius:12px", ink)
-        self.assertIn("text-transform:uppercase", ink)
-        self.assertIn("border-radius:999px", ink)                  # the Ink tray is a filled ink pill
-        self.assertIn("#session-list{border:1px solid var(--edge);border-radius:8px", classic)
-        self.assertNotIn("uppercase", classic)
-        self.assertIn("box-shadow:0 10px 30px -12px", classic)     # the Classic tray: tinted, soft shadow
+        layout = LAYOUT_TOKEN_CSS + LAYOUT_TOKEN_DASH_CSS
+        # the outline, radius and label case are tokens read once in the layout sheet
+        self.assertIn("#session-list{border:var(--line-w) solid var(--line-c);border-radius:var(--r-box)", layout)
+        self.assertIn("text-transform:var(--lab-case)", layout)
+        self.assertIn("--lab-case:uppercase", CSS)
+        self.assertIn("--lab-case:none", CLASSIC_CSS)
+        self.assertIn("border-radius:999px", CSS + dashboard.DASH_CSS)  # the Ink tray is a filled ink pill
+        self.assertNotIn("uppercase", CLASSIC_DASH_CSS)
+        self.assertIn("box-shadow:0 10px 30px -12px", CLASSIC_CSS)     # the Classic tray: tinted, soft shadow
 
     def test_a_hostile_session_id_is_escaped_everywhere_the_script_writes_html(self):
         js = dashboard.JS_SESSIONS
@@ -630,6 +632,7 @@ class OverviewTest(unittest.TestCase):
         svg = dashboard._daily_stacked(rows, [], [])
         wide = svg.split('<svg class="narrow"')[0]                          # the phone shows a second, narrow copy
         self.assertEqual(wide.count('<g class="d"'), 7)                     # days off are empty slots
+        # wide chart: the baseline is y 218 (240 - pad_b 22) and the plot is 184 high (240 - 34 - 22)
         last = re.search(r'class="ma"[^>]*points="([^"]+)"', wide).group(1).split()[-1]
         self.assertEqual(last.split(",")[1], f"{218 - 184 * (2000 / 7) / 1000:.1f}")  # 2000 over 7 calendar days, not 1000
 
