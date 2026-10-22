@@ -36,7 +36,7 @@ def _run(args):
         out = subprocess.run([exe, *args, "--format", "jsonl"], capture_output=True, text=True, timeout=TIMEOUT)
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"ant did not answer in {TIMEOUT} s") from None
-    except OSError as e:  # found on PATH but cannot start (a broken interpreter line, another architecture)
+    except OSError as e:  # found but cannot start (a broken interpreter line, another architecture)
         raise RuntimeError(f"ant could not start: {e.strerror or e}") from None
     if out.returncode:
         lines = [l for l in (out.stderr or out.stdout).strip().splitlines() if l.strip()]

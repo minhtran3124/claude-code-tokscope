@@ -84,12 +84,15 @@ class ManagedReadTest(unittest.TestCase):
         self.assertNotIn("shell", kw)
 
     def test_ant_in_the_user_bin_folder_is_found_without_it_on_path(self):
-        home = Path(tempfile.mkdtemp())
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        home, empty = Path(tmp.name) / "home", Path(tmp.name) / "path"  # an empty PATH: no other ant can be found
         exe = home / ".local" / "bin" / "ant"
         exe.parent.mkdir(parents=True)
+        empty.mkdir()
         exe.write_text("#!/bin/sh\n")
         exe.chmod(0o755)
-        with mock.patch.dict(os.environ, {"HOME": str(home), "PATH": "/usr/bin:/bin"}):
+        with mock.patch.dict(os.environ, {"HOME": str(home), "PATH": str(empty)}):
             self.assertEqual(managed._ant(), str(exe))
             exe.unlink()
             self.assertIsNone(managed._ant())
