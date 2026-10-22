@@ -6,10 +6,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import __version__, paths
-from .calls import turn_calls
-from .ingest import CARRIED, PROJECTS_DIR, connect, ingest, ingest_session
-from .pricing import API_EQ_NOTE
-from .privacy import LEVELS
+from .core.calls import turn_calls
+from .core.ingest import CARRIED, PROJECTS_DIR, connect, ingest, ingest_session
+from .core.pricing import API_EQ_NOTE
+from .core.privacy import LEVELS
 
 ROOT = paths.home()
 DB = paths.db()
@@ -48,7 +48,7 @@ def summary(args):
 
 def record_skill_versions(lines):
     """A Skill mark from the mod: hash the folder that call loaded, so the load has its exact version."""
-    from .skills import record_load
+    from .core.skills import record_load
 
     marks = [json.loads(line) for line in lines if line.strip()]
     marks = [m for m in marks if m.get("tool") == "Skill" and m.get("skill") and not m.get("is_error")]
@@ -62,7 +62,7 @@ def record_skill_versions(lines):
 
 
 def skills_text(skill=None):
-    from .skills import versions
+    from .core.skills import versions
 
     rows = versions(connect(DB), skill)
     if not rows:
@@ -104,7 +104,7 @@ def session_text(conn, session_id):
         ("skill", "COALESCE(skill, '(no skill)')"),
         ("phase", "COALESCE(phase, 'unscoped')"),
     )
-    from .skills import session_skill_versions
+    from .core.skills import session_skill_versions
 
     versions = session_skill_versions(conn, session_id)
     for label, key in groups:
@@ -131,7 +131,7 @@ def session_json(conn, session_id):
     if not row or row[2] is None:
         return {"id": session_id, "empty": True}
     title, prompts, tokens, out, usd, main, agents, runs = row
-    from .skills import session_skill_versions
+    from .core.skills import session_skill_versions
 
     versions = session_skill_versions(conn, session_id)
 
@@ -281,7 +281,7 @@ def main():
         append_marks(lines, paths.marks())
         record_skill_versions(lines)
     elif args.cmd == "serve":
-        from .dashboard import serve
+        from .web.dashboard import serve
 
         try:
             serve(DB, PHASES, args.port, args.interval, not args.no_open, args.privacy)
@@ -289,7 +289,7 @@ def main():
             sys.exit(f"tokscope: cannot listen on 127.0.0.1:{args.port} ({e.strerror}); try --port {args.port + 1}")
     elif args.cmd == "skills":
         if args.skill == "import":
-            from .skills import import_from_transcripts
+            from .core.skills import import_from_transcripts
 
             done = import_from_transcripts(connect(DB), PROJECTS_DIR, args.name)
             for sk, version, first, n in done:
@@ -298,7 +298,7 @@ def main():
         else:
             print(skills_text(args.skill))
     elif args.cmd == "change":
-        from .changes import add_change, impact_text, list_changes
+        from .features.changes import add_change, impact_text, list_changes
 
         conn = connect(DB)  # creates the tables on a fresh install
         if args.note:
@@ -310,7 +310,7 @@ def main():
         for change in list_changes(conn):
             print(impact_text(conn, change, args.days))
     elif args.cmd == "replay":
-        from . import replay
+        from .experiments import replay
 
         if args.action == "plan":
             path = replay.find_transcript(args.session_id)
@@ -330,7 +330,7 @@ def main():
         else:
             print(replay.diff(DB, args.session_id))
     elif args.cmd == "bench":
-        from . import bench
+        from .experiments import bench
 
         task_path = Path(args.task) if args.task.endswith(".json") else paths.tasks() / f"{args.task}.json"
         task = bench.load_task(task_path)
@@ -351,7 +351,7 @@ def main():
     elif args.cmd == "summary":
         summary(args)
     elif args.cmd in ("report", "open"):
-        from .report import write_report
+        from .web.report import write_report
 
         if args.cmd == "open":
             ingest(DB, PHASES, PROJECTS_DIR, log=lambda *_: None)  # only changed transcripts; well under a second

@@ -10,9 +10,10 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
-from tokscope import dashboard, managed
-from tokscope.ingest import connect
-from tokscope.paths import PACKAGE
+from tokscope.integrations import managed
+from tokscope.web import dashboard
+from tokscope.core.ingest import connect
+from tokscope.paths import ASSETS
 
 DEP = {"id": "depl_01Abc", "name": "Daily brief", "status": "paused", "paused_reason": {"type": "manual"},
        "agent": {"id": "agent_01A", "type": "agent", "version": 1}, "budget": {"type": "limit", "max_list_cost": {"amount": "2500", "currency": "USD"}},
@@ -177,7 +178,7 @@ class WriteRouteTest(unittest.TestCase):
         self.addCleanup(ant.stop)
         connect(self.tmp / "t.db").close()
         (self.tmp / "projects").mkdir()
-        self.live = dashboard.Live(self.tmp / "t.db", PACKAGE / "phases.json", 60, projects_dir=self.tmp / "projects")
+        self.live = dashboard.Live(self.tmp / "t.db", ASSETS / "phases.json", 60, projects_dir=self.tmp / "projects")
         self.serve("full")
 
     def serve(self, level):

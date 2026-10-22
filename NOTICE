@@ -3,7 +3,7 @@ Copyright 2026 Minh Tran
 
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 
-tokscope/fonts/ holds subsets (latin and vietnamese) of two typefaces, both under the SIL Open Font License 1.1
+tokscope/assets/fonts/ holds subsets (latin and vietnamese) of two typefaces, both under the SIL Open Font License 1.1
 (https://openfontlicense.org):
 - Be Vietnam Pro, Copyright 2018 The Be Vietnam Pro Project Authors (https://github.com/bettergui/BeVietnamPro)
 - IBM Plex Mono, Copyright 2017 IBM Corp. (https://github.com/IBM/plex)

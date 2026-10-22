@@ -1,7 +1,8 @@
 import unittest
 import urllib.error
 
-from tokscope import projects, registry
+from tokscope.features import projects
+from tokscope.integrations import registry
 
 
 def entry(name, packages=(), remotes=(), latest=True):

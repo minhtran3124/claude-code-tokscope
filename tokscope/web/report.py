@@ -8,14 +8,17 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from statistics import median
 
-from . import charts, fonts, paths, privacy, skills
-from .classic import CLASSIC_CSS, SKIN_APPLY, SKIN_BUTTON
-from .layout import LAYOUT_CSS, LAYOUT_TOKEN_CSS
-from .brand import MARK, favicon_link
-from .calls import est_tokens, mcp_server, turn_calls
-from .changes import BENCH_PROJECT, impact, list_changes
-from .ingest import CARRIED, connect
-from .pricing import API_EQ_NOTE, COSTS_DOC
+from .. import paths
+from ..core import privacy, skills
+from . import charts
+from .theme import fonts
+from .theme.classic import CLASSIC_CSS, SKIN_APPLY, SKIN_BUTTON
+from .theme.layout import LAYOUT_CSS, LAYOUT_TOKEN_CSS
+from .theme.brand import MARK, favicon_link
+from ..core.calls import est_tokens, mcp_server, turn_calls
+from ..features.changes import BENCH_PROJECT, impact, list_changes
+from ..core.ingest import CARRIED, connect
+from ..core.pricing import API_EQ_NOTE, COSTS_DOC
 
 TOKENS = "(input + cache_read + cache_write_5m + cache_write_1h + output)"
 

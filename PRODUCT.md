@@ -187,7 +187,7 @@ Built-in tool and agent names and phase names do not change.
 - **Dollars are estimates ("API-eq")**: tokens at API list prices. On a Pro, Max, Team or Enterprise plan you do not
   pay per token; the real limits are the 5-hour and weekly limits.
 - **Phases are direct or carried.** Direct: its skill ran in that prompt. Carried: a later prompt loaded no skill and
-  kept the last phase. Copy `tokscope/phases.json` to the data home to change the phase map.
+  kept the last phase. Copy `tokscope/assets/phases.json` to the data home to change the phase map.
 - **By skill overlaps By owner.** Do not sum the two tables.
 - **Tool tokens are estimates** (`~`): the API reports usage per request, so MCP and tool tokens come from result size
   (4 characters per token).

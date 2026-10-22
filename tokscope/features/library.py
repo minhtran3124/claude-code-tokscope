@@ -19,8 +19,8 @@ import sys
 import threading
 from pathlib import Path
 
-from . import paths
-from .markdown import frontmatter
+from .. import paths
+from ..core.markdown import frontmatter
 
 HIDDEN = {"__pycache__", "node_modules"}
 MAX_VIEW = 512_000

@@ -8,11 +8,17 @@ bin/tokscope serve                          # http://127.0.0.1:8765 (--port N), 
 python3 -m unittest discover -s tests -q    # tests
 ```
 
+## Code layout
+
+`tokscope/`: `cli.py` (entry), `paths.py`, `assets/`, `core/` (transcripts to SQLite), `features/`, `integrations/` (ant,
+MCP Registry), `experiments/` (paid `claude -p` runs), `web/` and `web/theme/`. `core` never imports the others and
+only `cli` and `web` import `web` (`tests/test_layout.py`). Why: [docs/research-package-layout.md](docs/research-package-layout.md).
+
 ## Rules
 
 - Minimize tokens. Behavior rules: [.claude/rules/behavior.md](.claude/rules/behavior.md).
-- **UI PRs show screenshots.** A PR that changes what the owner sees (markup, CSS or page script in `tokscope/report.py`
-  or `tokscope/dashboard.py`) shows before (`main`) and after at 1440 and 375 px, and a pass/fail table against the
+- **UI PRs show screenshots.** A PR that changes what the owner sees (markup, CSS or page script in `tokscope/web/report.py`
+  or `tokscope/web/dashboard.py`) shows before (`main`) and after at 1440 and 375 px, and a pass/fail table against the
   issue's "Done when". Steps: [uat.md](.claude/skills/factory/references/uat.md). Fix a screenshot problem without
   asking when this PR caused it or it fails Done-when; ask about one that is also on `main`.
 - **Review every PR** (outside `/factory`, unless the owner says skip): run `/code-review:code-review <PR>` (Anthropic's

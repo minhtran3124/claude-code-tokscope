@@ -2,8 +2,9 @@
 import re
 import unittest
 
-from tokscope import dashboard, layout, report
-from tokscope.classic import CLASSIC_CSS, CLASSIC_DASH_CSS
+from tokscope.web import dashboard, report
+from tokscope.web.theme import layout
+from tokscope.web.theme.classic import CLASSIC_CSS, CLASSIC_DASH_CSS
 
 
 def rules(css):

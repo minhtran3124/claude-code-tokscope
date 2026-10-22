@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from statistics import median
 
-from .ingest import connect, ingest_session
+from ..core.ingest import connect, ingest_session
 
 BENCH_SCHEMA = """
 CREATE TABLE IF NOT EXISTS bench_runs (
@@ -94,7 +94,7 @@ def _claude_bin():
 def version_dir(snapshot, skill, version):
     """The task's snapshot with one skill version pinned: hard links to the snapshot's files (cheap, read-only use),
     real copies for the skill, so each variant reads its own version and runs can interleave."""
-    from .skills import pin
+    from ..core.skills import pin
 
     dest = snapshot.parent / f"{snapshot.name}-{version[:8]}"
     if not dest.exists():
@@ -141,7 +141,7 @@ def save_run(conn, row):
 
 def run(root, db_path, phases_path, task, runs, variants=None, skill=None, versions=None, log=print):
     """Run the task's variants, or with skill and versions, one variant per pinned skill version."""
-    from .skills import check_load, check_pinnable, resolve_version
+    from ..core.skills import check_load, check_pinnable, resolve_version
 
     if skill:  # fail before exporting or spending anything
         check_pinnable(skill)
@@ -171,7 +171,7 @@ def run(root, db_path, phases_path, task, runs, variants=None, skill=None, versi
 def regrade(db_path, task, skill=None):
     """Re-apply the task's current grader to stored answers (the task's own runs and its -leaky ones); with skill,
     also re-check which version each run read (a newer ingest may have found text an older one missed)."""
-    from .skills import check_load
+    from ..core.skills import check_load
 
     conn = sqlite3.connect(db_path)
     _schema(conn)

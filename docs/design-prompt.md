@@ -2,16 +2,16 @@
 
 A reusable prompt for designing a tokscope screen (dashboard page or the HTML report) in the "ink" style. It is adapted from the ink prompt of Claude Bot Local (claude-bot-projects `docs/design-prompt.md`), which follows [colorfigures](https://colorfigures.vercel.app/#washer). Fill in the two bracketed lines and paste the whole block.
 
-- Kept from the source: paper, sheet, ink and rule colours, ink outlines, pill buttons, the flat navy shadow, mono labels, and the two bundled faces (tokscope already ships them in `tokscope/fonts/`).
+- Kept from the source: paper, sheet, ink and rule colours, ink outlines, pill buttons, the flat navy shadow, mono labels, and the two bundled faces (tokscope already ships them in `tokscope/assets/fonts/`).
 - Changed on purpose: Claude Bot Local's swatches mean a project's state. tokscope has no states; its colours mean data. So the swatches are remapped to series and results below, and "no accent that isn't a state" becomes "no accent that isn't data".
 - Changed on purpose: tokscope pages are dense tables and numbers. Shadows go on one card per page, not every card, and tables keep thin rules.
 - Text colours were checked for WCAG AA on paper, sheet and chip in both themes (contrast in brackets, the lowest). Light-theme swatch fills are below 3:1 on sheet, so every filled mark carries an ink outline.
-- The colours below are the live palette: the `:root` and DARK blocks of `CSS` in `tokscope/report.py` (since #6).
-- The dashboard and the report share one stylesheet (`CSS` in `tokscope/report.py`). A design applies to both.
+- The colours below are the live palette: the `:root` and DARK blocks of `CSS` in `tokscope/web/report.py` (since #6).
+- The dashboard and the report share one stylesheet (`CSS` in `tokscope/web/report.py`). A design applies to both.
 
 ```text
 Design [SCREEN, e.g. "the Overview page" | "the Sessions page" | "the HTML report"] for tokscope in its "ink" style.
-Output: [mockup on a design canvas | CSS and markup changes in tokscope/report.py and tokscope/dashboard.py].
+Output: [mockup on a design canvas | CSS and markup changes in tokscope/web/report.py and tokscope/web/dashboard.py].
 
 ## Product
 tokscope measures the tokens Claude Code uses: per session, skill, subagent and phase. It reads
@@ -38,7 +38,7 @@ Data colours, one meaning each, never decoration (fill · text light · text dar
                        "Other" is the palest tint; never more than 5 in one chart.
                        Neighbouring series differ by at least 1.5:1 in luminance.
 Theme: light, dark and System via html[data-theme] and prefers-color-scheme (the :root and
-DARK blocks in tokscope/report.py). Every colour has both values and passes WCAG AA.
+DARK blocks in tokscope/web/report.py). Every colour has both values and passes WCAG AA.
 
 Type
 - Mono = IBM Plex Mono (--mono): numbers, KPI values, token counts, costs, session ids,
@@ -64,7 +64,7 @@ Shapes
 - Selection (picked row) = 2px ink outline, never a ring of tint. Primary button is a filled pill
   that inverts to paper on hover. Session rows do not lift on hover (colour only). Diff gap cells are flat chip colour.
 
-Skin tokens (write a new rule once, in `tokscope/layout.py`; Classic then needs no copy)
+Skin tokens (write a new rule once, in `tokscope/web/theme/layout.py`; Classic then needs no copy)
 - A skin is tokens plus a short look block. A rule reads a token, never a literal outline, radius or font, so both skins show it.
   Ink value | Classic value. The full list sits above `LAYOUT_TOKEN_CSS` in `layout.py`.
 - Outline: `border:var(--line-w) solid var(--line-c)` (1.5px ink | 1px edge). Focus ring: `outline:2px solid var(--focus-c)`.
@@ -80,7 +80,7 @@ Skin tokens (write a new rule once, in `tokscope/layout.py`; Classic then needs 
   no shadow), the hero glow, hover and pressed looks, delta style. Add a token only when two or more rules need it.
 
 Motion (working tool: state changes are fast, nothing loops)
-- Three durations, as CSS tokens in the layout sheet (`tokscope/layout.py`): --t-fast 120ms (press, hover colour),
+- Three durations, as CSS tokens in the layout sheet (`tokscope/web/theme/layout.py`): --t-fast 120ms (press, hover colour),
   --t-state 200ms (toggles, segments, tooltips, delta chip), --t-layout 320ms (row open, sheet, toast, first-paint
   entrances). An exit is 0.7 times its entrance on --ease-exit cubic-bezier(.55,.06,.68,.19); entrances use --ease.
   Any other duration needs a comment that says why (the 600ms live-dot ring, the endless spinner).
@@ -130,4 +130,4 @@ Deliver
 - A short list of every choice not covered above, so this prompt can be updated.
 ```
 
-Brand (owner's choice, 2026-10-21): the mark and favicon (`tokscope/brand.py`) are drawn in ink only, no blue or amber. The sidebar mark uses `currentColor` (the theme's ink); the favicon is an ink gauge on a paper square with an ink outline, so it reads on light and dark tab bars.
+Brand (owner's choice, 2026-10-21): the mark and favicon (`tokscope/web/theme/brand.py`) are drawn in ink only, no blue or amber. The sidebar mark uses `currentColor` (the theme's ink); the favicon is an ink gauge on a paper square with an ink outline, so it reads on light and dark tab bars.

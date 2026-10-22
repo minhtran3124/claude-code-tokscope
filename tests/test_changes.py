@@ -4,8 +4,8 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from tokscope.changes import add_change, impact, impact_text, list_changes
-from tokscope.ingest import connect
+from tokscope.features.changes import add_change, impact, impact_text, list_changes
+from tokscope.core.ingest import connect
 
 AT = datetime(2026, 10, 10, tzinfo=timezone.utc)
 

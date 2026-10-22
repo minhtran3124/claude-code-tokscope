@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from statistics import median
 
-from .ingest import COMMAND_RE, PROJECTS_DIR, _is_human_prompt, _text, BUILTIN_COMMANDS, ingest_session
+from ..core.ingest import COMMAND_RE, PROJECTS_DIR, _is_human_prompt, _text, BUILTIN_COMMANDS, ingest_session
 
 ARGS_RE = re.compile(r"<command-args>(.*?)</command-args>", re.S)
 TOKENS = "(input + cache_read + cache_write_5m + cache_write_1h + output)"
@@ -146,7 +146,7 @@ def _claude_bin():
 def run(root, db_path, phases_path, source_session, runs=2, budget_total=6.0, model=None, skill=None, versions=None,
         log=print):
     """Replay the session `runs` times; with skill and versions, run i pins versions[i % len(versions)]."""
-    from .skills import check_load, check_pinnable, pin, resolve_version
+    from ..core.skills import check_load, check_pinnable, pin, resolve_version
 
     if skill:
         check_pinnable(skill)

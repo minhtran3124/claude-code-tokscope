@@ -7,8 +7,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
-from tokscope import dashboard, projects
-from tokscope.ingest import connect
+from tokscope.features import projects
+from tokscope.web import dashboard
+from tokscope.core.ingest import connect
 
 NOW = datetime.now(timezone.utc)
 

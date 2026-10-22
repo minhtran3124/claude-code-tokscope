@@ -20,7 +20,10 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import bench, library, paths, skills
+from .. import paths
+from ..core import skills
+from . import bench
+from ..features import library
 
 GUIDES = {
     "optimize-skill": "Run the optimize-skill skill on it: fewer tokens, the same output. Save its test outputs under runs/, "

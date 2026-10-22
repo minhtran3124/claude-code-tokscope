@@ -14,7 +14,7 @@ You run the checks and report the results. You change nothing.
 Run each check from the repo root, and report its exit code.
 
 1. `python3 -m unittest discover -s tests -q`. If the prompt names modules, run `python3 -m unittest tests.<module> -q`.
-2. Run this check only when the prompt says that `tokscope/dashboard.py`, `tokscope/cli.py` or `bin/tokscope` changed. Start the app in the background with `TOKSCOPE_HOME=<empty scratchpad folder> bin/tokscope serve --no-open --port 8799`. Run `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8799/overview` and expect `200`. Then stop that server only (never the owner's dashboard on 8765).
+2. Run this check only when the prompt says that `tokscope/web/dashboard.py`, `tokscope/cli.py` or `bin/tokscope` changed. Start the app in the background with `TOKSCOPE_HOME=<empty scratchpad folder> bin/tokscope serve --no-open --port 8799`. Run `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8799/overview` and expect `200`. Then stop that server only (never the owner's dashboard on 8765).
 
 There is no venv: the tests need only `python3`, in the main checkout or in a worktree.
 

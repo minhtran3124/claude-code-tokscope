@@ -6,10 +6,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tokscope import skills
+from tokscope.core import skills
 from tokscope.cli import record_skill_versions
-from tokscope.ingest import connect
-from tokscope.report import write_report
+from tokscope.core.ingest import connect
+from tokscope.web.report import write_report
 
 
 def write_skill(folder, body="# rules\n", extra=None):

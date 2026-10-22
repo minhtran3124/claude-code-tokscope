@@ -11,8 +11,12 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
-from tokscope import dashboard, library, optimize, skills
-from tokscope.ingest import connect
+from tokscope import paths
+from tokscope.core import skills
+from tokscope.experiments import optimize
+from tokscope.features import library
+from tokscope.web import dashboard
+from tokscope.core.ingest import connect
 
 # stands in for claude -p: rewrites the target's SKILL.md in its cwd, notes its arguments, answers like --output-format json
 FAKE_CLAUDE = """#!/usr/bin/env python3
@@ -254,7 +258,7 @@ class CompareAndBenchTest(OptimizeTest):
 class WriteGuardTest(OptimizeTest):
     def setUp(self):
         super().setUp()
-        live = dashboard.Live(self.tmp / "t.db", Path(dashboard.__file__).parent / "phases.json", 60, projects_dir=self.tmp)
+        live = dashboard.Live(self.tmp / "t.db", paths.ASSETS / "phases.json", 60, projects_dir=self.tmp)
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), dashboard.BaseHTTPRequestHandler)
         self.port = self.server.server_address[1]
         self.server.RequestHandlerClass = dashboard.handler(self.tmp / "t.db", live, self.port, "full", token="tok")
