@@ -15,7 +15,7 @@ from unittest import mock
 
 from tokscope.core import skills
 from tokscope.integrations import managed
-from tokscope.web import dashboard, report
+from tokscope.web import dashboard
 from tokscope.web.report import scripts as report_scripts
 from http.server import BaseHTTPRequestHandler
 from tokscope.core import privacy as core_privacy
