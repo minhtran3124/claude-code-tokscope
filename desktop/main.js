@@ -64,11 +64,22 @@ async function start() {
   openWindow(url);
 }
 
+// Only web links leave the window, and only to the browser. Whatever answers on the port could ask for a file:, smb: or
+// app-scheme URL, so nothing else is passed to the desktop.
+function openExternal(u) {
+  try {
+    if (["http:", "https:"].includes(new URL(u).protocol)) shell.openExternal(u);
+  } catch (e) { /* not a URL: ignore */ }
+}
+
 function openWindow(url) {
   win = new BrowserWindow({ width: 1440, height: 900, title: "tokscope", autoHideMenuBar: true });
   // anything that is not the local dashboard opens in the real browser
-  win.webContents.setWindowOpenHandler(({ url: u }) => { shell.openExternal(u); return { action: "deny" }; });
-  win.webContents.on("will-navigate", (e, u) => { if (!u.startsWith(url)) { e.preventDefault(); shell.openExternal(u); } });
+  win.webContents.setWindowOpenHandler(({ url: u }) => { openExternal(u); return { action: "deny" }; });
+  // a server redirect must not move the window off the dashboard either
+  for (const ev of ["will-navigate", "will-redirect"]) {
+    win.webContents.on(ev, (e, u) => { if (!u.startsWith(url)) { e.preventDefault(); openExternal(u); } });
+  }
   win.on("closed", () => { win = null; });
   win.loadURL(url);
 }
