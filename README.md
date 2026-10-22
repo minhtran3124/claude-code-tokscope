@@ -237,6 +237,8 @@ The dashboard is a local web server. It reads the database for each request. It 
 
 The dashboard has seven pages: Overview, Projects, Sessions, Library, Benchmarks, Breakdowns and Managed.
 Managed lists your Managed Agents deployments, sessions and agents (Claude Developer Platform), with tokens and cost.
+Click an agent's name to see its configuration: model and effort, description, system prompt, toolsets with their permission
+policies, MCP servers, skills and multiagent. It is read only and comes from the same `ant beta:agents list` read.
 Each active deployment has a Pause button and each paused one an Unpause button; the page asks before it runs `ant`.
 It reads them with the `ant` CLI, so install it and run `ant auth login` first.
 It shows at the `full` privacy level only.

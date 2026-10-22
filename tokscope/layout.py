@@ -187,6 +187,8 @@ LAYOUT_DASH_CSS = """
 main{width:100%;min-width:0}
 .dep-st{white-space:nowrap}
 .dep-why{display:block;white-space:normal;overflow-wrap:anywhere}
+/* an agent's toolsets and metadata: a long URL or value wraps inside its block on a phone */
+.agent-cfg .ids dd{display:block;min-width:0;overflow-wrap:anywhere}
 .dash-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin:0 0 14px}
 .dash-head h1{margin:0}
 .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-left:auto}

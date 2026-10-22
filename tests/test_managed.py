@@ -18,7 +18,13 @@ DEP = {"id": "depl_01Abc", "name": "Daily brief", "status": "paused", "paused_re
        "agent": {"id": "agent_01A", "type": "agent", "version": 1}, "budget": {"type": "limit", "max_list_cost": {"amount": "2500", "currency": "USD"}},
        "schedule": {"type": "cron", "expression": "45 7 * * 1-5", "timezone": "Asia/Ho_Chi_Minh", "upcoming_runs_at": ["2026-10-23T00:45:00Z"]}}
 AGENT = {"id": "agent_01A", "name": "Brief <writer>", "model": {"id": "claude-haiku-5-5", "effort": {"type": "medium"}},
-         "mcp_servers": [{"name": "github", "type": "url", "url": "https://api.githubcopilot.com/mcp/"}], "skills": [], "system": "secret prompt"}
+         "mcp_servers": [{"name": "github", "type": "url", "url": "https://api.githubcopilot.com/mcp/"}], "skills": [], "system": "secret prompt",
+         "description": None, "version": 1, "updated_at": "2026-10-22T09:00:00Z", "execution_identity": {"type": "service_account"},
+         "multiagent": None, "metadata": {"source": "cookbook"},
+         "tools": [{"type": "agent_toolset_20260401", "default_config": {"enabled": True, "permission_policy": {"type": "always_allow"}},
+                    "configs": [{"name": "web_search", "enabled": False, "permission_policy": {"type": "always_allow"}}]},
+                   {"type": "mcp_toolset", "mcp_server_name": "github",
+                    "default_config": {"enabled": True, "permission_policy": {"type": "always_ask"}}}]}
 
 
 def ses(sid, dep="depl_01Abc", cost="8"):
@@ -52,7 +58,10 @@ class ManagedReadTest(unittest.TestCase):
         self.assertEqual(d["budget"], 25.0)
         self.assertEqual((d["cron"], d["tz"], d["paused"]), ("45 7 * * 1-5", "Asia/Ho_Chi_Minh", "manual"))
         self.assertEqual((a["sessions"], a["model"], a["effort"], a["mcp"]), (3, "claude-haiku-5-5", "medium", ["github"]))
-        self.assertNotIn("system", a)                           # the prompt text never reaches the page
+        self.assertEqual((a["system"], a["version"], a["runs_as"]), ("secret prompt", 1, "service_account"))
+        self.assertEqual([(t["type"], t["server"], t["enabled"], t["policy"], t["changed"]) for t in a["tools"]],
+                         [("agent_toolset_20260401", "", True, "always allow", [("web_search", False, "always allow")]),
+                          ("mcp_toolset", "github", True, "always ask", [])])
 
     def test_only_list_commands_run_and_the_result_is_kept(self):
         calls = []
@@ -218,6 +227,35 @@ class ManagedPageTest(unittest.TestCase):
         self.assertNotIn("secret prompt", body)
         self.assertIn('data-dep-act="unpause" data-dep="depl_01Abc" data-name="Daily brief">Unpause</button>', body)
 
+    def test_an_agent_name_opens_its_configuration(self):
+        with mock.patch.object(managed, "_run", fake()):
+            self.assertIn('<a href="/managed?agent=agent_01A">Brief &lt;writer&gt;</a>', dashboard.page_managed({}, "full"))
+            body = dashboard.page_managed({"agent": ["agent_01A"]}, "full")
+        for part in ('id="agent-config"', "claude-haiku-5-5 · medium effort", "service account", "v1 · updated",
+                     '<pre class="answer">secret prompt</pre>', "<h3>Built-in tools</h3>",
+                     "<dt>Default</dt><dd>always allow</dd><dt>Set apart</dt><dd>web_search: off</dd>",
+                     "<h3>MCP tools</h3>", "<code>github</code></dd><dt>URL</dt><dd><code>https://api.githubcopilot.com/mcp/</code>",
+                     "<dd>always ask</dd>",
+                     "<dt>source</dt><dd>cookbook</dd>", 'href="/managed?refresh=1&amp;agent=agent_01A"'):
+            self.assertIn(part, body)
+        self.assertNotIn('id="deployments"', body)
+
+    def test_the_configuration_is_escaped(self):
+        agents = [AGENT | {"system": "</pre><script>x</script>", "description": "<b>d</b>", "metadata": {"<k>": "<v>"}}]
+        with mock.patch.object(managed, "_run", lambda a: {"beta:agents": agents}.get(a[0], [])):
+            body = dashboard.page_managed({"agent": ["agent_01A"]}, "full")
+        self.assertIn("&lt;/pre&gt;&lt;script&gt;x&lt;/script&gt;</pre>", body)
+        self.assertNotIn("<script>x", body)
+        self.assertIn("&lt;b&gt;d&lt;/b&gt;", body)
+        self.assertIn("<dt>&lt;k&gt;</dt><dd>&lt;v&gt;</dd>", body)
+
+    def test_an_unknown_agent_says_so(self):
+        with mock.patch.object(managed, "_run", fake()):
+            body = dashboard.page_managed({"agent": ['agent_"<x>']}, "full")
+        self.assertIn("No such agent", body)
+        self.assertIn("agent_&quot;&lt;x&gt;", body)
+        self.assertIn('href="/managed?refresh=1&amp;agent=agent_%22%3Cx%3E"', body)
+
     def test_only_active_and_paused_deployments_get_a_button(self):
         deps = [DEP | {"id": "depl_01Act", "status": "active", "name": 'A "quoted" <one>'}, DEP | {"id": "depl_01Arc", "status": "archived"}]
         with mock.patch.object(managed, "_run", lambda a: {"beta:deployments": deps}.get(a[0], [])):
@@ -234,6 +272,7 @@ class ManagedPageTest(unittest.TestCase):
     def test_below_full_the_page_never_runs_ant(self):
         with mock.patch.object(managed, "_run", side_effect=AssertionError("ran ant")):
             self.assertIn("full level only", dashboard.page_managed({}, "redacted"))
+            self.assertIn("full level only", dashboard.page_managed({"agent": ["agent_01A"]}, "redacted"))
 
     def test_an_error_shows_the_sign_in_hint(self):
         with mock.patch.object(managed, "_run", side_effect=RuntimeError("ant is not installed")):
