@@ -20,10 +20,12 @@ function freePort() {
   });
 }
 
-function waitFor(url, tries = 100) {
+// the first start may ingest a large ~/.claude/projects before the socket opens, so allow a minute
+function waitFor(url, tries = 600) {
   return new Promise((resolve, reject) => {
     const attempt = (n) => {
       const req = http.get(url, (res) => { res.resume(); resolve(); });
+      req.setTimeout(2000, () => req.destroy());
       req.on("error", () => (n <= 0 ? reject(new Error("the tokscope server did not start")) : setTimeout(() => attempt(n - 1), 100)));
     };
     attempt(tries);
@@ -36,7 +38,8 @@ async function start() {
   // SIGKILL, a crash). Killing the sh runs its trap, which stops the server.
   const guard = 'trap \'kill "$S" 2>/dev/null\' EXIT TERM INT HUP; "$@" & S=$!; while kill -0 "$PPID" 2>/dev/null && kill -0 "$S" 2>/dev/null; do sleep 1; done; kill "$S" 2>/dev/null; wait "$S"';
   server = spawn("sh", ["-c", guard, "sh", path.join(ROOT, "bin", "tokscope"), "serve", "--no-open", "--port", String(port)], { stdio: "inherit" });
-  server.once("exit", (code) => { server = null; if (code) app.exit(code); });
+  // the server is gone (it failed to bind, crashed or was killed): leave rather than show a dead page
+  server.once("exit", (code) => { server = null; app.exit(code || 1); });
   const url = `http://127.0.0.1:${port}/`;
   await waitFor(url);
   win = new BrowserWindow({ width: 1440, height: 900, title: "tokscope", autoHideMenuBar: true });

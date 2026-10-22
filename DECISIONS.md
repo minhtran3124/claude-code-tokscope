@@ -1,5 +1,12 @@
 # Decisions
 
+## 2026-10-22 · Desktop app is an optional Electron window
+
+| Decision | Why | Rejected |
+| --- | --- | --- |
+| `desktop/` holds an Electron shell that starts `tokscope serve` on a free loopback port and shows it in a window. It is optional, installed by `desktop/install.sh`, and is not in the Python package. The CLI keeps no dependencies. | The owner wants a clickable app that can be pinned. The dashboard already is a local web page, so a window around it adds no second UI to keep in step. | Rewriting the dashboard as an Electron renderer (a second UI); a Chrome `--app` window (needs Chrome, no own icon or process); making Electron a dependency of the CLI. |
+| The launcher runs the Electron binary with `--no-sandbox`. The server runs under an `sh` that stops it when Electron's process is gone. | The downloaded `chrome-sandbox` is not setuid and Ubuntu 24.04 blocks the fallback, so Electron aborts at launch. The window loads only the loopback dashboard, whose text is escaped; other links open in the browser. Signals and SIGKILL left the server running without the guard. | Setuid `chrome-sandbox` (needs root); stopping the server only in a quit handler. |
+
 ## 2026-10-21 · Keep Classic next to Ink
 
 | Decision | Why | Rejected |

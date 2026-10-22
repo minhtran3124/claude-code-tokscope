@@ -9,8 +9,16 @@ ENTRY="$APPS/tokscope.desktop"
 
 if [ "${1:-}" = "--uninstall" ]; then
   rm -f "$ENTRY"
+  rm -rf "$HERE/node_modules"
+  # take it off the GNOME dock too, if it was pinned there
+  if command -v gsettings >/dev/null 2>&1; then
+    favs=$(gsettings get org.gnome.shell favorite-apps 2>/dev/null || true)
+    case "$favs" in
+      *"'tokscope.desktop'"*) gsettings set org.gnome.shell favorite-apps "$(printf '%s' "$favs" | sed "s/, 'tokscope.desktop'//; s/'tokscope.desktop', //; s/'tokscope.desktop'//")" ;;
+    esac
+  fi
   command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APPS" 2>/dev/null || true
-  echo "removed $ENTRY"
+  echo "removed $ENTRY and desktop/node_modules"
   exit 0
 fi
 
