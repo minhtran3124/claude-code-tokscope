@@ -2,6 +2,7 @@ import re
 import unittest
 
 from tokscope.web import dashboard
+from tokscope.web.report import JS_CORE
 from tokscope.web.theme.classic import CLASSIC_CSS, CLASSIC_DASH_CSS
 from tokscope.web.theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS
 from tokscope.web.report import CSS
@@ -63,13 +64,13 @@ class MotionTokensTest(unittest.TestCase):
     def test_a_swapped_region_never_replays_an_entrance(self):
         self.assertIn("html.settled [data-region] :is(.hero,.kpi,.empty,.bar i u){animation:none}", LAYOUT_CSS)
         self.assertIn("classList.add('settled')", dashboard.DASH_JS)       # before refresh() swaps a region
-        self.assertIn("setTimeout(()=>document.documentElement.classList.add('settled')", dashboard.JS_CORE)
+        self.assertIn("setTimeout(()=>document.documentElement.classList.add('settled')", JS_CORE)
 
     def test_live_values_change_at_once_with_a_chip_and_the_dot_rings_once(self):
         js = dashboard.DASH_JS
         self.assertNotIn("countFrom", js)
         self.assertIn("deltaChip(el,old[el.dataset.key])", js)
-        self.assertIn("[data-count]:not([data-key])", dashboard.JS_CORE)   # no count-up on live values
+        self.assertIn("[data-count]:not([data-key])", JS_CORE)   # no count-up on live values
         self.assertIn(".dot.ring{animation:ring 600ms var(--ease) 1}", LAYOUT_DASH_CSS)
         self.assertIn(".fresh.stale .dot,body.offline h2>.dot{background:transparent", LAYOUT_DASH_CSS)   # offline: hollow
         for name in ("ink-dash", "classic-dash"):

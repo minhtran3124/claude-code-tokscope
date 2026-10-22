@@ -16,6 +16,8 @@ from tokscope.core import skills
 from tokscope.experiments import optimize
 from tokscope.features import library
 from tokscope.web import dashboard
+from http.server import BaseHTTPRequestHandler
+from tokscope.web.dashboard.pages import library as library_page
 from tokscope.core.ingest import connect
 
 # stands in for claude -p: rewrites the target's SKILL.md in its cwd, notes its arguments, answers like --output-format json
@@ -249,7 +251,7 @@ class CompareAndBenchTest(OptimizeTest):
         self.assertEqual((current["label"], current["runs"], current["passed"]), ("current", 1, 1))
         self.assertEqual((draft["label"], draft["runs"], draft["passed"]), ("draft", 1, 1))
         self.assertLess(draft["cost"], current["cost"])                              # the fake costs by SKILL.md size
-        page = dashboard._bench_section(job, optimize.status(job), self.conn)
+        page = library_page._bench_section(job, optimize.status(job), self.conn)
         self.assertIn("Draft against current:</b> pass 1/1 vs 1/1, cost", page)
         with self.assertRaisesRegex(ValueError, "runs per version"):
             optimize.bench_start(job, db, name, 4)
@@ -259,7 +261,7 @@ class WriteGuardTest(OptimizeTest):
     def setUp(self):
         super().setUp()
         live = dashboard.Live(self.tmp / "t.db", paths.ASSETS / "phases.json", 60, projects_dir=self.tmp)
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), dashboard.BaseHTTPRequestHandler)
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), BaseHTTPRequestHandler)
         self.port = self.server.server_address[1]
         self.server.RequestHandlerClass = dashboard.handler(self.tmp / "t.db", live, self.port, "full", token="tok")
         threading.Thread(target=self.server.serve_forever, daemon=True).start()

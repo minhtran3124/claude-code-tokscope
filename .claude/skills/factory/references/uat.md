@@ -1,6 +1,6 @@
 # UAT for UI changes
 
-Read this when a PR changes what the owner sees: `tokscope/web/report.py` or `tokscope/web/dashboard.py` markup, CSS, or page script. `CLAUDE.md` makes it apply in and outside `/factory`.
+Read this when a PR changes what the owner sees: `tokscope/web/report.py` or `tokscope/web/dashboard/` markup, CSS, or page script. `CLAUDE.md` makes it apply in and outside `/factory`.
 
 1. Use a throwaway data home, not the owner's. Make an empty folder in the scratchpad and pass it as `TOKSCOPE_HOME`, with `--privacy redacted` as the README screenshots do. `tokscope serve` has no flag for another transcripts folder: it reads `~/.claude/projects` (read only) into the throwaway database. Never touch the owner's real data home or the running dashboard for a screenshot, and never run ingest against it.
 2. Start the app twice, each with its own `TOKSCOPE_HOME` and `bin/tokscope serve --no-open --port N`. Run main from a `git worktree`, and the PR branch from a checkout of that branch.

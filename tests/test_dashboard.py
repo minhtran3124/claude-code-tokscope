@@ -16,6 +16,16 @@ from unittest import mock
 from tokscope.core import skills
 from tokscope.integrations import managed
 from tokscope.web import dashboard, report
+from http.server import BaseHTTPRequestHandler
+from tokscope.core import privacy as core_privacy
+from tokscope.features import library as features_library
+from tokscope.features import projects as features_projects
+from tokscope.web.dashboard import shell
+from tokscope.web.dashboard.pages import overview as overview_page
+from tokscope.web.report import JS_BENCH
+from tokscope.web.report import JS_CORE
+from tokscope.web.report import JS_SESSIONS
+from tokscope.web.report import JS_TREND
 from tokscope.core.ingest import connect
 from tokscope.paths import ASSETS
 
@@ -69,7 +79,7 @@ class ServerTest(unittest.TestCase):
         conn.close()
         self.live = dashboard.Live(self.db, ASSETS / "phases.json", 60, projects_dir=self.tmp / "projects")
         (self.tmp / "projects").mkdir()
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), dashboard.BaseHTTPRequestHandler)
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), BaseHTTPRequestHandler)
         self.port = self.server.server_address[1]
         self.server.RequestHandlerClass = dashboard.handler(self.db, self.live, self.port, "full")
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
@@ -86,7 +96,7 @@ class ServerTest(unittest.TestCase):
 
     def test_the_version_poll_makes_no_redacted_copy(self):
         self.server.RequestHandlerClass = dashboard.handler(self.db, self.live, self.port, "redacted")
-        with mock.patch.object(dashboard.privacy, "redacted_copy", side_effect=AssertionError("copied")) as copy:
+        with mock.patch.object(core_privacy, "redacted_copy", side_effect=AssertionError("copied")) as copy:
             code, body = self.get("/api/version")
         self.assertEqual(code, 200)
         self.assertEqual(json.loads(body), {"stamp": self.live.stamp})
@@ -168,9 +178,9 @@ class ServerTest(unittest.TestCase):
         self.assertIn("catch(_){}", dashboard.LIB_JS)               # a malformed #v- hash leaves the rest of the script running
 
     def test_a_big_rise_reads_as_a_multiple(self):
-        self.assertIn(">×25</span>", dashboard._delta(2500, 100))
-        self.assertIn(">+900%</span>", dashboard._delta(1000, 100))
-        self.assertEqual(dashboard._delta(5, 0), "")                      # nothing before: no chip, no note
+        self.assertIn(">×25</span>", overview_page._delta(2500, 100))
+        self.assertIn(">+900%</span>", overview_page._delta(1000, 100))
+        self.assertEqual(overview_page._delta(5, 0), "")                      # nothing before: no chip, no note
 
     def test_a_partial_render_is_the_regions_only(self):
         _, body = self.get("/overview?partial=1")
@@ -208,7 +218,7 @@ class ServerTest(unittest.TestCase):
 
 class SessionsTableTest(unittest.TestCase):
     def test_the_table_groups_by_day_and_sizes_the_bar_by_tokens(self):
-        js = dashboard.JS_SESSIONS
+        js = JS_SESSIONS
         self.assertIn("function dayEl(", js)                       # a header per day: its sessions and tokens
         self.assertIn("session${n===1?'':'s'} · ${fmt(tk)} tokens", js)
         self.assertIn("const MAXT=Math.max(...S.map(s=>s.tokens),1)", js)    # the bar is tokens against the largest in the list
@@ -219,7 +229,7 @@ class SessionsTableTest(unittest.TestCase):
             self.assertIn(f">{col}</span>", head)
 
     def test_sort_is_three_buttons_and_the_tray_shows_from_two_picks(self):
-        js = dashboard.JS_SESSIONS
+        js = JS_SESSIONS
         for key in ("recent", "tokens", "agents"):
             self.assertIn(f"{key}:[", js)
         self.assertNotIn("sortSel", js)
@@ -229,7 +239,7 @@ class SessionsTableTest(unittest.TestCase):
 
     def test_the_table_script_has_no_literal_durations(self):
         import re
-        js = dashboard.JS_SESSIONS
+        js = JS_SESSIONS
         self.assertIn("cssVar('--t-layout')", js)
         self.assertIsNone(re.search(r"duration:\s*\d", js))
         self.assertIsNone(re.search(r"easing:'ease", js))
@@ -260,7 +270,7 @@ class SessionsTableTest(unittest.TestCase):
         self.assertIn("box-shadow:0 10px 30px -12px", CLASSIC_CSS)     # the Classic tray: tinted, soft shadow
 
     def test_a_hostile_session_id_is_escaped_everywhere_the_script_writes_html(self):
-        js = dashboard.JS_SESSIONS
+        js = JS_SESSIONS
         self.assertIn("<code class=sid8>${esc(s.id.slice(0,8))}</code>", js)
         self.assertIn("${esc(s.id.slice(0,8))}</span></th>", js)               # the compare header
         self.assertIn("<span class=d>${esc(when(s))}</span>", js)
@@ -281,7 +291,7 @@ class SessionsTableTest(unittest.TestCase):
         self.assertEqual(_sessions_json(conn, "WHERE 1", ())[0]["id"], bad)    # it stays data; esc() in the script makes it text
 
     def test_labels_say_subagents_not_children_and_a_session_without_a_date_is_handled(self):
-        js = dashboard.JS_SESSIONS
+        js = JS_SESSIONS
         head = js.split("function headEl", 1)[1].split("function dayEl", 1)[0]
         self.assertNotIn("children", head)
         self.assertIn("subagent runs", js)
@@ -321,7 +331,7 @@ class ScriptTest(unittest.TestCase):
         node = shutil.which("node")
         if not node:
             self.skipTest("node is not installed")
-        for name, js in {"report": dashboard.JS_CORE + dashboard.JS_SESSIONS + dashboard.JS_TREND + dashboard.JS_BENCH,
+        for name, js in {"report": JS_CORE + JS_SESSIONS + JS_TREND + JS_BENCH,
                          "dashboard": dashboard.DASH_JS, "library": dashboard.LIB_JS}.items():
             with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as f:
                 f.write(js)
@@ -334,7 +344,7 @@ class ScriptTest(unittest.TestCase):
         self.assertIn("setInterval(poll,2000)", dashboard.DASH_JS)
 
     def test_the_from_label_links_only_where_the_dashboard_serves_sessions(self):
-        js = dashboard.JS_SESSIONS
+        js = JS_SESSIONS
         # an orphan child links to its parent's full id, all time; the id is URL-encoded and the name escaped
         self.assertIn("DASH&&s.parent?`<a href=\"/sessions?range=all&amp;q=${encodeURIComponent(s.parent)}\"", js)
         self.assertIn("${esc(by)}</a>`:esc(by)", js)
@@ -342,7 +352,7 @@ class ScriptTest(unittest.TestCase):
         self.assertIn("const DASH=!!document.body.dataset.page", js)
 
     def test_a_parent_with_many_children_can_collapse_again(self):
-        js = dashboard.JS_SESSIONS
+        js = JS_SESSIONS
         self.assertIn("'Show fewer'", js)
         self.assertIn("setAttribute('aria-expanded'", js)
         self.assertIn("openKids.delete(id)", js)
@@ -438,7 +448,7 @@ class OverviewTest(unittest.TestCase):
         body = self.page({"range": ["7"]})
         self.assertEqual(body.count("Change = average per day in this range against the 1 day before it"), 1)
         self.assertIn('<span class="trend up">+43%</span>', body)         # 1000 a day against 700 in the one day of data before
-        window = dashboard._window(self.conn, dashboard.Filters({"range": ["7"]}))
+        window = overview_page._window(self.conn, dashboard.Filters({"range": ["7"]}))
         self.assertEqual(window["now"], 7)
         self.assertAlmostEqual(window["before"], 1, places=2)
 
@@ -471,8 +481,8 @@ class OverviewTest(unittest.TestCase):
 
     def test_pill_names_the_range_and_any_model_or_skill_and_the_library_only_the_project(self):
         f = dashboard.Filters({"range": ["7"], "model": ["claude-opus-5-5"], "skill": ["plan"]})
-        self.assertEqual(dashboard._filter_pill(self.conn, f, "overview"), "Last 7 days · all projects · opus-5-5 · plan")
-        self.assertEqual(dashboard._filter_pill(self.conn, f, "library"), "all projects")
+        self.assertEqual(shell._filter_pill(self.conn, f, "overview"), "Last 7 days · all projects · opus-5-5 · plan")
+        self.assertEqual(shell._filter_pill(self.conn, f, "library"), "all projects")
 
     def test_daily_chart_has_a_phone_copy_of_14_days_with_4_labels(self):
         for d in range(30):
@@ -516,15 +526,15 @@ class OverviewTest(unittest.TestCase):
         body = self.page()                                                 # 30 days; only 9.96 days of data before them
         self.assertIn("against the 9 days before it", body)
         self.assertIn('<span class="trend flat">+0%</span>', body)         # not -67%, which 10 days over 30 would read as
-        window = dashboard._window(self.conn, dashboard.Filters({}))
+        window = overview_page._window(self.conn, dashboard.Filters({}))
         self.assertEqual(window["now"], 30)
         self.assertAlmostEqual(window["before"], 9.96, places=1)
 
     def test_no_comparison_for_all_time_or_with_nothing_before_the_range(self):
         for d in range(20):
             self.add(d)
-        self.assertIsNone(dashboard._window(self.conn, dashboard.Filters({"range": ["all"]})))
-        self.assertIsNone(dashboard._window(self.conn, dashboard.Filters({})))        # 20 days of history, 30-day range
+        self.assertIsNone(overview_page._window(self.conn, dashboard.Filters({"range": ["all"]})))
+        self.assertIsNone(overview_page._window(self.conn, dashboard.Filters({})))        # 20 days of history, 30-day range
         body = self.page()
         self.assertNotIn("Change = average per day", body)
         self.assertNotIn("more than 7 days of history", body)                          # 20 days is more than 7: do not say otherwise
@@ -551,7 +561,7 @@ class OverviewTest(unittest.TestCase):
         self.assertEqual(typ["med"][24], typ["med"][10])
         self.assertLess(typ["p25"][10], typ["med"][10])
         self.assertGreater(typ["p75"][10], typ["med"][10])
-        self.assertEqual(dashboard._at_hour(typ["med"], 9.5), typ["med"][9] + (typ["med"][10] - typ["med"][9]) / 2)
+        self.assertEqual(overview_page._at_hour(typ["med"], 9.5), typ["med"][9] + (typ["med"][10] - typ["med"][9]) / 2)
 
     def test_a_typical_day_needs_more_than_7_active_days_not_calendar_days(self):
         day = lambda n: date(2026, 10, 1) + timedelta(days=n)             # noqa: E731
@@ -651,7 +661,7 @@ class OverviewTest(unittest.TestCase):
 
     def test_the_seven_day_average_counts_days_off_as_zero(self):
         rows = [("2026-10-01", 1000, 0.1, 1, 0, 0, 0, 1000), ("2026-10-07", 1000, 0.1, 1, 0, 0, 0, 1000)]
-        svg = dashboard._daily_stacked(rows, [], [])
+        svg = overview_page._daily_stacked(rows, [], [])
         wide = svg.split('<svg class="narrow"')[0]                          # the phone shows a second, narrow copy
         self.assertEqual(wide.count('<g class="d"'), 7)                     # days off are empty slots
         # wide chart: the baseline is y 218 (240 - pad_b 22) and the plot is 184 high (240 - 34 - 22)
@@ -661,7 +671,7 @@ class OverviewTest(unittest.TestCase):
     def test_the_y_axis_labels_the_gridlines_where_they_are(self):
         marks = {k: [0] * 25 for k in ("p25", "med", "p75")}
         marks["p75"] = [100] * 25
-        svg = dashboard._today_chart({**marks, "n": 9}, [(0, 0)], 1.0, 100)
+        svg = overview_page._today_chart({**marks, "n": 9}, [(0, 0)], 1.0, 100)
         self.assertIn(">105</text>", svg)                                   # top gridline = 1.05 x the largest value, labelled as such
 
     def test_local_hours_are_exact_in_a_half_hour_zone(self):
@@ -673,7 +683,7 @@ class OverviewTest(unittest.TestCase):
         self.conn.execute("INSERT INTO requests (session_id, request_key, ts, model, prompt_idx, input, output, cache_read, cache_write_5m, "
                           "cache_write_1h, cost_usd) VALUES ('s1','tz',?,'claude-opus-5-5',1,500,0,0,0,0,0.1)", (day.strftime("%Y-%m-%dT%H:%M:%S.000Z"),))
         self.conn.commit()
-        hours = dashboard._hours(self.conn, dashboard.Filters({}))
+        hours = overview_page._hours(self.conn, dashboard.Filters({}))
         local = day.astimezone()
         self.assertEqual((local.hour, local.minute), (6, 0))                # 00:30 UTC is 06:00 in Kolkata
         self.assertEqual(hours[local.date()][6], 500)
@@ -681,11 +691,11 @@ class OverviewTest(unittest.TestCase):
 
     def test_sidebar_counts_are_cached_and_follow_the_folded_projects(self):
         self.conn.commit()
-        with mock.patch.object(dashboard.library, "discover", return_value=[1, 2, 3]) as lib, \
-                mock.patch.object(dashboard.projects, "discover", return_value=[{"root": "/a"}, {"root": "/b"}, {"root": None}]):
-            dashboard._NAV_CACHE.clear()
-            first = dashboard._nav_counts(self.conn)
-            dashboard._nav_counts(self.conn)
+        with mock.patch.object(features_library, "discover", return_value=[1, 2, 3]) as lib, \
+                mock.patch.object(features_projects, "discover", return_value=[{"root": "/a"}, {"root": "/b"}, {"root": None}]):
+            shell._NAV_CACHE.clear()
+            first = shell._nav_counts(self.conn)
+            shell._nav_counts(self.conn)
         self.assertEqual((first["projects"], first["library"]), (2, 3))     # the Projects page's folded groups, benchmark rows left out
         self.assertEqual(lib.call_count, 1)                                 # the second render reads the cache
-        self.assertEqual(set(dashboard._nav_counts(self.conn, "numbers")), {"sessions"})
+        self.assertEqual(set(shell._nav_counts(self.conn, "numbers")), {"sessions"})

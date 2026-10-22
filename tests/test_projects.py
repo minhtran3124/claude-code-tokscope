@@ -9,6 +9,7 @@ from unittest import mock
 
 from tokscope.features import projects
 from tokscope.web import dashboard
+from tokscope.web.dashboard.pages import projects as projects_page
 from tokscope.core.ingest import connect
 
 NOW = datetime.now(timezone.utc)
@@ -109,7 +110,7 @@ class ProjectsTest(unittest.TestCase):
         self.assertTrue(rows[("Figma", "connector")]["disabled"])
         self.assertEqual(rows[("api", "local")]["secrets"], ["Authorization"])
         self.assertEqual(rows[("api", "project")]["target"], "api.example.com")  # user:password dropped from the URL
-        page = dashboard._project_view(self.app_group())
+        page = projects_page._project_view(self.app_group())
         self.assertNotIn("SECRET", page)
         self.assertNotIn("pw@", page)
 
@@ -125,7 +126,7 @@ class ProjectsTest(unittest.TestCase):
         self.assertEqual(rows[("docs", "project")]["status"], "⏸ Pending approval (run `claude` to approve)")
         self.assertEqual(rows[("Notion", "connector")]["flag"], "never used here")    # known from the check only
         self.assertEqual(rows[("Linear", "connector")]["status"], "✔ Connected")
-        page = dashboard._project_view(self.app_group())
+        page = projects_page._project_view(self.app_group())
         self.assertIn('class="st ok"><span class="pill">✔ Connected</span>', page)
         self.assertIn('class="st bad"><span class="pill">✘ Failed to connect</span>', page)
 
@@ -206,7 +207,7 @@ class ChangeTest(ProjectsTest):
             projects.remove(self.app, "nope", "local", self.cli)
 
     def test_the_page_offers_remove_only_where_claude_mcp_can_remove(self):
-        page = dashboard._project_view(self.app_group())
+        page = projects_page._project_view(self.app_group())
         self.assertIn('data-mcp-remove="api" data-scope="local"', page)
         self.assertIn('data-mcp-remove="docs" data-scope="user"', page)
         self.assertNotIn('data-mcp-remove="sentry"', page)

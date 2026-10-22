@@ -17,7 +17,7 @@ Spend reviewers only where they can find something. Before any review (in or out
 | Docs or rules only | `*.md`, `.claude/` | 1: consistency, so no contradiction or gap with `CLAUDE.md`, factory `SKILL.md`, `REVIEW.md`, and true statements about the code | No |
 | Tests only | `tests/` | 1: each test can fail, and tests the claim in its name | No |
 | Bug fix | `tokscope/` | 2: bugs (the fix covers the failing input and its neighbours, and a test proves it), history (it does not undo an earlier fix) | Yes, when it touches a High or Medium path |
-| UI change | `tokscope/web/report.py`, `tokscope/web/dashboard.py`, `tokscope/web/charts.py` markup, CSS, page script | 2: bugs (each template branch and state, JS ids, escaping), comments (rules in code comments, such as textContent only) | Yes, when it renders data, adds a form or adds script |
+| UI change | `tokscope/web/report.py`, `tokscope/web/dashboard/`, `tokscope/web/charts.py` markup, CSS, page script | 2: bugs (each template branch and state, JS ids, escaping), comments (rules in code comments, such as textContent only) | Yes, when it renders data, adds a form or adds script |
 | New feature | `tokscope/` plus tests | All 5: claude-md, bugs, history, prior-prs, comments | Yes |
 | Risky path | the High row of "Risk by path" | All 5, whatever the type | Yes |
 
@@ -36,14 +36,14 @@ Go up one step when the diff is large or a cheaper run missed something on this 
 - **The numbers lie:** wrong tokens, cost, dates, phase, skill or subagent attribution for a session, a double-counted transcript, or a session missing from the dashboard or report.
 - **Quota is spent nobody asked for:** something runs `claude -p` (bench, replay, optimize) without the owner starting it, runs several in parallel, or retries in a loop.
 - **It writes where it should not:** a write outside the tokscope data home (this repo's `data/`, `reports/` and `bench/` in a source checkout, else `TOKSCOPE_HOME`) and the bench/replay/optimize work folders, or to the owner's source files, `.git/` or `~/.claude/`. Ingest only reads `~/.claude/projects`.
-- **It opens to the network:** the dashboard's bind address in `dashboard.py` (`serve`) stops being `127.0.0.1`, or a POST route is reachable from another origin without the host, origin and token checks in `dashboard.py`.
+- **It opens to the network:** the dashboard's bind address in `dashboard/server.py` (`serve`) stops being `127.0.0.1`, or a POST route is reachable from another origin without the host, origin and token checks in `dashboard/server.py`.
 - **Private data leaks:** Claude session contents (prompts, paths, titles), `privacy.key`, or a token is logged, sent to a third party, written into a `--privacy redacted` or `numbers` output, or rendered without escaping.
 
 ## Risk by path
 
 | Risk | Paths |
 | --- | --- |
-| High | code that writes files or runs `claude -p` (`tokscope/experiments/bench.py`, `replay.py`, `optimize.py`), `bin/tokscope`, `setup.sh`, the `host`/`port` handling and the POST handlers in `tokscope/web/dashboard.py`, `tokscope/core/privacy.py` |
+| High | code that writes files or runs `claude -p` (`tokscope/experiments/bench.py`, `replay.py`, `optimize.py`), `bin/tokscope`, `setup.sh`, the `host`/`port` handling and the POST handlers in `tokscope/web/dashboard/server.py`, `tokscope/core/privacy.py` |
 | Medium | the rest of `tokscope/` (`ingest.py`, `charts.py`, `report.py`, `cli.py`, parsing, markup) |
 | Low | docs, `*.md`, `.claude/`, tests only |
 
