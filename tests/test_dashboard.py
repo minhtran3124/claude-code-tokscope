@@ -1,3 +1,4 @@
+import re
 import json
 import os
 import tempfile
@@ -10,7 +11,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
-from tokscope import dashboard, skills
+from tokscope import dashboard, report, skills
 from tokscope.ingest import connect
 from tokscope.paths import PACKAGE
 
@@ -363,6 +364,43 @@ class OverviewTest(unittest.TestCase):
         self.assertEqual(body.count("Change = average per day in this range against the 1 days before it"), 1)
         self.assertIn('<span class="trend up">+43%</span>', body)         # 1000 a day against 700 a day
         self.assertEqual(dashboard._window(self.conn, dashboard.Filters({"range": ["7"]})), {"now": 7, "before": 1})
+
+    def test_phone_menu_is_a_button_for_a_sheet_with_the_pages_filters_controls_and_privacy_note(self):
+        self.add(0)
+        body = self.page({"project": ["-home-u-app"]})
+        self.assertIn('id="menu-btn" aria-controls="sheet" aria-expanded="false"', body)
+        sheet = body.split('<div class="sheet" id="sheet">', 1)[1].split("</aside>", 1)[0]
+        self.assertIn('<nav class="toc"', sheet)                                   # the pages
+        self.assertIn('class="filters sheet-filters"', sheet)                      # the same filter form
+        self.assertIn("data-set-theme", sheet)                                      # the theme control
+        self.assertIn("Privacy level:", sheet)
+        self.assertIn("<span>Last 30 days · app</span>", body)                     # the filters as one pill
+        self.assertIn('aria-controls="sheet" aria-expanded="false" aria-haspopup="dialog"', body)
+        self.assertIn("e.key==='Escape'", dashboard.DASH_JS)                       # keyboard: Escape closes, Tab wraps, focus returns
+        self.assertIn("main.inert=on", dashboard.DASH_JS)
+
+    def test_pill_names_the_range_and_any_model_or_skill_and_the_library_only_the_project(self):
+        f = dashboard.Filters({"range": ["7"], "model": ["claude-opus-5-5"], "skill": ["plan"]})
+        self.assertEqual(dashboard._filter_pill(self.conn, f, "overview"), "Last 7 days · all projects · opus-5-5 · plan")
+        self.assertEqual(dashboard._filter_pill(self.conn, f, "library"), "all projects")
+
+    def test_daily_chart_has_a_phone_copy_of_14_days_with_4_labels(self):
+        for d in range(30):
+            self.add(d)
+        body = self.page()
+        wide, narrow = (re.search(rf'<svg class="{c}".*?</svg>', body, re.S).group(0) for c in ("wide", "narrow"))
+        self.assertEqual(narrow.count('<g class="d"'), 14)
+        self.assertEqual(wide.count('<g class="d"'), 30)
+        labels = re.findall(r'<text x="[\d.]+" y="194" text-anchor="\w+">([\d-]+)</text>', narrow)
+        self.assertEqual(len(labels), 4)
+
+    def test_phone_section_is_in_the_layout_sheet_and_the_static_report_has_no_menu(self):
+        from tokscope.layout import LAYOUT_DASH_CSS
+        block = LAYOUT_DASH_CSS.split("/* phone */", 1)[1].split("/* end phone */", 1)[0]
+        self.assertIn("@media (max-width:640px)", block)
+        self.assertIn("min-height:44px", block)
+        self.assertIn("prefers-reduced-motion:reduce", block)                      # the sheet fades, it does not travel
+        self.assertNotIn("menu-btn", report.JS)
 
     def test_a_window_before_shorter_than_the_range_is_compared_per_day(self):
         for d in range(40):                                                 # the same 1000 a day for 40 days

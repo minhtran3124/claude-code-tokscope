@@ -402,22 +402,34 @@ def _version_marks(conn, f, first, last):
 
 def _daily_stacked(rows, changes, versions):
     """Tokens per day, main thread under subagents in each bar; a dashed line marks a skill version change (or a recorded
-    config change), the mustard line is the 7-day average of the day's total."""
+    config change), the mustard line is the 7-day average of the day's total. A second copy of the chart, the last 14 days
+    on a narrow canvas with 4 day labels, is what a phone shows (layout.py /* phone */ swaps the two)."""
     if not rows:
         return "<p class='note'>No data.</p>"
+    legend = ('<div class="legend"><span class="key"><i></i>Main thread</span><span class="key"><i class="a"></i>Subagents</span>'
+              '<span class="key"><i class="ln"></i>7-day average</span>'
+              + ('<span class="key"><i class="dash"></i>Skill version changed</span>' if versions else "") + "</div>")
+    return (legend + _daily_svg(rows, changes, versions, 1100, 240, 56, 8, "wide")
+            + _daily_svg(rows[-14:], changes, versions, 340, 200, 44, 4, "narrow"))
+
+
+def _daily_svg(rows, changes, versions, w, h, pad_l, labels, cls):
     days = [(d, t or 0, m or 0) for d, t, _u, _s, _o, _r, _c, m in rows]
-    w, h, pad_l, pad_b, pad_t = 1100, 240, 56, 22, 34
+    pad_b, pad_t = 22, 34
     top = max(t for _, t, _ in days) or 1
     step = (w - pad_l) / len(days)
     bw = max(2, step - 2)
     index = {d: i for i, (d, _t, _m) in enumerate(days)}
     ph = h - pad_t - pad_b
-    out = [f'<svg viewBox="0 0 {w} {h}" width="100%" role="img" aria-label="Tokens per day, main thread and subagents">'
+    out = [f'<svg class="{cls}" viewBox="0 0 {w} {h}" width="100%" role="img" aria-label="Tokens per day, main thread and subagents">'
            f'<line class="guide" x1="0" x2="0" y1="{pad_t}" y2="{h - pad_b}"/>']
     for frac in (0, 0.5, 1):
         y = pad_t + ph * (1 - frac)
         out.append(f'<line class="g" x1="{pad_l}" x2="{w}" y1="{y:.1f}" y2="{y:.1f}"/>'
                    f'<text x="{pad_l - 6}" y="{y + 4:.1f}" text-anchor="end">{_tok(top * frac)}</text>')
+    # labels: every n-th day on the wide chart; `labels` days spread from the first to the last on the narrow one
+    narrow = cls == "narrow"
+    marked = {round(k * (len(days) - 1) / (labels - 1)) for k in range(labels)} if narrow and len(days) >= labels else set()
     for i, (day, total, main) in enumerate(days):
         x = pad_l + i * step
         sub = total - main
@@ -427,8 +439,10 @@ def _daily_stacked(rows, changes, versions):
         out.append(f'<g class="d" data-tip="{tip}"><rect class="hit" x="{x:.1f}" y="{pad_t}" width="{step:.1f}" height="{ph}"/>'
                    f'<rect class="m" x="{x:.1f}" y="{h - pad_b - hm:.1f}" width="{bw:.1f}" height="{hm:.1f}"/>'
                    + (f'<rect class="m a" x="{x:.1f}" y="{h - pad_b - hm - hs:.1f}" width="{bw:.1f}" height="{hs:.1f}"/>' if hs > 0 else "") + "</g>")
-        if i % max(1, len(days) // 8) == 0:
-            out.append(f'<text x="{x + bw / 2:.1f}" y="{h - 6}" text-anchor="middle">{day[5:]}</text>')
+        if (i in marked) if narrow else i % max(1, len(days) // labels) == 0:
+            anchor = "start" if marked and i == min(marked) else "end" if marked and i == max(marked) else "middle"
+            lx = x if anchor == "start" else x + bw if anchor == "end" else x + bw / 2
+            out.append(f'<text x="{lx:.1f}" y="{h - 6}" text-anchor="{anchor}">{day[5:]}</text>')
     vals = [t for _, t, _ in days]
     pts = []
     for i in range(len(days)):
@@ -438,19 +452,17 @@ def _daily_stacked(rows, changes, versions):
         out.append(f'<polyline class="ma" pathLength="1" points="{" ".join(pts)}"/>')
     # a change on a day without requests sits on the next day that has bars
     nxt = lambda day: next((i for d, i in sorted(index.items()) if d >= day), None)  # noqa: E731
-    marks = [(i, f"{charts.short(sk, 18)} {v[:6]}", f"<b>{html.escape(sk)}</b> changed<br>version {v[:6]}{' v' + html.escape(lbl) if lbl else ''}")
-             for day, sk, v, lbl in versions if (i := nxt(day)) is not None]
+    short = 9 if narrow else 18
+    marks = [(i, f"{charts.short(sk, short)} {v[:6]}", f"<b>{html.escape(sk)}</b> changed<br>version {v[:6]}{' v' + html.escape(lbl) if lbl else ''}")
+             for day, sk, v, lbl in versions if (i := nxt(day)) is not None and (not narrow or day >= days[0][0])]
     marks += [(index[at[:10]], f"#{cid}", f"<b>change #{cid}</b><br>{html.escape(note)}") for cid, at, note, *_ in changes if at[:10] in index]
     for n, (i, text, tip) in enumerate(sorted(marks)):
         x = pad_l + i * step + bw / 2
-        end = x > w - 150
+        end = x > w - (110 if narrow else 150)
         out.append(f'<g class="vmark" data-tip="{html.escape(tip)}"><line class="chg" x1="{x:.1f}" x2="{x:.1f}" y1="{pad_t - 8 - 12 * (n % 2)}" y2="{h - pad_b}"/>'
                    f'<text class="chg-l" x="{x + (-4 if end else 4):.1f}" y="{pad_t - 12 * (n % 2) - 12}" text-anchor="{"end" if end else "start"}">{html.escape(text)}</text></g>')
     out.append("</svg>")
-    legend = ('<div class="legend"><span class="key"><i></i>Main thread</span><span class="key"><i class="a"></i>Subagents</span>'
-              '<span class="key"><i class="ln"></i>7-day average</span>'
-              + ('<span class="key"><i class="dash"></i>Skill version changed</span>' if versions else "") + "</div>")
-    return legend + "".join(out)
+    return "".join(out)
 
 
 def page_overview(conn, f):
@@ -1393,6 +1405,23 @@ DASH_JS = """
 document.querySelectorAll('form.filters').forEach(fm=>fm.addEventListener('submit',e=>{e.preventDefault();const q=new URLSearchParams();
   fm.querySelectorAll('select').forEach(x=>{if(x.value&&!(x.name==='range'&&x.value==='30'))q.set(x.name,x.value)});
   location.href=fm.getAttribute('action')+(q.toString()?'?'+q:'')}));
+// phone menu: the Menu button and the filter pill open one sheet. While it is open the page behind is inert, focus moves
+// into the sheet and wraps there, Escape closes it, and focus goes back to the control that opened it
+(()=>{const sheet=document.getElementById('sheet'),bar=document.getElementById('menu-btn'),main=document.querySelector('main'),
+  ctl=[...document.querySelectorAll('[aria-controls=sheet]')],phone=matchMedia('(max-width:640px)');let back=null;
+  if(!sheet||!bar)return;
+  const focusable=()=>[bar,...sheet.querySelectorAll('a[href],button,select,input,[tabindex]:not([tabindex="-1"])')].filter(e=>!e.disabled&&e.getClientRects().length);
+  const set=on=>{sheet.classList.toggle('open',on);document.documentElement.classList.toggle('menu-open',on);ctl.forEach(b=>b.setAttribute('aria-expanded',on));
+    main.inert=on;if(on){sheet.setAttribute('role','dialog');sheet.setAttribute('aria-modal','true');sheet.setAttribute('aria-label','Menu')}
+    else['role','aria-modal','aria-label'].forEach(a=>sheet.removeAttribute(a))};
+  const open=from=>{back=from;set(true);requestAnimationFrame(()=>(sheet.querySelector('.toc a.on')||sheet.querySelector('a,button')).focus())};
+  const close=(restore=true)=>{if(!sheet.classList.contains('open'))return;set(false);if(restore&&back)back.focus();back=null};
+  ctl.forEach(b=>b.addEventListener('click',()=>sheet.classList.contains('open')?close():open(b)));
+  document.addEventListener('keydown',e=>{if(!sheet.classList.contains('open'))return;
+    if(e.key==='Escape'){e.preventDefault();close()}
+    else if(e.key==='Tab'){const f=focusable(),i=f.indexOf(document.activeElement);
+      if(e.shiftKey&&i<=0){e.preventDefault();f[f.length-1].focus()}else if(!e.shiftKey&&(i<0||i===f.length-1)){e.preventDefault();f[0].focus()}}});
+  phone.addEventListener('change',e=>{if(!e.matches)close(false)})})();
 const freshEl=document.getElementById('fresh'),page=document.body.dataset.page;let stamp=document.body.dataset.stamp,seenAt=Date.now();
 const ago=t=>{const s=Math.round((Date.now()-t)/1000);return s<60?'just now':s<3600?Math.round(s/60)+' min ago':Math.round(s/3600)+' h ago'};
 function fresh(ok){freshEl.classList.toggle('stale',!ok);freshEl.lastChild.textContent=ok?' live · updated '+ago(seenAt):' offline · '+ago(seenAt)}
@@ -1458,6 +1487,18 @@ def _nav_counts(conn):
     return out
 
 
+def _filter_pill(conn, f, name):
+    """The filters as one line for a phone: "Last 30 days · all projects", then any model or skill that is set."""
+    proj = "all projects"
+    if f.project:
+        row = conn.execute("SELECT max(cwd) FROM sessions WHERE project = ?", (f.project,)).fetchone()
+        proj = Path(row[0] or f.project).name or f.project
+    parts = ([] if name == "library" else [RANGES[f.range]]) + [proj]
+    if name != "library":
+        parts += [x for x in (f.model.removeprefix("claude-"), f.skill) if x]
+    return " · ".join(parts)
+
+
 def _range_dates(f):
     """The exact days the applied range covers, in local time, shown after Apply."""
     if not f.days:
@@ -1498,14 +1539,22 @@ def render(conn, name, qs, stamp, level="full", token=""):
            f'<button type="submit" class="chip">Apply</button>{reset}</form>')
     chip = "" if level == "full" else f'<span class="privacy" role="note" title="Names and text follow the {level} level"><b>{level}</b></span>'
     dates = _range_dates(f) if bar and name != "library" else ""
+    pill = sheet_filters = ""
+    if bar:  # a phone shows the filters as one pill that opens the menu sheet, where the same form sits
+        sheet_filters = (bar.replace('<form class="filters"', '<form class="filters sheet-filters" aria-label="Filters"', 1)
+                         .replace("<label", '<p class="ctl-l">Filters</p><label', 1))
+        pill = (f'<button type="button" class="chip pill-btn" aria-controls="sheet" aria-expanded="false" aria-haspopup="dialog">'
+                f'<span>{html.escape(_filter_pill(conn, f, name))}</span><span class="pill-i" aria-hidden="true"></span></button>')
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>tokscope · {PAGES[name]}</title>{favicon_link()}<meta name="tokscope-token" content="{token}"><script>document.documentElement.classList.add('js');
 try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElement.dataset.theme=t}}catch(_){{}}</script>
 <style>{fonts.face_css(False)}</style><style id="layout">{LAYOUT_CSS}{LAYOUT_DASH_CSS}</style><style id="skin-ink">{CSS}{DASH_CSS}</style><style id="skin-classic" media="not all">{CLASSIC_CSS}{CLASSIC_DASH_CSS}</style>{SKIN_APPLY}</head><body data-page="{name}" data-stamp="{html.escape(stamp)}"><div id="progress"></div><div class="layout">
-<aside class="side" aria-label="Pages"><div class="brand">{MARK}tokscope</div><nav class="toc">{nav}</nav>
-{SIDE_CONTROLS}</aside><main>
+<aside class="side" aria-label="Pages"><div class="brand">{MARK}tokscope</div>
+<button type="button" class="chip menu-btn" id="menu-btn" aria-controls="sheet" aria-expanded="false"><span class="menu-i" aria-hidden="true"></span>Menu</button>
+<div class="sheet" id="sheet"><nav class="toc" aria-label="Pages">{nav}</nav>{sheet_filters}
+{SIDE_CONTROLS}<p class="sheet-priv note">Privacy level: <b>{level}</b>. Names and text follow it.</p></div></aside><main>
 <header class="dash-head"><h1>{PAGES[name]}</h1>{chip}<span class="fresh" id="fresh"><span class="dot"></span> live</span>
-{bar}{dates}</header>
+{bar}{pill}{dates}</header>
 {body}
 </main></div><div id="tip"></div><div id="toast" role="status" aria-live="polite"></div>
 <dialog class="keys" id="keys"><h3 style="margin:0">Keyboard shortcuts</h3><dl>

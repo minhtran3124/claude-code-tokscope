@@ -149,10 +149,6 @@ transition:transform calc(var(--t-state)*.7) var(--ease-exit),opacity calc(var(-
 transition:transform var(--t-layout) var(--ease-expo),opacity var(--t-state) var(--ease),visibility var(--t-state)}
 #sessions .pickbar #pick-hint{font-variant-numeric:tabular-nums;white-space:nowrap}
 body.picking .totop{bottom:96px}
-@media (max-width:640px){#session-list{--scols:24px minmax(0,1fr) 64px 14px}
-#session-list :is(.d,.sk,.n,.track,.sid8,.from){display:none}
-#session-list .srow>summary .t{padding-left:calc(var(--depth,0)*14px)}
-#session-list .btn.kids-more{margin-left:calc(34px + var(--depth)*14px)}}
 @media (prefers-reduced-motion:reduce){#sessions .pickbar,#sessions .pickbar.show{transform:none}}
 /* end sessions */
 /* reduced motion: opacity and colour stay, travel and scale go. A keyframes set below replaces the one above, so each
@@ -278,7 +274,6 @@ pointer-events:none;animation:chip-in var(--t-state) var(--ease) both}
 .strip .kpi:first-child .spark{max-width:220px}
 .strip-note{margin:0 0 16px}
 @media (max-width:1200px){.kpis.strip{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media (max-width:560px){.kpis.strip{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* biggest movers */
 .cause{margin:0 0 10px}
 .movers{width:100%}
@@ -286,7 +281,6 @@ pointer-events:none;animation:chip-in var(--t-state) var(--ease) both}
 .movers :is(th,td):nth-child(2){text-align:left}
 .movers :is(th,td):is(:nth-child(3),:nth-child(4),:nth-child(5)){text-align:right;white-space:nowrap}
 .movers td{vertical-align:baseline}
-@media (max-width:560px){.movers :is(th,td):nth-child(2){display:none}.movers th,.movers td{padding:5px 4px}.movers td:first-child{overflow-wrap:break-word;min-width:5.5em}}
 .tag{display:inline-block;font-size:11px;font-weight:500;padding:1px 8px;border-radius:999px;background:var(--chip);color:var(--ink2)}
 #trend .legend{margin:0 0 6px}
 svg rect.m.a{fill:var(--agent)}
@@ -316,6 +310,116 @@ svg .vmark{cursor:default}
 .segctl .chip:last-child{border-radius:0 999px 999px 0}
 #keys-btn{align-self:flex-start}
 /* end overview */
+/* phone */
+/* Under 640 px the sidebar is a 52 px top bar. Its Menu button, or the filter pill, opens a full sheet with the pages, the
+   filters, the theme controls and the privacy note (script in DASH_JS). On a wider screen the sheet is display:contents, so the
+   sidebar looks as before, and the phone-only parts (button, pill, second filter form, note) stay hidden. The skin sheets load
+   after this one and `.chip` resets everything (all:unset), so rules on a chip or a skin-styled part start with `body` or
+   `.layout` to win on specificity. Sizes are layout; colours and outlines read tokens, and Classic restyles only the look. */
+body .menu-btn,body .pill-btn,.sheet-filters,.sheet-priv,.menu-i,.pill-i{display:none}
+.sheet{display:contents}
+#trend svg.narrow{display:none}
+@media (max-width:640px){
+html.menu-open{overflow:hidden}
+body .chip{box-sizing:border-box}
+.layout{display:block}
+.layout>.side{position:sticky;top:0;height:52px;padding:0 6px 0 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;
+overflow:visible;border-right:0;border-bottom:1px solid var(--edge);z-index:40}
+.layout .brand{display:flex;margin:0}
+body .menu-btn{display:inline-flex;align-items:center;gap:8px;min-height:44px;min-width:44px;padding:0 16px;font-size:14px}
+.menu-i{display:block;width:16px;height:12px;background:linear-gradient(currentColor 0 0) 0 0/100% 2px no-repeat,linear-gradient(currentColor 0 0) 0 50%/100% 2px no-repeat,linear-gradient(currentColor 0 0) 0 100%/100% 2px no-repeat}
+.menu-btn[aria-expanded=true] .menu-i{background:linear-gradient(currentColor 0 0) 0 50%/100% 2px no-repeat}
+.layout .sheet{display:block;position:fixed;top:52px;left:0;right:0;bottom:0;overflow-y:auto;overscroll-behavior:contain;background:var(--page);padding:8px 16px 40px;
+opacity:0;visibility:hidden;transform:translateY(-8px);
+transition:opacity calc(var(--t-layout)*.7) var(--ease-exit),transform calc(var(--t-layout)*.7) var(--ease-exit),visibility calc(var(--t-layout)*.7)}
+.layout .sheet.open{opacity:1;visibility:visible;transform:none;
+transition:opacity var(--t-layout) var(--ease),transform var(--t-layout) var(--ease-expo),visibility calc(var(--t-fast)*0)}
+.sheet .toc{flex-direction:column;white-space:normal;gap:2px}
+.sheet .toc a{min-height:48px;padding:0 12px;font-size:16px}
+.sheet .toc a .cnt{display:inline}
+.sheet .sub-toc{display:none}
+.sheet .sheet-filters{display:flex;flex-direction:column;align-items:stretch;gap:12px;margin:20px 0 0}
+.sheet-filters .ctl-l{margin:0}
+.sheet-filters .fl{gap:4px}
+.sheet-filters select{width:100%;max-width:none;min-height:44px;font-size:16px}
+.sheet-filters .chip{align-self:flex-start;justify-content:center;min-height:44px;min-width:44px;padding:0 20px;font-size:14px}
+.sheet-filters a{display:inline-flex;align-items:center;min-height:44px}
+.sheet .side-foot.ctls{margin:20px 0 0}
+.sheet .segctl .chip{min-height:44px;font-size:14px}
+.sheet #keys-btn{display:none}
+.sheet .sheet-priv{display:block;margin:20px 0 0}
+/* the header: the title row, then the filters as one pill that opens the sheet */
+.dash-head{gap:8px 12px}
+.dash-head>.filters{display:none}
+body .pill-btn{display:flex;flex:1 0 100%;align-items:center;justify-content:space-between;gap:10px;min-height:44px;padding:0 16px;font-size:14px;text-align:left}
+.pill-btn>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill-i{display:block;flex:none;width:8px;height:8px;border:solid currentColor;border-width:0 2px 2px 0;transform:rotate(45deg) translate(-2px,-2px)}
+.range-dates{flex-basis:100%;text-align:left}
+main{padding:16px 12px 72px}
+/* range totals: two columns, Tokens across both, each tile keeps its sparkline */
+.kpis.strip{grid-template-columns:repeat(2,minmax(0,1fr))}
+.strip .kpi:first-child{grid-column:1/-1}
+.strip .kpi:last-child:nth-child(even){grid-column:1/-1}
+.strip .kpi .spark{max-width:none;height:36px}
+/* tables become two-line rows: the name on the first line, its numbers on the second */
+.movers tr:has(th),.spenders tr:has(th){display:none}
+.movers,.movers tbody,.spenders table,.spenders tbody{display:block}
+.movers tr{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:12px;align-items:baseline;padding:8px 0;border-top:1px solid var(--grid)}
+.movers td,.spenders td{border:0}
+.movers td{padding:0;text-align:left;white-space:normal}
+.movers td:first-child{grid-column:1/3;overflow-wrap:break-word;font-weight:600}
+.movers td:last-child{grid-column:3;grid-row:1;text-align:right;white-space:nowrap}
+.movers td:nth-child(2){grid-column:1;grid-row:2}
+.movers td:nth-child(3){grid-column:2;grid-row:2;white-space:nowrap}
+.movers td:nth-child(4){grid-column:3;grid-row:2;text-align:right;white-space:nowrap}
+.movers td:nth-child(3)::before{content:"Before ";color:var(--muted)}
+.movers td:nth-child(4)::before{content:"Now ";color:var(--muted)}
+.spenders tr{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;align-items:baseline;padding:2px 0;border-top:1px solid var(--grid)}
+.spenders td{padding:0;white-space:nowrap}
+.spenders .cols3 td:first-child{grid-column:1/-1;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:break-word;text-align:left}
+.spenders td:first-child a,.spenders td:first-child span{display:inline-flex;align-items:center;min-height:44px}
+.spenders td:nth-child(2){text-align:left}
+.spenders .bar{justify-content:flex-start}
+.spenders .bar i{display:none}
+.spenders td:nth-child(3){text-align:right;padding-bottom:6px}
+.spenders td:nth-child(2){padding-bottom:6px}
+/* daily chart: a phone shows the 14-day chart with 4 labels, not the wide one */
+#trend svg.wide{display:none}
+#trend svg.narrow{display:block}
+/* sessions: two lines. Title and tokens, then time, top skill and the split bar */
+#session-list{--scols:44px auto minmax(0,1fr) 72px 24px}
+#session-list .shead[aria-hidden]{display:none}
+#session-list .srow>summary{height:auto;min-height:56px;padding:6px 6px 6px 0;gap:2px 8px}
+#session-list .srow>summary>input{grid-column:1;grid-row:1/3}
+#session-list .srow>summary .t{grid-column:2/4;grid-row:1;padding-left:calc(var(--depth,0)*14px)}
+#session-list .srow>summary .r{grid-column:4;grid-row:1}
+#session-list .srow>summary .cv{grid-column:5;grid-row:1/3}
+#session-list .srow>summary .d{grid-column:2;grid-row:2;font-size:12px}
+#session-list .srow>summary .sk{grid-column:3;grid-row:2;font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+#session-list .srow>summary .track{grid-column:4;grid-row:2}
+#session-list .srow>summary :is(.d,.sk,.track,.split){display:block}
+#session-list :is(.n,.sid8,.from){display:none}
+#session-list .btn.kids-more{margin-left:calc(44px + var(--depth)*14px);min-height:44px}
+#session-list .srow>summary>input{appearance:none;-webkit-appearance:none;width:44px;height:44px;margin:0;display:grid;place-items:center}
+#session-list .srow>summary>input::before{content:"";width:18px;height:18px;border:var(--line-w,1px) solid var(--ink);border-radius:4px;background:var(--surface)}
+#session-list .srow>summary>input:checked::before{background:var(--mark) linear-gradient(135deg,transparent 42%,var(--surface) 42% 52%,transparent 52%);}
+#session-list .srow>summary>input:focus-visible{outline:2px solid var(--ink);outline-offset:-4px}
+#sessions .tools .seg .chip,#sessions .tools input[type=search]{min-height:44px}
+#sessions .pickbar .primary,#sessions .pickbar .btn{min-height:44px}
+/* touch targets: 44 px */
+body .btn,body .primary,body .chip:not(.menu-btn):not(.pill-btn),main select,main input[type=search],main input[type=text]{min-height:44px}
+main .latest a,main td a,main li>a{display:inline-flex;align-items:center;min-height:44px}
+main details>summary{min-height:44px}
+main .totop{width:44px;height:44px}
+/* a long word wraps whole at a space or a hyphen; only a word wider than the line breaks, and then at the line's edge */
+main :is(td,li,p,h1,h2,h3,b,.tt){overflow-wrap:break-word;hyphens:manual}
+}
+@media (max-width:640px) and (prefers-reduced-motion:reduce){
+/* the sheet and its button fade, they do not travel */
+html .layout .sheet,html .layout .sheet.open{transform:none;transition:opacity var(--t-state) var(--ease),visibility var(--t-state)}
+html .layout .sheet.open{transition:opacity var(--t-state) var(--ease),visibility calc(var(--t-fast)*0)}
+}
+/* end phone */
 @media (prefers-reduced-motion:reduce){
 @keyframes ring{from{opacity:.35}}
 @keyframes chip-in{from{opacity:0}}
