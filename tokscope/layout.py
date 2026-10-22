@@ -184,10 +184,6 @@ main{width:100%;min-width:0}
 .dash-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin:0 0 14px}
 .dash-head h1{margin:0}
 .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-left:auto}
-/* the report's .kpis is a content-sized flex row; here the six tiles fill the width, edge to edge with .cols2 below */
-[data-region=kpis]>.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px}
-@media (max-width:1200px){[data-region=kpis]>.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media (max-width:560px){[data-region=kpis]>.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .spark{display:block;margin-top:4px}
 /* spender cards share one width: two to a row on a desktop (the third starts the next row), one on a phone;
    wide enough that a long name (compound-engineering:ce-simplify-code) fits on one line, and it wraps whole if not */
@@ -248,6 +244,78 @@ pointer-events:none;animation:chip-in var(--t-state) var(--ease) both}
 /* #056 Toast: "New data · reload" on the pages that do not refresh themselves */
 #newdata{animation:toast-in var(--t-layout) var(--ease-expo) both}
 @keyframes toast-in{from{opacity:0;transform:translateY(12px)}}
+/* overview */
+/* Today: the answer card. Numbers and the typical-day line on the left, the chart on the right; the latest session below.
+   Without a typical day (7 active days or fewer) the numbers take the full width. */
+.today-top{display:grid;grid-template-columns:minmax(0,1fr);gap:12px 28px;align-items:stretch}
+.today-top.has-chart{grid-template-columns:minmax(0,1fr) minmax(0,1.5fr)}
+@media (max-width:760px){.today-top.has-chart{grid-template-columns:minmax(0,1fr)}.today-nums{gap:10px 20px}}
+.today-main{display:flex;flex-direction:column;justify-content:center;gap:14px;min-width:0}
+.today-nums{margin:0;gap:12px 28px}
+.today-top:not(.has-chart) .today-nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.today-nums b{font-size:28px}
+.vs{margin:0;font-size:15px;line-height:1.5}
+.vs .trend{margin-right:4px}
+.vs .note{display:inline;margin:0}
+.today-chart{min-width:0;display:flex;flex-direction:column;gap:4px}
+.today-chart svg{display:block;overflow:visible}
+.tmed{fill:none;stroke:var(--ink2);stroke-width:1.5;stroke-dasharray:5 4}
+.tline{fill:none;stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+.tlegend{margin:0}
+.tk{display:inline-block;width:14px;height:10px;border-radius:2px;background:color-mix(in oklch,var(--mark) 24%,transparent)}
+.tk.med{height:0;border-top:2px dashed var(--ink2);background:none;border-radius:0}
+.tk.now{height:3px;background:var(--mark-ink)}
+.tk.band{background:var(--tint)}
+.latest{margin-top:14px}
+/* range totals: one container, 1px rules between the tiles (the grid gap shows the container's colour) */
+.kpis.strip{display:grid;grid-template-columns:1.5fr repeat(5,minmax(0,1fr));gap:1px;background:var(--grid);overflow:hidden;margin:0 0 6px}
+.strip .kpi{display:flex;flex-direction:column;gap:2px;min-width:0;border:0;border-radius:0;padding:14px 16px;background:var(--surface)}
+.strip .kpi b{order:1}
+.strip .kpi .dl{order:2;margin:0}
+.strip .kpi .spark{order:3;margin-top:auto;padding-top:6px;width:100%;max-width:140px;height:auto}
+.strip .kpi b{font-size:22px}
+.strip .kpi:first-child b{font-size:28px}
+.strip .kpi:first-child .spark{max-width:220px}
+.strip-note{margin:0 0 16px}
+@media (max-width:1200px){.kpis.strip{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:560px){.kpis.strip{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* biggest movers */
+.cause{margin:0 0 10px}
+.movers{width:100%}
+.movers th:first-child,.movers td:first-child{text-align:left;white-space:normal;overflow-wrap:anywhere}
+.movers :is(th,td):nth-child(2){text-align:left}
+.movers :is(th,td):is(:nth-child(3),:nth-child(4),:nth-child(5)){text-align:right;white-space:nowrap}
+.movers td{vertical-align:baseline}
+@media (max-width:560px){.movers :is(th,td):nth-child(2){display:none}.movers th,.movers td{padding:5px 4px}.movers td:first-child{overflow-wrap:break-word;min-width:5.5em}}
+.tag{display:inline-block;font-size:11px;font-weight:500;padding:1px 8px;border-radius:999px;background:var(--chip);color:var(--ink2)}
+#trend .legend{margin:0 0 6px}
+svg rect.m.a{fill:var(--agent)}
+.key i.dash{height:0;width:14px;border-top:2px dashed var(--agent-ink);background:none;border-radius:0;box-shadow:none}
+svg .vmark{cursor:default}
+/* top spenders: one container, three columns split by 1px rules */
+.spenders .cols3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0}
+.spenders .col{padding:0 18px;border-left:1px solid var(--grid);min-width:0}
+.spenders .col:first-child{padding-left:0;border-left:0}
+.spenders .col:last-child{padding-right:0}
+.spenders .col h3{margin-top:4px}
+.spenders .cols3 td:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal}
+@media (max-width:900px){.spenders .cols3{grid-template-columns:1fr}.spenders .col{padding:12px 0 0;border-left:0;border-top:1px solid var(--grid)}
+.spenders .col:first-child{border-top:0;padding-top:0}}
+/* header: a label over each filter, the privacy level as a chip beside the title, the range dates after Apply */
+.fl{display:flex;flex-direction:column;gap:3px}
+.filters{align-items:flex-end}
+.dash-head .privacy{display:inline-flex;align-items:center;margin:0;padding:2px 10px;border-radius:999px;font-size:12px}
+.range-dates{flex:1 0 100%;margin:0;text-align:right}
+/* sidebar: counts beside the pages; Theme and Design as segmented controls */
+.side-foot.ctls{display:flex;flex-direction:column;align-items:stretch;gap:12px;margin:18px 0 0 4px}
+.ctl{display:flex;flex-direction:column;gap:4px}
+.segctl{display:flex}
+.segctl .chip{flex:1;justify-content:center;border-radius:0;padding:5px 8px}
+.segctl .chip+.chip{margin-left:calc(-1*var(--line-w,1px))}
+.segctl .chip:first-child{border-radius:999px 0 0 999px}
+.segctl .chip:last-child{border-radius:0 999px 999px 0}
+#keys-btn{align-self:flex-start}
+/* end overview */
 @media (prefers-reduced-motion:reduce){
 @keyframes ring{from{opacity:.35}}
 @keyframes chip-in{from{opacity:0}}

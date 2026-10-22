@@ -9,15 +9,17 @@ updated_by: claude   # claude | manual
 # claude-code-tokscope — Status
 
 ## Summary
+The ink redesign and headless child sessions are on `main`; the Classic/Ink switch is permanent (#18) and the Library holds the skills (#22). Issue #23 (dashboard UI/UX update) is under way: steps 0 (one layout sheet), 1 (motion system) and 2 (answer-first Overview) are open as stacked PRs.
 The ink redesign and headless child sessions are on `main`; the Classic/Ink switch is permanent (#18) and the Library holds the skills (#22). Issue #23 (dashboard UI/UX update) is under way: steps 0 (layout sheet), 1 (motion system) and 3 (dense Sessions table) are open as stacked PRs.
 
 ## Next step
-Review and merge the step 0 and step 1 PRs of #23, then start step 2 (Overview). Moving the remaining look rules of Ink and Classic into tokens is a follow-up in that PR.
+Review and merge the step 0, 1 and 2 PRs of #23, then continue with steps 3 to 5 (Sessions, Breakdowns, phone). Moving the remaining look rules of Ink and Classic into tokens is a follow-up in that PR.
 
 ## Blockers
 - GitHub Actions jobs do not start: account payment or spending limit (see Settings > Billing).
 
 ## Recent
+- 2026-10-22: #23 step 2: answer-first Overview (typical-day line and band, one KPI strip with per-day deltas, biggest movers, stacked daily tokens, one spenders container, labelled filters, segmented sidebar controls) (PR open).
 - 2026-10-22: #23 step 4: Breakdowns sections show their finding in the summary line (share bar, empty-state hints); PR open on #26.
 - 2026-10-22: #23 step 3: Sessions is a 44 px table grouped by day, with a sort control and a compare tray (PR open, stacked on step 1).
 - 2026-10-22: #23 step 1: motion tokens, first-paint-only entrances, delta chip instead of count-up, one-ring live dot, per-rule reduced motion (PR open).
