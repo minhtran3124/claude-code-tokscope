@@ -100,7 +100,7 @@ def _spark(values, w=96, h=22):
     return f'<svg class="spark" viewBox="0 0 {w} {h}" width="{w}" height="{h}" aria-hidden="true"><polyline points="{pts}"/></svg>'
 
 
-MIN_HISTORY_DAYS = 7  # a change against the window before, and a typical day, need more than this many days of data
+MIN_HISTORY_DAYS = 7  # a change chip needs more than this many elapsed days of history; a typical day this many active days
 
 
 def _delta(now, before):
@@ -132,9 +132,9 @@ def _history_days(conn, f):
 
 
 def _window(conn, f):
-    """{"now": days of data in the range, "before": days of data in the window before it}, or None when a change would
-    say too little: no fixed range, 7 days of history or fewer (elapsed time, not calendar days), or less than a full day
-    of data before the range. Both sides become an average per day, so a window before that holds only part of the range
+    """{"now": elapsed days of the range since the first request, "before": the same for the window before it}, or None
+    when a change would say too little: no fixed range, 7 days of history or fewer (elapsed time, not calendar days), or
+    less than a full day of data before the range. Both sides become an average per day, so a window before that holds only part of the range
     still compares fairly."""
     if not f.days:
         return None
@@ -144,8 +144,8 @@ def _window(conn, f):
 
 
 def _day_rows(conn, f, shift=0):
-    """One row per day with data: day, tokens, API-eq, sessions, output, subagent runs, cache read, main-thread tokens
-    (shift=1: the window before the range)."""
+    """One row per UTC day with data (the stored timestamps' day, not local time like Today): day, tokens, API-eq, sessions,
+    output, subagent runs, cache read, main-thread tokens (shift=1: the window before the range)."""
     cond, params = f.cond(shift)
     return _q(conn, f"SELECT substr(r.ts,1,10) d, sum({TOKENS}), sum(cost_usd), count(DISTINCT session_id), sum(output), "
                     f"count(DISTINCT CASE WHEN agent_id IS NOT NULL THEN session_id || agent_id END), sum(cache_read), "
@@ -163,7 +163,8 @@ def _kpis(conn, f):
     cache = lambda t: round(100 * (t[5] or 0) / (t[0] or 1)) if t[0] else None  # noqa: E731
     cache_daily = [round(100 * (r[6] or 0) / r[1]) if r[1] else 0 for r in rows]
     # (key, label, value, text, kind, column of the day rows or None for a share, series); the change compares the average
-    # per day: the sum of the day rows over the days of data on each side (sessions and runs count once per day they appear)
+    # per day: the sum of the day rows over the elapsed days each side covers, from _window (sessions and runs count once
+    # per day they appear)
     before_rows = _day_rows(conn, f, 1) if cmp else []
     per_day = lambda rs, i, n: sum(r[i] or 0 for r in rs) / n  # noqa: E731
     tiles = [("tokens", "Tokens", now[0] or 0, _tok(now[0]), "tok", 1, col(1)),
@@ -444,7 +445,7 @@ def _daily_stacked(rows, changes, versions):
 
 
 def _daily_svg(days, changes, versions, w, h, pad_l, labels, cls):
-    pad_b, pad_t = 22, 34
+    pad_b, pad_t = 22, 34  # the top pad holds the two staggered rows of change labels
     top = max(t for _, t, _, _ in days) or 1
     step = (w - pad_l) / len(days)
     bw = max(2, step - 2)
@@ -479,7 +480,7 @@ def _daily_svg(days, changes, versions, w, h, pad_l, labels, cls):
         pts.append(f"{pad_l + i * step + bw / 2:.1f},{h - pad_b - ph * (sum(window) / len(window)) / top:.1f}")
     if len(pts) > 1:
         out.append(f'<polyline class="ma" pathLength="1" points="{" ".join(pts)}"/>')
-    # a change on a day without requests sits on the next day that has bars
+    # every calendar day has a slot, so a version sits on its own day; the narrow copy drops the ones before its 14 days
     nxt = lambda day: next((i for d, i in sorted(index.items()) if d >= day), None)  # noqa: E731
     short = 9 if narrow else 18
     marks = [(i, f"{charts.short(sk, short)} {v[:6]}", f"<b>{html.escape(sk)}</b> changed<br>version {v[:6]}{' v' + html.escape(lbl) if lbl else ''}")
@@ -1455,6 +1456,7 @@ document.querySelectorAll('form.filters').forEach(fm=>fm.addEventListener('submi
     if(e.key==='Escape'){if(selOpen&&e.target.tagName==='SELECT'){selOpen=false;return}e.preventDefault();close()}
     else if(e.key==='Tab'){const f=focusable(),i=f.indexOf(document.activeElement);
       if(e.shiftKey&&i<=0){e.preventDefault();f[f.length-1].focus()}else if(!e.shiftKey&&(i<0||i===f.length-1)){e.preventDefault();f[0].focus()}}});
+  // 639px is the phone block's max-width in layout.py; a window widened past it closes the sheet and leaves focus alone
   phone.addEventListener('change',e=>{if(!e.matches)close(false)})})();
 const freshEl=document.getElementById('fresh'),page=document.body.dataset.page;let stamp=document.body.dataset.stamp,seenAt=Date.now();
 const ago=t=>{const s=Math.round((Date.now()-t)/1000);return s<60?'just now':s<3600?Math.round(s/60)+' min ago':Math.round(s/3600)+' h ago'};
@@ -1508,7 +1510,9 @@ def _options(conn, f, only=None):
     ])
 
 
-_NAV_CACHE = {}  # (kind, data home, database) -> (time, count): folding projects and reading every SKILL.md is not for each render
+# (kind, HOME, data home, database) -> (time, count): folding projects and reading every SKILL.md is not for each render;
+# HOME is in the key because both counts read ~/.claude
+_NAV_CACHE = {}
 NAV_TTL = 30.0
 
 
