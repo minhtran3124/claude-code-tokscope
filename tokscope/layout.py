@@ -120,7 +120,7 @@ th{white-space:normal}
 html.settled [data-region] :is(.hero,.kpi,.empty,.bar i u){animation:none}
 /* sessions: a dense table. Rows are 44px, the id selector keeps these ahead of the skins' older .srow card rules, and the
    skins add only the look (outline, radius, label case, tray colour). Child sessions keep their indent (--depth) in the title cell. */
-#session-list{--scols:24px 100px minmax(0,1fr) 120px 60px 68px 70px 140px 14px;overflow:clip}
+#session-list{--scols:24px 100px minmax(0,1fr) 120px 60px 84px 70px 140px 14px;overflow:clip}
 #session-list :is(.shead,.srow>summary){display:grid;grid-template-columns:var(--scols);gap:8px;align-items:center;padding:0 10px}
 #session-list .shead{height:32px;font-size:11px;white-space:nowrap}
 #session-list .shead>*{overflow:hidden;text-overflow:ellipsis}
@@ -149,6 +149,9 @@ transition:transform calc(var(--t-state)*.7) var(--ease-exit),opacity calc(var(-
 transition:transform var(--t-layout) var(--ease-expo),opacity var(--t-state) var(--ease),visibility var(--t-state)}
 #sessions .pickbar #pick-hint{font-variant-numeric:tabular-nums;white-space:nowrap}
 body.picking .totop{bottom:96px}
+/* a narrower page drops the top skill, then the split bar, so the title column never collapses (checked from 641 to 1200 px) */
+@media (max-width:1200px){#session-list{--scols:24px 100px minmax(0,1fr) 60px 84px 70px 140px 14px}#session-list .sk{display:none}}
+@media (max-width:1040px){#session-list{--scols:24px 100px minmax(0,1fr) 60px 84px 70px 14px}#session-list .track{display:none}}
 @media (prefers-reduced-motion:reduce){#sessions .pickbar,#sessions .pickbar.show{transform:none}}
 /* end sessions */
 /* reduced motion: opacity and colour stay, travel and scale go. A keyframes set below replaces the one above, so each
@@ -398,7 +401,8 @@ main{padding:16px 12px 72px}
 #session-list .srow>summary .sk{grid-column:3;grid-row:2;font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis}
 #session-list .srow>summary .track{grid-column:4;grid-row:2}
 #session-list .srow>summary :is(.d,.sk,.track,.split){display:block}
-#session-list :is(.n,.sid8,.from){display:none}
+#session-list :is(.n,.sid8){display:none}
+#session-list .srow.orphan>summary .t{flex-direction:row}#session-list .srow>summary .from{max-width:45%}  /* an orphan child keeps its link to the parent (#28 review) */
 #session-list .btn.kids-more{margin-left:calc(44px + var(--depth)*14px);min-height:44px}
 #session-list .srow>summary>input{appearance:none;-webkit-appearance:none;width:44px;height:44px;margin:0;display:grid;place-items:center}
 #session-list .srow>summary>input::before{content:"";width:18px;height:18px;border:var(--line-w,1px) solid var(--ink);border-radius:4px;background:var(--surface)}
