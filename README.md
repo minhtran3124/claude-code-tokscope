@@ -6,7 +6,30 @@ report and in a live local dashboard. Nothing leaves your machine.
 
 What each part does: [PRODUCT.md](PRODUCT.md).
 
+## Screenshots
+
+The usage screenshots come from `tokscope serve --privacy redacted` and `tokscope report --privacy redacted`, so they
+show no prompts, titles, paths or project names. The Managed screenshot uses demo data.
+
+**Overview**: today against a typical day, the totals with their change, and the biggest movers.
+
 ![The dashboard Overview page](docs/screenshots/dashboard-overview.png)
+
+**Sessions**: each session by day, split between the main thread and subagents. Open a row for each prompt; tick 2 to 4 rows to compare.
+
+![The dashboard Sessions page](docs/screenshots/dashboard-sessions.png)
+
+**Breakdowns**: tokens by MCP server, tool, phase, owner, skill and subagent type, each with its finding.
+
+![The dashboard Breakdowns page](docs/screenshots/dashboard-breakdowns.png)
+
+**Managed**: Claude Managed Agents deployments, sessions and agents, with Pause / Unpause (needs the `ant` CLI).
+
+![The dashboard Managed page](docs/screenshots/dashboard-managed.png)
+
+**Report** (`tokscope open`): one HTML file with the last 7 days, the totals, the sessions and the breakdowns.
+
+![The HTML report](docs/screenshots/report-overview.png)
 
 ## Requirements
 
