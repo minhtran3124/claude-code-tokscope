@@ -13,7 +13,7 @@
 | Decision | Why | Rejected |
 | --- | --- | --- |
 | Three duration tokens (`--t-fast` 120 ms, `--t-state` 200 ms, `--t-layout` 320 ms) and `--ease-exit` live in the layout sheet. Entrances play on the first paint only (`html.settled`). A live value changes at once and shows a delta chip. | The 2 s poll swaps regions, so every entrance, blur-in and count-up replayed on each update. About 30 durations made the motion uneven. | Keeping the count-up for live values; a duration per rule. |
-| Reduced motion: each keyframes set has an opacity-only twin in the layout sheet, and there is no global `animation:none`. | An update must still show for a person who asks for less motion. A global off switch hid it. | `*{animation:none!important}` (what it was). |
+| Reduced motion: the entrance, chip, ring and toast keyframes have an opacity-only twin in the layout sheet; the spinner, run bar and Classic hero glow are switched off by their own rule; there is no global `animation:none`. | An update must still show for a person who asks for less motion. A global off switch hid it. | `*{animation:none!important}` (what it was). |
 
 ## 2026-10-21 · Headless child sessions keep their own totals
 

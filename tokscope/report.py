@@ -109,14 +109,12 @@ transition:opacity var(--t-state) var(--ease),transform var(--t-state) var(--eas
 .totop.show{opacity:1;visibility:visible;transform:none}
 .totop.show:hover{background:var(--ink);color:var(--page);transform:translateY(-2px)}
 .totop:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-body.picking .totop{bottom:92px}
-/* clear the sticky Compare bar */
+body.picking .totop{bottom:92px}  /* clear the sticky Compare bar */
 @media (max-width:900px){.layout{display:block}
 .side{height:auto;padding:8px 16px;border-right:0;border-bottom:1px solid var(--edge);overflow-x:auto;overflow-y:hidden;scrollbar-width:none}.side::-webkit-scrollbar{display:none}
 .brand,.sub-toc,.cnt{display:none}.toc{flex-direction:row;white-space:nowrap}.toc a:hover{transform:none}}
 /* everything that reacts to a click shows the hand cursor */
 a,summary,label,select,button:not(:disabled),input[type=checkbox],svg [data-change],[data-copy]{cursor:pointer}
-/* a scrolling card would stop the pick bar from sticking */
 .pickbar{position:sticky;bottom:12px;z-index:20;display:flex;gap:10px;align-items:center;justify-content:space-between;margin:4px 0 8px;
 padding:10px 14px;border:var(--line-w) solid var(--ink);border-radius:12px;background:var(--surface);
 animation:pop var(--t-state) var(--ease) both}
@@ -265,7 +263,7 @@ function countUp(el,delay,dur=1200){const end=el.dataset.end??(el.dataset.end=el
     el.textContent=p<1?f(raw*(1-Math.pow(1-p,4))):end;if(p<1)requestAnimationFrame(step)};requestAnimationFrame(step)},delay)}
 // a live value (data-key, on the dashboard) shows its real number at once; the count-up is for the static report and the rows you open
 document.querySelectorAll('[data-count]:not([data-key])').forEach((el,k)=>countUp(el,150+k*70));
-// the entrances (CSS under html:not(.settled)) belong to the first paint; a region that a poll swaps in must not replay them
+// the entrances belong to the first paint (CSS: `html.settled [data-region] ...` turns them off); a region that a poll swaps in must not replay them
 setTimeout(()=>document.documentElement.classList.add('settled'),1500);
 const root=document.documentElement;
 const isDark=()=>root.dataset.theme?root.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;
