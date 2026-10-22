@@ -32,7 +32,26 @@ function waitFor(url, tries = 600) {
   });
 }
 
+// The background service (install.sh) keeps `tokscope serve` on this port. Same number as in install.sh.
+const SERVICE_PORT = 8770;
+
+// true when the page at url is a tokscope dashboard (a different program on the port must not be shown)
+function isTokscope(url) {
+  return new Promise((resolve) => {
+    const req = http.get(url, (res) => {
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (c) => { if (body.length < 65536) body += c; });
+      res.on("end", () => resolve(res.statusCode === 200 && /tokscope/i.test(body)));
+    });
+    req.setTimeout(2000, () => req.destroy());
+    req.on("error", () => resolve(false));
+  });
+}
+
 async function start() {
+  const serviceUrl = `http://127.0.0.1:${SERVICE_PORT}/`;
+  if (await isTokscope(serviceUrl)) return openWindow(serviceUrl);  // the service is up: just show it
   const port = await freePort();
   // The server runs under a small sh that stops it when this process is gone, however it went (a quit, a signal,
   // SIGKILL, a crash). Killing the sh runs its trap, which stops the server.
@@ -42,6 +61,10 @@ async function start() {
   server.once("exit", (code) => { server = null; app.exit(code || 1); });
   const url = `http://127.0.0.1:${port}/`;
   await waitFor(url);
+  openWindow(url);
+}
+
+function openWindow(url) {
   win = new BrowserWindow({ width: 1440, height: 900, title: "tokscope", autoHideMenuBar: true });
   // anything that is not the local dashboard opens in the real browser
   win.webContents.setWindowOpenHandler(({ url: u }) => { shell.openExternal(u); return { action: "deny" }; });

@@ -124,10 +124,13 @@ ExecStart=/usr/bin/python3 -I /path/to/tokscope/collector/otlp_receiver.py
 
 ### Desktop app (optional)
 
-From a clone, `desktop/install.sh` installs a small Electron window around `tokscope serve` (needs Node.js and npm) and
+From a clone, `desktop/install.sh` installs a small Electron window around the dashboard (needs Node.js and npm) and
 adds `tokscope` to the Linux app menu. Open it from there; right-click its icon and choose Add to Favorites to pin it.
-The window starts the server on a free port and stops it when you close the window. The CLI itself still has no
-dependencies. `desktop/install.sh --uninstall` removes the launcher, `desktop/node_modules` and the dock pin.
+It also installs a systemd user service, `tokscope.service`, that keeps `tokscope serve` running on 127.0.0.1:8770
+from login, so the data is always fresh and the window opens at once. The window shows that server and leaves it
+running when you close it. Without a systemd user session, or with the service stopped, the window starts its own
+server on a free port and stops it on close. The CLI itself still has no dependencies.
+`desktop/install.sh --uninstall` removes the launcher, the service, `desktop/node_modules` and the dock pin.
 
 ## Quick start
 
