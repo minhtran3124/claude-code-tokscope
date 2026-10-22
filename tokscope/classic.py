@@ -22,7 +22,7 @@ CLASSIC_CSS = """
 :root[data-theme=dark]{DARK}
 .privacy{border-left:3px solid var(--mark)}
 .privacy b{letter-spacing:.04em}
-:focus-visible{border-radius:4px}
+:where(:focus-visible){border-radius:4px}
 .hero{border:1px solid color-mix(in oklch,var(--mark) 30%,var(--edge));margin:12px 0 16px;background:radial-gradient(120% 160% at 0% 0%,color-mix(in oklch,var(--mark) 16%,transparent),transparent 55%),
 radial-gradient(70% 140% at 100% 100%,color-mix(in oklch,var(--agent) 12%,transparent),transparent 60%),var(--surface)}
 .hero .big em{color:var(--mark-ink)}
