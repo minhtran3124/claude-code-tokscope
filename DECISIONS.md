@@ -19,8 +19,8 @@
 
 | Decision | Why | Rejected |
 | --- | --- | --- |
-| A typical day is the median of the last 14 active days (a day with at least one request), cumulative to the same local time, shown with a p25 to p75 band only when more than 7 days are active. (Claude's default; the owner had no preference.) | Days off would pull a calendar-day median down and make every working day read as "above typical". | All calendar days; the same weekday only (needs about 4 weeks of history). |
-| A change chip shows only with more than 7 days of history. It compares the average per day in the range with the average per day in the window before it, over the days that window has data. A sentence under the strip says so once. Sessions and runs count once per day they appear. | A 30-day range with 10 days before it must not read as -67%. | "History starts ... too short to compare" on every tile. |
+| A typical day is the median of the last 14 active days (a day with at least one request), cumulative to the same local time, shown with a p25 to p75 band only when more than 7 days are active. (Chosen by the owner, 2026-10-22.) | Days off would pull a calendar-day median down and make every working day read as "above typical". | All calendar days; the same weekday only (needs about 4 weeks of history). |
+| A change chip shows only with more than 7 days of history, counted as elapsed time from the first request, and when the window before the range holds at least one full day. It compares the average per day in the range with the average per day in the window before it, over the elapsed time that window has data. A sentence under the strip says so once. Sessions and runs count once per day they appear. From cache is the exception: its chip is the relative change of its share of all tokens, and the same sentence says so. | A 30-day range with 10 days before it must not read as -67%. | "History starts ... too short to compare" on every tile. |
 
 ## 2026-10-21 · Headless child sessions keep their own totals
 

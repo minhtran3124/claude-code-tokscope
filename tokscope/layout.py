@@ -258,7 +258,7 @@ svg rect.m.a{fill:var(--agent)}
 .key i.dash{height:0;width:14px;border-top:2px dashed var(--agent-ink);background:none;border-radius:0;box-shadow:none}
 svg .vmark{cursor:default}
 /* top spenders: one container, three columns split by 1px rules */
-.spenders .cols3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0}
+.spenders .cols3{display:grid;grid-template-columns:repeat(var(--n,3),minmax(0,1fr));gap:0}
 .spenders .col{padding:0 18px;border-left:1px solid var(--grid);min-width:0}
 .spenders .col:first-child{padding-left:0;border-left:0}
 .spenders .col:last-child{padding-right:0}
