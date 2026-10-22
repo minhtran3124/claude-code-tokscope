@@ -5,24 +5,26 @@ The version lives in `tokscope/__init__.py`; `mod/.claude-plugin/plugin.json` mu
 
 ## 0.2.0 - 2026-10-22
 
-The dashboard redesign (#23). No data, CLI or database changes: the numbers are the same, the screens are new.
+The dashboard redesign (#23). No data, CLI or database changes: the same tokens and costs, on new screens. The
+Overview change figures now compare per-day averages (see below).
 
 Dashboard:
 - One layout stylesheet for both skins (Ink and Classic). A skin is now tokens plus a short look block: Ink went from
   400 to 69 rules and Classic from 385 to 87.
-- Overview answers first: the headline, then the cause and notes, with elapsed-time deltas, exact local hours, a
-  calendar 7-day average and the level spenders.
-- Sessions is a dense table, grouped by day (UTC), with a tray cue and a no-date group.
+- Overview answers first: a typical-day line and band, one KPI strip, stacked daily tokens, "Biggest movers", exact
+  local hours, a calendar 7-day average and the level spenders. Change is the average per day in the range against
+  the days before it, so ranges of different length compare fairly.
+- Sessions is a dense table, grouped by day (UTC), with a sort control, a compare tray and a no-date group.
 - Breakdowns show their findings next to each table: the zero-token skill case, the true skill count and exact
   percentages.
+- Sidebar controls are segmented; filters are labelled.
 - A motion system with a reduced-motion fallback, including the Classic hero glow.
-- A phone layout under 640 px: a filter sheet, the top spenders name sits on its numbers, and the Classic controls
-  keep a 3:1 outline.
+- A phone layout at 640 px and under: a menu and filter sheet, two-line table rows, the top spenders name sits on its
+  numbers, and the Classic controls keep a 3:1 outline.
 
 Fixes:
-- A skill's first version is no longer counted as a version change, in the Overview chart or in the skill versions
-  list.
-- Ids are escaped in the Sessions table.
+- A skill's first version is no longer listed as a version change in the skill versions list.
+- Classic focus ring keeps its radius; the Today dot is hollow offline.
 
 ## 0.1.0 - 2026-10-21
 
