@@ -28,7 +28,7 @@ from .brand import FAVICON, MARK, favicon_link
 from .changes import BENCH_PROJECT, list_changes
 from .ingest import PROJECTS_DIR, connect, ingest
 from .pricing import API_EQ_NOTE
-from .report import (CSS, JS_BENCH, JS_CORE, JS_SESSIONS, JS_TREND, TOKENS, _benchmarks, _breakdowns, _change_cards,
+from .report import (CSS, JS_BENCH, JS_CORE, JS_SESSIONS, JS_TREND, TOKENS, _benchmarks, _breakdowns, _change_cards, _section,
                      _daily_chart, _diff_html, _more, _sessions_json, _skill_versions, _table, _tok, _usd)
 
 PAGES = {"overview": "Overview", "projects": "Projects", "sessions": "Sessions", "library": "Library",
@@ -827,7 +827,9 @@ def page_breakdowns(conn, f):
     cond, params = f.cond()
     changes = list_changes(conn)
     return (f'<div id="breakdowns">{_breakdowns(conn, cond, params)}</div>'
-            + _more("Config changes", f"{len(changes)} recorded; before/after medians per run", _change_cards(conn, changes), "changes"))
+            + _section("Config changes",
+                       (f"{len(changes)} recorded; latest: {html.escape(changes[-1][2])}" if changes else "None recorded yet"),
+                       "before/after medians per run", _change_cards(conn, changes), "changes"))
 
 
 DASH_CSS = """
