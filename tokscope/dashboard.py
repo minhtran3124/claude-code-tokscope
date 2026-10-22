@@ -418,7 +418,7 @@ def _version_marks(conn, f, first, last):
         return []
     rows = _q(conn, "SELECT substr(v.first_seen,1,10), v.skill, v.version, v.label FROM skill_versions v WHERE v.source != 'transcript' "
                     "AND substr(v.first_seen,1,10) BETWEEN ? AND ? AND EXISTS (SELECT 1 FROM skill_versions o WHERE o.skill = v.skill "
-                    "AND o.version != v.version) ORDER BY v.first_seen LIMIT 8", (first, last))
+                    "AND o.version != v.version AND o.first_seen < v.first_seen) ORDER BY v.first_seen LIMIT 8", (first, last))
     return rows
 
 
