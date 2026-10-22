@@ -64,7 +64,7 @@ svg g.d:hover rect.m{opacity:1}
 .brand .logo{width:24px;height:15px;flex:none;position:relative;top:-1px}
 .toc{display:flex;flex-direction:column;gap:2px}
 [id]{scroll-margin-top:16px}
-#sessions{overflow:visible}
+#sessions{overflow:visible}  /* a scrolling card would stop the pick bar from sticking */
 .pickbar .acts{display:flex;gap:8px;align-items:center}
 .srow.dim:not(:hover):not([open]){opacity:.6}
 .btn.kids-more{margin:0 0 8px calc(var(--depth)*24px);padding:7px 14px}

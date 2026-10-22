@@ -109,14 +109,12 @@ transition:opacity var(--t-state) var(--ease),transform var(--t-state) var(--eas
 .totop.show{opacity:1;visibility:visible;transform:none}
 .totop.show:hover{background:var(--ink);color:var(--page);transform:translateY(-2px)}
 .totop:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-body.picking .totop{bottom:92px}
-/* clear the sticky Compare bar */
+body.picking .totop{bottom:92px}  /* clear the sticky Compare bar */
 @media (max-width:900px){.layout{display:block}
 .side{height:auto;padding:8px 16px;border-right:0;border-bottom:1px solid var(--edge);overflow-x:auto;overflow-y:hidden;scrollbar-width:none}.side::-webkit-scrollbar{display:none}
 .brand,.sub-toc,.cnt{display:none}.toc{flex-direction:row;white-space:nowrap}.toc a:hover{transform:none}}
 /* everything that reacts to a click shows the hand cursor */
 a,summary,label,select,button:not(:disabled),input[type=checkbox],svg [data-change],[data-copy]{cursor:pointer}
-/* a scrolling card would stop the pick bar from sticking */
 .pickbar{position:sticky;bottom:12px;z-index:20;display:flex;gap:10px;align-items:center;justify-content:space-between;margin:4px 0 8px;
 padding:10px 14px;border:var(--line-w) solid var(--ink);border-radius:12px;background:var(--surface);
 animation:pop var(--t-state) var(--ease) both}
