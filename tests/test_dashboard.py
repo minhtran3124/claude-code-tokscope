@@ -109,6 +109,9 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertIn("ant is not run in tests", body)
         self.assertEqual(managed._cache["all"][1]["error"], "ant is not run in tests")
+        with self.assertRaises(urllib.error.HTTPError) as e:                # an agent's view keeps its agent
+            opener.open(urllib.request.Request(f"http://127.0.0.1:{self.port}/managed?refresh=1&agent=agent_01%2FA"))
+        self.assertEqual(e.exception.headers["Location"], "/managed?agent=agent_01%2FA")
 
     def test_pages_carry_both_skins_and_the_switch_button(self):
         _, page = self.get("/overview")

@@ -95,13 +95,38 @@ def deployment(d, sums):
             **sums.get(d.get("id"), {"sessions": 0, "tokens": 0, "cost": 0.0})}
 
 
+def _policy(cfg):
+    """A tool config's {enabled, permission_policy: {type}} as (enabled, "always allow"); blank when it names none."""
+    cfg = cfg or {}
+    return cfg.get("enabled"), ((cfg.get("permission_policy") or {}).get("type") or "").replace("_", " ")
+
+
+def _text(v):
+    """A field the page prints as text: a string, else blank, so an odd shape cannot break the agent view."""
+    return v if isinstance(v, str) else ""
+
+
+def toolset(t):
+    """One entry of an agent's tools: a toolset, its default and the tools set apart from that default."""
+    enabled, policy = _policy(t.get("default_config"))
+    return {"type": t.get("type") or "", "server": t.get("mcp_server_name") or "", "enabled": enabled, "policy": policy,
+            "changed": [(c.get("name") or "", *_policy(c)) for c in t.get("configs") or [] if isinstance(c, dict)],
+            "name": t.get("name") or ""}
+
+
 def agent(a, sums):
+    """An agent's row, and its configuration for the agent view; the list read already carries all of it."""
     model = a.get("model") or {}
     effort = model.get("effort")
     return {"id": a.get("id", ""), "name": a.get("name") or "", "model": model.get("id") or "",
-            "effort": (effort.get("type") if isinstance(effort, dict) else effort) or "",
+            "effort": (effort.get("type") if isinstance(effort, dict) else effort) or "", "speed": _text(model.get("speed")),
             "mcp": [m.get("name") or m.get("url") or "" for m in a.get("mcp_servers") or []],
+            "servers": [(m.get("name") or "", m.get("url") or "") for m in a.get("mcp_servers") or [] if isinstance(m, dict)],
             "skills": [k.get("skill_id") or k.get("name") or k.get("id") or "" for k in a.get("skills") or [] if isinstance(k, dict)],
+            "tools": [toolset(t) for t in a.get("tools") or [] if isinstance(t, dict)],
+            "description": _text(a.get("description")), "system": _text(a.get("system")), "version": a.get("version"),
+            "updated_at": _text(a.get("updated_at")), "runs_as": _text((a.get("execution_identity") or {}).get("type")),
+            "multiagent": a.get("multiagent"), "metadata": a.get("metadata") if isinstance(a.get("metadata"), dict) else {},
             **sums.get(a.get("id"), {"sessions": 0, "tokens": 0, "cost": 0.0})}
 
 
