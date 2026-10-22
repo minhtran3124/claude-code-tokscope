@@ -283,21 +283,30 @@ setTimeout(()=>document.documentElement.classList.add('settled'),1500);
 const root=document.documentElement;
 const isDark=()=>root.dataset.theme?root.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;
 const themeBtn=document.getElementById('theme');
-function syncTheme(){themeBtn.innerHTML=(isDark()?'☀ Light':'☾ Dark')+' <kbd>t</kbd>'}
+// the report has one Theme button; the dashboard has a segmented control (Light, Dark, Auto) with data-set-theme buttons
+function syncTheme(){if(themeBtn)themeBtn.innerHTML=(isDark()?'☀ Light':'☾ Dark')+' <kbd>t</kbd>';
+  document.querySelectorAll('[data-set-theme]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.setTheme===(root.dataset.theme||'auto')))}
+function setTheme(mode){if(mode==='auto'){delete root.dataset.theme;try{localStorage.removeItem('tokscope-theme')}catch(_){}}
+  else{root.dataset.theme=mode;try{localStorage.setItem('tokscope-theme',mode)}catch(_){}}syncTheme()}
 // the new theme grows out of the button as a circle, where the browser has view transitions
-function toggleTheme(x,y){const apply=()=>{root.dataset.theme=isDark()?'light':'dark';try{localStorage.setItem('tokscope-theme',root.dataset.theme)}catch(_){};syncTheme()};
+function toggleTheme(x,y,mode){const apply=()=>setTheme(mode||(isDark()?'light':'dark'));
   if(!document.startViewTransition||!smoothOk())return apply();
   const r=Math.hypot(Math.max(x,innerWidth-x),Math.max(y,innerHeight-y));
   document.startViewTransition(apply).ready.then(()=>root.animate({clipPath:[`circle(0px at ${x}px ${y}px)`,`circle(${r}px at ${x}px ${y}px)`]},
     {duration:650,easing:'cubic-bezier(0.16,1,0.3,1)',pseudoElement:'::view-transition-new(root)'}))}
-themeBtn.addEventListener('click',e=>{const b=themeBtn.getBoundingClientRect();toggleTheme(e.clientX||b.left+b.width/2,e.clientY||b.top+b.height/2)});syncTheme();
+if(themeBtn)themeBtn.addEventListener('click',e=>{const b=themeBtn.getBoundingClientRect();toggleTheme(e.clientX||b.left+b.width/2,e.clientY||b.top+b.height/2)});
+document.querySelectorAll('[data-set-theme]').forEach(btn=>btn.addEventListener('click',e=>{const b=btn.getBoundingClientRect();
+  toggleTheme(e.clientX||b.left+b.width/2,e.clientY||b.top+b.height/2,btn.dataset.setTheme)}));syncTheme();
 // Classic/Ink switch: two stylesheets, one enabled by its media attribute
 const skinBtn=document.getElementById('skin'),skinInk=document.getElementById('skin-ink'),skinClassic=document.getElementById('skin-classic');
 function setSkin(classic){skinInk.media=classic?'not all':'all';skinClassic.media=classic?'all':'not all';root.dataset.skin=classic?'classic':'';
-  skinBtn.textContent=classic?'Ink':'Classic';skinBtn.setAttribute('aria-pressed',classic);
+  if(skinBtn){skinBtn.textContent=classic?'Ink':'Classic';skinBtn.setAttribute('aria-pressed',classic)}
+  document.querySelectorAll('[data-set-skin]').forEach(b=>b.setAttribute('aria-pressed',(b.dataset.setSkin==='classic')===classic));
   try{classic?localStorage.setItem('tokscope-skin','classic'):localStorage.removeItem('tokscope-skin')}catch(_){}}
 function toggleSkin(){setSkin(skinClassic.media!=='all')}
-skinBtn.addEventListener('click',toggleSkin);skinBtn.textContent=skinClassic.media==='all'?'Ink':'Classic';skinBtn.setAttribute('aria-pressed',skinClassic.media==='all');
+if(skinBtn){skinBtn.addEventListener('click',toggleSkin);skinBtn.textContent=skinClassic.media==='all'?'Ink':'Classic';skinBtn.setAttribute('aria-pressed',skinClassic.media==='all')}
+document.querySelectorAll('[data-set-skin]').forEach(b=>{b.addEventListener('click',()=>setSkin(b.dataset.setSkin==='classic'));
+  b.setAttribute('aria-pressed',(b.dataset.setSkin==='classic')===(skinClassic.media==='all'))});
 const io='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{rootMargin:'0px 0px -6% 0px'}):null;
 document.querySelectorAll('.reveal,main>details.more,#breakdowns>details').forEach(el=>{el.classList.add('reveal');io?io.observe(el):el.classList.add('in')});
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -305,7 +314,7 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const keysDlg=document.getElementById('keys');
 addEventListener('keydown',e=>{const typing=/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   if(typing||e.metaKey||e.ctrlKey||e.altKey)return;
-  if(e.key==='t'){const b=themeBtn.getBoundingClientRect();toggleTheme(b.left+b.width/2,b.top+b.height/2)}
+  if(e.key==='t'){const b=(themeBtn||document.querySelector('[data-set-theme]')).getBoundingClientRect();toggleTheme(b.left+b.width/2,b.top+b.height/2)}
   else if(e.key==='s')toggleSkin()
   else if(e.key==='g')scrollTo({top:0})
   else if(e.key==='?'){keysDlg.open?keysDlg.close():keysDlg.showModal()}});

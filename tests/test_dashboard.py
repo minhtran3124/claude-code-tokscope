@@ -1,16 +1,18 @@
 import json
 import os
+import re
 import tempfile
 import threading
+import time
 import unittest
 import urllib.error
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
-from tokscope import dashboard
+from tokscope import dashboard, skills
 from tokscope.ingest import connect
 from tokscope.paths import PACKAGE
 
@@ -94,7 +96,8 @@ class ServerTest(unittest.TestCase):
         _, page = self.get("/overview")
         self.assertIn('<style id="skin-ink">', page)
         self.assertIn('<style id="skin-classic" media="not all">', page)
-        self.assertIn('id="skin"', page)
+        self.assertIn('data-set-skin="classic"', page)
+        self.assertIn('data-set-theme="auto"', page)
 
     def test_fonts_are_served_from_the_package_and_nothing_else_is(self):
         _, page = self.get("/overview")
@@ -109,7 +112,9 @@ class ServerTest(unittest.TestCase):
     def test_overview_compares_the_range_with_the_one_before(self):
         _, body = self.get("/overview")
         self.assertIn('data-key="tokens">2.0K', body)           # only the request 2 days ago is in the last 30
-        self.assertIn('<span class="trend up">+100%</span> vs the 30 days before', body)
+        # history is 50 days: the 30 days before hold 20 days of data, so 2000/30 a day is set against 1000/20 a day
+        self.assertIn('<span class="trend up">+33%</span>', body)
+        self.assertEqual(body.count("Change = average per day in this range against the 20 days before it"), 1)
 
     def test_the_summary_api_follows_the_filters(self):
         _, body = self.get("/api/summary?range=all")
@@ -136,25 +141,13 @@ class ServerTest(unittest.TestCase):
         _, body = self.get("/library?skill=xia2")                  # a skill name, not an id: the list, with the bar
         self.assertIn('<form class="filters"', body)
         _, body = self.get("/overview?skill=xia2")
-        self.assertIn('<a href="/library">Library</a>', body)       # the name filter does not follow into the Library
+        self.assertIn('<a href="/library">Library<span class="cnt"', body)       # the name filter does not follow into the Library
         self.assertIn("catch(_){}", dashboard.LIB_JS)               # a malformed #v- hash leaves the rest of the script running
 
-    def test_no_percentage_when_history_covers_less_than_half_the_range_before(self):
-        _, body = self.get("/overview?range=7")                  # 7 days before: data starts 50 days ago, fine
-        self.assertNotIn("too short to compare", body)
-        conn = connect(self.db)
-        conn.execute("DELETE FROM requests WHERE session_id = 'old1'")
-        conn.execute("INSERT INTO requests (session_id, request_key, ts, model, prompt_idx, input, output, cache_read, "
-                     "cache_write_5m, cache_write_1h, cost_usd) VALUES ('old1','c',?,'claude-opus-5-5',1,1,0,0,0,0,0.01)", (ts(33),))
-        conn.commit()
-        conn.close()
-        _, body = self.get("/overview")                          # 3 of the 30 days before have data: no +199,900%
-        self.assertIn(f"history starts {ts(33)[:10]}: too short to compare", body)
-        self.assertNotIn('class="trend', body)
-
     def test_a_big_rise_reads_as_a_multiple(self):
-        self.assertIn(">×25</span>", dashboard._delta(2500, 100, "x"))
-        self.assertIn(">+900%</span>", dashboard._delta(1000, 100, "x"))
+        self.assertIn(">×25</span>", dashboard._delta(2500, 100))
+        self.assertIn(">+900%</span>", dashboard._delta(1000, 100))
+        self.assertEqual(dashboard._delta(5, 0), "")                      # nothing before: no chip, no note
 
     def test_a_partial_render_is_the_regions_only(self):
         _, body = self.get("/overview?partial=1")
@@ -370,3 +363,233 @@ class SkinSwitchReportTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OverviewTest(unittest.TestCase):
+    """The Overview answers from `requests` alone: deltas per day, a typical day, one container per group."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        env = mock.patch.dict(os.environ, {"TOKSCOPE_HOME": str(self.tmp / "home"), "HOME": str(self.tmp / "h")})
+        env.start()
+        self.addCleanup(env.stop)
+        self.conn = connect(self.tmp / "t.db")
+        self.conn.execute("INSERT INTO sessions (session_id, project, cwd, title, prompts) VALUES ('s1','-home-u-app','/home/u/app','Work',1)")
+
+    def add(self, days_ago, tokens=1000, agent=None, skill=None):
+        self.conn.execute("INSERT INTO requests (session_id, request_key, ts, model, agent_id, agent_type, prompt_idx, skill, input, output, "
+                          "cache_read, cache_write_5m, cache_write_1h, cost_usd) VALUES ('s1',?,?,'claude-opus-5-5',?,?,1,?,?,0,0,0,0,0.5)",
+                          (f"k{days_ago}-{agent}-{skill}", self.ts(days_ago), agent, "Explore" if agent else None, skill, tokens))
+
+    def add_hours(self, hours, tokens=100):
+        """`tokens` every hour for `hours` hours back from now."""
+        self.conn.executemany(
+            "INSERT INTO requests (session_id, request_key, ts, model, prompt_idx, input, output, cache_read, cache_write_5m, "
+            "cache_write_1h, cost_usd) VALUES ('s1',?,?,'claude-opus-5-5',1,?,0,0,0,0,0.1)",
+            [(f"h{h}", (NOW - timedelta(hours=h, seconds=60)).strftime("%Y-%m-%dT%H:%M:%S.000Z"), tokens) for h in range(hours)])
+
+    @staticmethod
+    def ts(days_ago):
+        """A minute older than the whole day, so a request never sits on the edge of a range."""
+        return (NOW - timedelta(days=days_ago, seconds=60)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+    def page(self, qs=None):
+        self.conn.commit()
+        return dashboard.render(self.conn, "overview", qs or {}, "stamp")
+
+    def test_no_deltas_and_no_note_with_7_days_of_history_or_fewer(self):
+        for d in range(7):                                                  # today and the 6 days before: 7 days
+            self.add(d)
+        body = self.page({"range": ["7"]})
+        self.assertNotIn('class="trend', body)
+        self.assertNotIn("too short", body)
+        self.assertNotIn("Change = average per day", body)
+        self.assertIn("Biggest movers appear once there are more than 7 days of history", body)
+
+    def test_deltas_show_with_8_days_of_history_and_say_once_what_they_compare(self):
+        for d in range(9):
+            self.add(d, 1000 if d < 7 else 350)                            # the 2 days before the range hold less
+        body = self.page({"range": ["7"]})
+        self.assertEqual(body.count("Change = average per day in this range against the 1 day before it"), 1)
+        self.assertIn('<span class="trend up">+43%</span>', body)         # 1000 a day against 700 in the one day of data before
+        window = dashboard._window(self.conn, dashboard.Filters({"range": ["7"]}))
+        self.assertEqual(window["now"], 7)
+        self.assertAlmostEqual(window["before"], 1, places=2)
+
+    def test_a_flat_history_of_7_6_days_shows_no_change_and_one_of_10_days_shows_none_too(self):
+        self.add_hours(int(7.6 * 24))                                      # 7.6 days elapsed: over the gate, under a full day before
+        body = self.page({"range": ["7"]})
+        self.assertNotIn('class="dl"', body)
+        self.assertNotIn("Change = average per day", body)
+        self.assertIn("Less than a day of data before this range", body)
+        self.conn.execute("DELETE FROM requests")
+        self.add_hours(240)                                                # 10 days of the same 100 an hour
+        body = self.page({"range": ["7"]})
+        self.assertIn("against the 2 days before it", body)
+        self.assertRegex(body, r'class="dl"><span class="trend \w+">[+-]?[0-2]%</span>')   # a flat input reads flat (hourly samples
+        self.assertNotIn("+269%", body)                                                      # leave a rounding of a percent or two)
+
+    def test_a_window_before_shorter_than_the_range_is_compared_per_day(self):
+        self.add_hours(40 * 24)                                            # the same 100 an hour for 40 days
+        body = self.page()                                                 # 30 days; only 9.96 days of data before them
+        self.assertIn("against the 9 days before it", body)
+        self.assertIn('<span class="trend flat">+0%</span>', body)         # not -67%, which 10 days over 30 would read as
+        window = dashboard._window(self.conn, dashboard.Filters({}))
+        self.assertEqual(window["now"], 30)
+        self.assertAlmostEqual(window["before"], 9.96, places=1)
+
+    def test_no_comparison_for_all_time_or_with_nothing_before_the_range(self):
+        for d in range(20):
+            self.add(d)
+        self.assertIsNone(dashboard._window(self.conn, dashboard.Filters({"range": ["all"]})))
+        self.assertIsNone(dashboard._window(self.conn, dashboard.Filters({})))        # 20 days of history, 30-day range
+        body = self.page()
+        self.assertNotIn("Change = average per day", body)
+        self.assertNotIn("more than 7 days of history", body)                          # 20 days is more than 7: do not say otherwise
+        self.assertIn("nothing to compare yet", body)
+        self.assertIn("All time has no range before it", self.page({"range": ["all"]}))
+
+    def test_biggest_movers_name_the_main_cause_per_day(self):
+        for d in range(40):
+            self.add(d, 1000 if d >= 30 else 2000, skill="old-skill" if d >= 30 else "new-skill")
+        body = self.page()
+        self.assertIn("Biggest cause: <b>new-skill</b> (skill)", body)
+        self.assertIn('<table class="movers">', body)
+        self.assertIn('<td class="tagc"><span class="tag">skill</span></td>', body)
+
+    def test_a_typical_day_is_the_median_of_the_last_14_active_days(self):
+        day = lambda n: date(2026, 10, 1) + timedelta(days=n)             # noqa: E731
+        hours = lambda at, v: [v if h == at else 0 for h in range(24)]    # noqa: E731
+        history = {day(n): hours(9, 100 + n) for n in range(0, 40, 2)}    # active every second day: days off in between
+        history[day(80)] = hours(9, 5000)                                  # today is not part of the baseline
+        typ = dashboard.typical_day(history, day(80))
+        self.assertEqual(typ["n"], 14)
+        self.assertEqual(typ["med"][9], 0)                                 # before 09:00 nothing has happened
+        self.assertEqual(typ["med"][10], 125)                            # days 12..38, step 2: values 112..138, the median of 14 is 125
+        self.assertEqual(typ["med"][24], typ["med"][10])
+        self.assertLess(typ["p25"][10], typ["med"][10])
+        self.assertGreater(typ["p75"][10], typ["med"][10])
+        self.assertEqual(dashboard._at_hour(typ["med"], 9.5), typ["med"][9] + (typ["med"][10] - typ["med"][9]) / 2)
+
+    def test_a_typical_day_needs_more_than_7_active_days_not_calendar_days(self):
+        day = lambda n: date(2026, 10, 1) + timedelta(days=n)             # noqa: E731
+        hours = [10] + [0] * 23
+        week = {day(n * 3): hours for n in range(7)}                       # 7 active days spread over 19 calendar days
+        self.assertIsNone(dashboard.typical_day(week, day(30)))
+        week[day(22)] = hours                                              # an 8th active day
+        self.assertIsNotNone(dashboard.typical_day(week, day(30)))
+
+    def test_the_overview_shows_the_typical_chart_only_with_enough_active_days(self):
+        for d in range(1, 20, 3):                                          # 7 active days within 19 calendar days
+            self.add(d)
+        self.add(0)
+        body = self.page()
+        self.assertNotIn('class="tchart"', body)
+        self.assertIn("A typical-day line appears once more than 7 days have activity (7 so far)", body)
+        for d in (2, 3, 5):
+            self.add(d)
+        body = self.page()
+        self.assertIn('class="tchart"', body)
+        self.assertIn('class="tband"', body)
+        self.assertRegex(body, r'class="trend (up|down|flat)">[^<]*</span>(?: about)? a typical day by \d\d:\d\d')
+
+    def test_daily_tokens_stack_the_main_thread_and_the_subagents(self):
+        self.add(1, 700)
+        self.add(1, 300, agent="a1")
+        body = self.page()
+        self.assertIn('<rect class="m a"', body)                           # the subagent segment
+        self.assertIn("main 700 · subagents 300", body)
+        self.assertIn("Subagents</span>", body)
+
+    def test_a_skill_version_change_gets_a_dashed_line_and_label(self):
+        self.add(3)
+        self.add(1)
+        self.conn.executescript(skills.SCHEMA)
+        self.conn.executemany("INSERT INTO skill_versions (skill, version, first_seen, source, label) VALUES (?,?,?,?,?)",
+                              [("xia2", "aaaaaa111111", self.ts(5), "disk", None), ("xia2", "bbbbbb222222", self.ts(2), "disk", None)])
+        body = self.page()
+        self.assertIn('class="chg-l"', body)
+        self.assertIn("xia2 bbbbbb", body)
+        self.assertIn("Skill version changed", body)
+
+    def test_top_spenders_are_one_container_with_three_columns(self):
+        self.add(1, skill="xia2")
+        body = self.page()
+        self.assertEqual(body.count('class="card spenders"'), 1)
+        self.assertEqual(body.count('<div class="col">'), 2)               # no subagents: that column drops out
+        self.assertNotIn("Subagent types", body)
+
+    def test_top_spenders_columns_stay_level(self):
+        for i, skill in enumerate(("a", "b", "c", "d")):
+            self.add(1 + i, 100 * (i + 1), skill=skill)
+        self.add(1, 50, agent="x1")                                        # one subagent type: the other columns show 2 rows
+        body = self.page()
+        self.assertEqual(body.count('<tr><td title="'), 0)
+        self.assertEqual(len(re.findall(r"<tr><td", body.split('class="card spenders"')[1])), 4)   # 2 skills, 1 type, 1 session
+        self.assertIn("at most 2 rows", body)
+
+    def test_each_kpi_keeps_its_sparkline_and_the_header_and_sidebar_follow_the_design(self):
+        for d in range(3):
+            self.add(d)
+        self.conn.execute("UPDATE requests SET output = 10, cache_read = 50, agent_id = 'a1', agent_type = 'Explore'")
+        body = self.page({"range": ["7"]})
+        self.assertEqual(body.count('class="spark"'), 6)
+        for label in ("Range", "Project", "Model", "Skill"):
+            self.assertIn(f"<label class=\"fl\"><span>{label}</span>", body)
+        self.assertRegex(body, r'class="range-dates note">\d\d \w{3} \d{4} – \d\d \w{3} \d{4}<')
+        self.assertIn('Sessions<span class="cnt" title="All time, not filtered">1</span></a>', body)
+        self.assertIn('Projects<span class="cnt" title="All time, not filtered">1</span></a>', body)
+        self.assertNotIn('class="privacy"', body)                           # the full level shows no chip
+        redacted = dashboard.render(self.conn, "overview", {}, "stamp", level="redacted")
+        self.assertIn('Sessions<span class="cnt"', redacted)
+        for hidden in ("Projects", "Library", "Benchmarks"):               # pages the level hides carry no count
+            self.assertRegex(redacted, rf'>{hidden}</a>')
+        self.assertRegex(redacted, r'<h1>Overview</h1><span class="privacy" role="note"[^>]*><b>redacted</b></span>')
+
+    def test_the_cause_is_main_thread_tokens_when_the_total_fell_and_no_skill_did(self):
+        for d in range(40):                                                # before the range: 3000 a day, none of it a skill
+            self.add(d, 3000 if d >= 30 else 1000)
+        self.add(1, 100, skill="newcomer")                                 # the one mover rose while the total fell
+        body = self.page()
+        self.assertIn("Tokens per day fell", body)
+        self.assertIn("mostly main-thread tokens that no skill or subagent type accounts for", body)
+        self.assertNotIn("Biggest cause", body)
+
+    def test_the_seven_day_average_counts_days_off_as_zero(self):
+        rows = [("2026-10-01", 1000, 0.1, 1, 0, 0, 0, 1000), ("2026-10-07", 1000, 0.1, 1, 0, 0, 0, 1000)]
+        svg = dashboard._daily_stacked(rows, [], [])
+        self.assertEqual(svg.count('<g class="d"'), 7)                      # days off are empty slots
+        last = re.search(r'class="ma"[^>]*points="([^"]+)"', svg).group(1).split()[-1]
+        self.assertEqual(last.split(",")[1], f"{218 - 184 * (2000 / 7) / 1000:.1f}")  # 2000 over 7 calendar days, not 1000
+
+    def test_the_y_axis_labels_the_gridlines_where_they_are(self):
+        marks = {k: [0] * 25 for k in ("p25", "med", "p75")}
+        marks["p75"] = [100] * 25
+        svg = dashboard._today_chart({**marks, "n": 9}, [(0, 0)], 1.0, 100)
+        self.assertIn(">105</text>", svg)                                   # top gridline = 1.05 x the largest value, labelled as such
+
+    def test_local_hours_are_exact_in_a_half_hour_zone(self):
+        old = os.environ.get("TZ")
+        os.environ["TZ"] = "Asia/Kolkata"
+        time.tzset()
+        self.addCleanup(lambda: (os.environ.pop("TZ", None) if old is None else os.environ.__setitem__("TZ", old), time.tzset()))
+        day = (datetime.now(timezone.utc) - timedelta(days=3)).replace(hour=0, minute=30, second=0, microsecond=0)
+        self.conn.execute("INSERT INTO requests (session_id, request_key, ts, model, prompt_idx, input, output, cache_read, cache_write_5m, "
+                          "cache_write_1h, cost_usd) VALUES ('s1','tz',?,'claude-opus-5-5',1,500,0,0,0,0,0.1)", (day.strftime("%Y-%m-%dT%H:%M:%S.000Z"),))
+        self.conn.commit()
+        hours = dashboard._hours(self.conn, dashboard.Filters({}))
+        local = day.astimezone()
+        self.assertEqual((local.hour, local.minute), (6, 0))                # 00:30 UTC is 06:00 in Kolkata
+        self.assertEqual(hours[local.date()][6], 500)
+        self.assertEqual(sum(hours[local.date()]), 500)
+
+    def test_sidebar_counts_are_cached_and_follow_the_folded_projects(self):
+        self.conn.commit()
+        with mock.patch.object(dashboard.library, "discover", return_value=[1, 2, 3]) as lib, \
+                mock.patch.object(dashboard.projects, "discover", return_value=[{"root": "/a"}, {"root": "/b"}, {"root": None}]):
+            dashboard._NAV_CACHE.clear()
+            first = dashboard._nav_counts(self.conn)
+            dashboard._nav_counts(self.conn)
+        self.assertEqual((first["projects"], first["library"]), (2, 3))     # the Projects page's folded groups, benchmark rows left out
+        self.assertEqual(lib.call_count, 1)                                 # the second render reads the cache
+        self.assertEqual(set(dashboard._nav_counts(self.conn, "numbers")), {"sessions"})
