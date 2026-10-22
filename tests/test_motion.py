@@ -71,9 +71,28 @@ class MotionTokensTest(unittest.TestCase):
         self.assertIn("deltaChip(el,old[el.dataset.key])", js)
         self.assertIn("[data-count]:not([data-key])", dashboard.JS_CORE)   # no count-up on live values
         self.assertIn(".dot.ring{animation:ring 600ms var(--ease) 1}", LAYOUT_DASH_CSS)
-        self.assertIn(".fresh.stale .dot{background:transparent", LAYOUT_DASH_CSS)   # offline: hollow
+        self.assertIn(".fresh.stale .dot,body.offline h2>.dot{background:transparent", LAYOUT_DASH_CSS)   # offline: hollow
         for name in ("ink-dash", "classic-dash"):
             self.assertNotIn("stale .dot", SHEETS[name], name)             # a skin rule would win over the layout one
+
+    def test_every_keyframes_set_that_moves_something_has_a_reduced_motion_answer(self):
+        # an opacity-only twin in the layout sheet, or (spin, slide, drift) a rule that switches it off, tested below
+        twins = set()
+        for css in (LAYOUT_CSS, LAYOUT_DASH_CSS):
+            twins |= set(re.findall(r"@keyframes ([\w-]+)\{[^\n]*\}\n", css.split("prefers-reduced-motion:reduce){", 1)[1]))
+        moving = set()
+        for css in SHEETS.values():
+            for kf, body in re.findall(r"@keyframes ([\w-]+)\{(.*?)\}\n", css):
+                if "transform" in body or "translate" in body:
+                    moving.add(kf)
+        self.assertEqual(moving - twins, {"spin", "slide", "drift"})
+        for kf in twins:
+            self.assertNotIn("transform", "".join(re.findall(r"@keyframes %s\{([^\n]*)\}\n" % kf, LAYOUT_CSS.split("prefers-reduced-motion:reduce){", 1)[1] + LAYOUT_DASH_CSS.split("prefers-reduced-motion:reduce){", 1)[1])))
+
+    def test_the_hero_glow_and_the_spinners_stop_under_reduced_motion(self):
+        self.assertIn("@media (prefers-reduced-motion:reduce){.hero::before{animation:none}}", CLASSIC_CSS)
+        for css in (CLASSIC_DASH_CSS, dashboard.DASH_CSS):
+            self.assertIn("@media (prefers-reduced-motion:reduce){.runbar i,.spin,.busy::before{animation:none}}", css)
 
 
 if __name__ == "__main__":
