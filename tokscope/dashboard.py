@@ -1408,7 +1408,7 @@ document.querySelectorAll('form.filters').forEach(fm=>fm.addEventListener('submi
 // phone menu: the Menu button and the filter pill open one sheet. While it is open the page behind is inert, focus moves
 // into the sheet and wraps there, Escape closes it, and focus goes back to the control that opened it
 (()=>{const sheet=document.getElementById('sheet'),bar=document.getElementById('menu-btn'),main=document.querySelector('main'),
-  ctl=[...document.querySelectorAll('[aria-controls=sheet]')],phone=matchMedia('(max-width:640px)');let back=null;
+  ctl=[...document.querySelectorAll('[aria-controls=sheet]')],phone=matchMedia('(max-width:639px)');let back=null,selOpen=false;
   if(!sheet||!bar)return;
   const focusable=()=>[bar,...sheet.querySelectorAll('a[href],button,select,input,[tabindex]:not([tabindex="-1"])')].filter(e=>!e.disabled&&e.getClientRects().length);
   const set=on=>{sheet.classList.toggle('open',on);document.documentElement.classList.toggle('menu-open',on);ctl.forEach(b=>b.setAttribute('aria-expanded',on));
@@ -1417,8 +1417,13 @@ document.querySelectorAll('form.filters').forEach(fm=>fm.addEventListener('submi
   const open=from=>{back=from;set(true);requestAnimationFrame(()=>(sheet.querySelector('.toc a.on')||sheet.querySelector('a,button')).focus())};
   const close=(restore=true)=>{if(!sheet.classList.contains('open'))return;set(false);if(restore&&back)back.focus();back=null};
   ctl.forEach(b=>b.addEventListener('click',()=>sheet.classList.contains('open')?close():open(b)));
+  // a native select popup and the shortcuts dialog handle Escape and Tab themselves; the sheet leaves them alone
+  sheet.querySelectorAll('select').forEach(x=>{x.addEventListener('mousedown',()=>{selOpen=!selOpen});x.addEventListener('blur',()=>{selOpen=false});
+    x.addEventListener('change',()=>{selOpen=false});
+    x.addEventListener('keydown',e=>{if(e.key===' '||e.key==='Enter'||(e.altKey&&e.key.startsWith('Arrow')))selOpen=true})});
   document.addEventListener('keydown',e=>{if(!sheet.classList.contains('open'))return;
-    if(e.key==='Escape'){e.preventDefault();close()}
+    if(e.target.closest&&e.target.closest('dialog')||document.querySelector('dialog[open]'))return;
+    if(e.key==='Escape'){if(selOpen&&e.target.tagName==='SELECT'){selOpen=false;return}e.preventDefault();close()}
     else if(e.key==='Tab'){const f=focusable(),i=f.indexOf(document.activeElement);
       if(e.shiftKey&&i<=0){e.preventDefault();f[f.length-1].focus()}else if(!e.shiftKey&&(i<0||i===f.length-1)){e.preventDefault();f[0].focus()}}});
   phone.addEventListener('change',e=>{if(!e.matches)close(false)})})();

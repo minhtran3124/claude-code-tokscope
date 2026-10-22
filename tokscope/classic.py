@@ -452,8 +452,8 @@ border-radius:8px;padding:10px 12px;margin:0 0 16px}
 #trend svg rect.m{stroke:var(--surface);stroke-width:1}
 .key i.dash{border-top-color:var(--agent-ink)}
 /* end overview */
-/* phone: the current page in the menu sheet is ink on the tint (the blue is 4.0:1 on it) */
-@media (max-width:640px){.sheet .toc a.on{color:var(--ink)}}
+/* phone: the current page in the menu sheet is ink on the tint (the blue is 4.69:1 on it, ink reads clearer) */
+@media (max-width:639px){.sheet .toc a.on{color:var(--ink)}}
 """
 
 SKIN_APPLY = ("<script>try{if(localStorage.getItem('tokscope-skin')==='classic'){"

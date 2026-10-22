@@ -397,10 +397,21 @@ class OverviewTest(unittest.TestCase):
     def test_phone_section_is_in_the_layout_sheet_and_the_static_report_has_no_menu(self):
         from tokscope.layout import LAYOUT_DASH_CSS
         block = LAYOUT_DASH_CSS.split("/* phone */", 1)[1].split("/* end phone */", 1)[0]
-        self.assertIn("@media (max-width:640px)", block)
+        self.assertIn("@media (max-width:639px)", block)
         self.assertIn("min-height:44px", block)
         self.assertIn("prefers-reduced-motion:reduce", block)                      # the sheet fades, it does not travel
         self.assertNotIn("menu-btn", report.JS)
+
+    def test_phone_breakpoint_is_639_in_css_and_script_and_the_sheet_leaves_dialog_and_select_keys_alone(self):
+        from tokscope.layout import LAYOUT_DASH_CSS
+        from tokscope.classic import CLASSIC_DASH_CSS
+        block = LAYOUT_DASH_CSS.split("/* phone */", 1)[1].split("/* end phone */", 1)[0]
+        self.assertNotIn("max-width:640px", block)
+        self.assertNotIn("max-width:640px", CLASSIC_DASH_CSS.split("/* end overview */", 1)[1])
+        self.assertIn("matchMedia('(max-width:639px)')", dashboard.DASH_JS)
+        keys = dashboard.DASH_JS.split("document.addEventListener('keydown',e=>{if(!sheet.classList.contains('open'))return;", 1)[1][:400]
+        self.assertIn("dialog[open]", keys.split("if(e.key==='Escape')", 1)[0])    # the shortcuts dialog keeps Escape and Tab
+        self.assertIn("selOpen", keys)                                             # an open select keeps its Escape
 
     def test_a_window_before_shorter_than_the_range_is_compared_per_day(self):
         for d in range(40):                                                 # the same 1000 a day for 40 days

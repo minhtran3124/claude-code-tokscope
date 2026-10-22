@@ -311,7 +311,7 @@ svg .vmark{cursor:default}
 #keys-btn{align-self:flex-start}
 /* end overview */
 /* phone */
-/* Under 640 px the sidebar is a 52 px top bar. Its Menu button, or the filter pill, opens a full sheet with the pages, the
+/* Under 640 px (max-width:639px, the same in the script) the sidebar is a 52 px top bar. Its Menu button, or the filter pill, opens a full sheet with the pages, the
    filters, the theme controls and the privacy note (script in DASH_JS). On a wider screen the sheet is display:contents, so the
    sidebar looks as before, and the phone-only parts (button, pill, second filter form, note) stay hidden. The skin sheets load
    after this one and `.chip` resets everything (all:unset), so rules on a chip or a skin-styled part start with `body` or
@@ -319,7 +319,7 @@ svg .vmark{cursor:default}
 body .menu-btn,body .pill-btn,.sheet-filters,.sheet-priv,.menu-i,.pill-i{display:none}
 .sheet{display:contents}
 #trend svg.narrow{display:none}
-@media (max-width:640px){
+@media (max-width:639px){
 html.menu-open{overflow:hidden}
 body .chip{box-sizing:border-box}
 .layout{display:block}
@@ -414,7 +414,7 @@ main .totop{width:44px;height:44px}
 /* a long word wraps whole at a space or a hyphen; only a word wider than the line breaks, and then at the line's edge */
 main :is(td,li,p,h1,h2,h3,b,.tt){overflow-wrap:break-word;hyphens:manual}
 }
-@media (max-width:640px) and (prefers-reduced-motion:reduce){
+@media (max-width:639px) and (prefers-reduced-motion:reduce){
 /* the sheet and its button fade, they do not travel */
 html .layout .sheet,html .layout .sheet.open{transform:none;transition:opacity var(--t-state) var(--ease),visibility var(--t-state)}
 html .layout .sheet.open{transition:opacity var(--t-state) var(--ease),visibility calc(var(--t-fast)*0)}
