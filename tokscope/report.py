@@ -580,15 +580,17 @@ def _more(title, note, inner, anchor="", is_open=False):
             f'<span class="note">{note}</span></summary>{inner}</details>')
 
 
-def _pc(x):
-    """A share as a whole percent; a small non-zero share reads '<1%', not '0%'."""
-    return "<1%" if 0 < x < 0.005 else f"{x:.0%}"
+def _pc(x, plain=False):
+    """A share as a whole percent; a small non-zero share reads '<1%', not '0%', and a share just under 1 never reads '100%'. plain=True gives text for an attribute."""
+    if 0 < x < 0.005:
+        return "under 1%" if plain else "&lt;1%"
+    return "99%" if 0.995 <= x < 1 else f"{x:.0%}"  # 100% only when it is exactly 100
 
 
 def _section(title, finding, how, inner, anchor="", pct=None, empty=None):
     """A Breakdowns section: the summary line holds the finding (with a share bar when `pct` is given), and the long
     'how this is counted' text sits inside, above the content. `empty` = (headline, hint) replaces the content."""
-    bar = (f'<span class="mini" role="img" aria-label="{pct:.0%}"><i style="width:{min(max(pct, 0), 1) * 100:.1f}%"></i></span>'
+    bar = (f'<span class="mini" role="img" aria-label="{_pc(pct, True)}"><i style="width:{min(max(pct, 0), 1) * 100:.1f}%"></i></span>'
            if pct is not None else "")
     body = (f'<div class="empty"><b>{empty[0]}</b>{empty[1]}</div>' if empty else inner)
     return (f'<details class="more finding-sec" id="{anchor}"><summary><span class="ttl">{title}</span>'
@@ -1033,8 +1035,9 @@ def _breakdowns(conn, cond, params):
         p_owner = sub_t / real_total
         f_owner = (f"Subagents use {pc(p_owner)} of all tokens" if sub_t else "No subagent ran: the main thread has every token")
     if skills:
-        p_skill = (skills[0][2] or 0) / real_total
-        f_skill = f"{html.escape(skills[0][0])} uses {pc(p_skill)} of all tokens; {len(skills)} skill{'s' * (len(skills) != 1)} loaded"
+        p_skill = (skills[0][2] or 0) / real_total if has_tokens else 0
+        n_skills = q(f"SELECT count(DISTINCT skill) {base} AND skill IS NOT NULL")[0][0]
+        f_skill = f"{html.escape(skills[0][0])} uses {pc(p_skill)} of all tokens; {n_skills} skill{'s' * (n_skills != 1)} loaded"
     if by_type:
         sums = {t: sum(r[0] for r in rs) for t, rs in by_type.items()}
         all_runs, all_t = sum(len(rs) for rs in by_type.values()), sum(sums.values())

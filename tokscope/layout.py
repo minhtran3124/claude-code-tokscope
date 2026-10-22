@@ -426,7 +426,7 @@ html .layout .sheet.open{transition:opacity var(--t-state) var(--ease),visibilit
 @keyframes chip-out{to{opacity:0}}
 @keyframes toast-in{from{opacity:0}}
 }
-/* breakdowns: a folded section shows its finding; the "how this is counted" text sits inside, open */
+/* breakdowns: a folded section shows its finding; the "how this is counted" text sits inside the section, shown only when it is opened */
 details.more>summary .finding b{color:var(--ink);font-weight:600}
 details.more>summary .mini{display:inline-block;vertical-align:middle;width:84px;height:6px;margin-left:10px;border-radius:3px;background:var(--track);overflow:hidden}
 details.more>summary .mini i{display:block;height:100%;min-width:2px;border-radius:3px;background:var(--mark)}
