@@ -54,8 +54,6 @@ svg g.d:hover rect.m{opacity:1}
 .bar [data-count],.note [data-count]{font-variant-numeric:tabular-nums}
 .srow>summary input{accent-color:var(--mark);cursor:pointer}
 .srow>summary .t{transition:color var(--t-fast) var(--ease)}
-.srow>summary .split{transition:transform var(--t-state) var(--ease);transform-origin:left}
-.srow:hover>summary .split{transform:scaleY(1.35)}
 .srow .body tr td{transition:background var(--t-fast) var(--ease)}
 .srow .body tr:hover td{background:color-mix(in oklch,var(--mark) 7%,transparent)}
 /* left sidebar: every section one click away; the link of the section in view is highlighted */
@@ -120,6 +118,43 @@ th{white-space:normal}
 /* first paint only: <html> gets .settled once the entrances are done (and before the first poll swaps a region), and a
    region that a poll swaps in never plays an entrance again. The ids and classes beat the skin rules by specificity. */
 html.settled [data-region] :is(.hero,.kpi,.empty,.bar i u){animation:none}
+/* sessions: a dense table. Rows are 44px, the id selector keeps these ahead of the skins' older .srow card rules, and the
+   skins add only the look (outline, radius, label case, tray colour). Child sessions keep their indent (--depth) in the title cell. */
+#session-list{--scols:24px 100px minmax(0,1fr) 120px 60px 68px 70px 140px 14px;overflow:clip}
+#session-list :is(.shead,.srow>summary){display:grid;grid-template-columns:var(--scols);gap:8px;align-items:center;padding:0 10px}
+#session-list .shead{height:32px;font-size:11px;white-space:nowrap}
+#session-list .shead>*{overflow:hidden;text-overflow:ellipsis}
+#session-list .dayhd{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:0 12px;min-height:36px;padding:4px 10px}
+#session-list .srow{margin:0;border-width:0;border-radius:0}
+#session-list .srow.child{margin-left:0}
+#session-list .srow.child::before{display:none}
+#session-list .srow>summary{height:44px;border-radius:0}
+#session-list .srow>summary:focus-visible{outline-offset:-2px}
+#session-list .srow>summary .d,#session-list .srow>summary .n,#session-list .srow>summary .sk{white-space:nowrap}
+#session-list .srow>summary .t{display:flex;gap:8px;align-items:baseline;min-width:0;padding-left:calc(var(--depth,0)*20px)}
+#session-list .srow>summary .tt{flex:0 1 auto}
+#session-list .srow>summary .sid8{flex:none;font-size:11px;color:var(--muted)}
+#session-list .srow>summary .from{flex:0 1 auto}
+#session-list .track{display:block;min-width:0}
+#session-list .srow>summary .split{height:10px}
+#session-list .srow .body{padding:4px 12px 12px 34px}
+#session-list .btn.kids-more{margin:6px 10px 6px calc(34px + var(--depth)*20px)}
+#sessions .tools .seg{flex:none}
+#sessions .seg .chip{transition:color var(--t-state) var(--ease),background var(--t-state) var(--ease),border-color var(--t-state) var(--ease)}
+/* the compare tray rises when a second session is ticked (travel is dropped under reduced motion, the fade stays) */
+#sessions .pickbar{position:fixed;left:0;right:0;bottom:20px;z-index:30;width:min(520px,calc(100vw - 24px));margin:0 auto;animation:none;
+opacity:0;visibility:hidden;transform:translateY(calc(100% + 24px));
+transition:transform calc(var(--t-state)*.7) var(--ease-exit),opacity calc(var(--t-state)*.7) var(--ease-exit),visibility calc(var(--t-state)*.7)}
+#sessions .pickbar.show{opacity:1;visibility:visible;transform:none;
+transition:transform var(--t-layout) var(--ease-expo),opacity var(--t-state) var(--ease),visibility var(--t-state)}
+#sessions .pickbar #pick-hint{font-variant-numeric:tabular-nums;white-space:nowrap}
+body.picking .totop{bottom:96px}
+@media (max-width:640px){#session-list{--scols:24px minmax(0,1fr) 64px 14px}
+#session-list :is(.d,.sk,.n,.track,.sid8,.from){display:none}
+#session-list .srow>summary .t{padding-left:calc(var(--depth,0)*14px)}
+#session-list .btn.kids-more{margin-left:calc(34px + var(--depth)*14px)}}
+@media (prefers-reduced-motion:reduce){#sessions .pickbar,#sessions .pickbar.show{transform:none}}
+/* end sessions */
 /* reduced motion: opacity and colour stay, travel and scale go. A keyframes set below replaces the one above, so each
    entrance still fades in and an update still shows; transitions lose their transform and keep colour and opacity.
    Selectors start with `html` to beat the skin rules that load after this sheet. */

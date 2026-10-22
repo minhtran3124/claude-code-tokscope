@@ -178,6 +178,80 @@ class ServerTest(unittest.TestCase):
         self.assertIsNone(self.live.error)
         self.assertNotEqual(json.loads(self.get("/api/version")[1])["stamp"], before)
 
+    def test_sessions_page_has_a_sort_control_and_a_compare_tray(self):
+        status, page = self.get("/sessions?range=all")
+        self.assertEqual(status, 200)
+        self.assertNotIn('<select id="s-sort"', page)
+        for key, label in (("recent", "Newest"), ("tokens", "Most tokens"), ("agents", "Most subagent")):
+            self.assertIn(f'data-sort="{key}"', page)
+            self.assertIn(f">{label}</button>", page)
+        self.assertIn('class="chip on" data-sort="recent" aria-pressed="true"', page)    # Newest is the start state
+        self.assertIn('id="pickbar"', page)
+        self.assertIn('id="session-list"', page)
+
+
+class SessionsTableTest(unittest.TestCase):
+    def test_the_table_groups_by_day_and_sizes_the_bar_by_tokens(self):
+        js = dashboard.JS_SESSIONS
+        self.assertIn("function dayEl(", js)                       # a header per day: its sessions and tokens
+        self.assertIn("session${n===1?'':'s'} · ${fmt(tk)} tokens", js)
+        self.assertIn("const MAXT=Math.max(...S.map(s=>s.tokens),1)", js)    # the bar is tokens against the largest in the list
+        self.assertIn("100*(main+ag)/MAXT", js)
+        self.assertIn("<u class=a", js)                            # the colours still split main thread and subagents
+        head = js.split("function headEl", 1)[1].split("function dayEl", 1)[0]
+        for col in ("time", "session", "top skill", "prompts", "children", "tokens", "split"):
+            self.assertIn(f">{col}</span>", head)
+
+    def test_sort_is_three_buttons_and_the_tray_shows_from_two_picks(self):
+        js = dashboard.JS_SESSIONS
+        for key in ("recent", "tokens", "agents"):
+            self.assertIn(f"{key}:[", js)
+        self.assertNotIn("sortSel", js)
+        self.assertIn("`${n} of 4 picked`", js)                    # "2 of 4 picked"
+        self.assertIn("pickBar.classList.toggle('show',on)", js)
+        self.assertIn("const n=picked.size,on=n>=2", js)
+
+    def test_the_table_script_has_no_literal_durations(self):
+        import re
+        js = dashboard.JS_SESSIONS
+        self.assertIn("cssVar('--t-layout')", js)
+        self.assertIsNone(re.search(r"duration:\s*\d", js))
+        self.assertIsNone(re.search(r"easing:'ease", js))
+
+    def test_rows_are_44px_and_children_keep_their_indent_in_the_layout_sheet(self):
+        from tokscope.layout import LAYOUT_CSS
+        block = LAYOUT_CSS.split("/* sessions:", 1)[1].split("/* end sessions */", 1)[0]
+        self.assertIn("#session-list .srow>summary{height:44px", block)
+        self.assertIn("padding-left:calc(var(--depth,0)*20px)", block)       # --depth is set per row by the script
+        self.assertIn("#session-list .srow.child{margin-left:0}", block)
+        self.assertIn("#sessions .pickbar.show{opacity:1", block)
+        self.assertIn("calc(var(--t-state)*.7) var(--ease-exit)", block)    # the tray sinks at 0.7 of its entrance
+        self.assertIn("@media (prefers-reduced-motion:reduce){#sessions .pickbar,#sessions .pickbar.show{transform:none}}", block)
+        self.assertNotIn(".srow:hover>summary .split{transform", LAYOUT_CSS)    # no hover lift on a row's bar
+
+    def test_each_skin_adds_only_the_look(self):
+        from tokscope.classic import CLASSIC_CSS
+        from tokscope.report import CSS
+        ink = CSS.split("/* sessions look */", 1)[1].split("/* end sessions look */", 1)[0]
+        classic = CLASSIC_CSS.split("/* sessions look */", 1)[1].split("/* end sessions look */", 1)[0]
+        self.assertIn("#session-list{border:var(--line-w) solid var(--ink);border-radius:12px", ink)
+        self.assertIn("text-transform:uppercase", ink)
+        self.assertIn("border-radius:999px", ink)                  # the Ink tray is a filled ink pill
+        self.assertIn("#session-list{border:1px solid var(--edge);border-radius:8px", classic)
+        self.assertNotIn("uppercase", classic)
+        self.assertIn("box-shadow:0 10px 30px -12px", classic)     # the Classic tray: tinted, soft shadow
+
+    def test_the_static_report_gets_the_same_sort_control(self):
+        from tokscope.report import write_report
+        with tempfile.TemporaryDirectory() as d:
+            db = Path(d) / "t.db"
+            connect(db).close()
+            out = Path(d) / "r.html"
+            write_report(db, out, tasks_dir=Path(d))
+            page = out.read_text()
+        self.assertIn('data-sort="agents"', page)
+        self.assertIn('id="pickbar"', page)
+
 
 class ScriptTest(unittest.TestCase):
     def test_every_page_script_parses(self):
