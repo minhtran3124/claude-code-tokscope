@@ -100,7 +100,7 @@ def _spark(values, w=96, h=22):
     return f'<svg class="spark" viewBox="0 0 {w} {h}" width="{w}" height="{h}" aria-hidden="true"><polyline points="{pts}"/></svg>'
 
 
-MIN_HISTORY_DAYS = 7  # a change chip needs more than this many elapsed days of history; a typical day this many active days
+MIN_HISTORY_DAYS = 7  # a change chip needs more than this many elapsed days of history; a typical day, more than this many active days
 
 
 def _delta(now, before):

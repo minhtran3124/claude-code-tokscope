@@ -418,7 +418,7 @@ function tally(s,seen=new Set()){if(seen.has(s.id))return[0,0];seen.add(s.id);le
   (kids.get(s.id)||[]).forEach(k=>{const[a,b]=tally(k,seen);n+=a;t+=b});return[n,t]}
 // days are UTC days, like the time column (s.start is a UTC timestamp)
 const dayName=d=>!d?'No date':new Date(d+'T00:00:00Z').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
-// a group ranks by its root session's own numbers: the sessions it started keep their own totals (DECISIONS.md)
+// a group ranks by its root session's own numbers: a parent's totals do not include the sessions it started (DECISIONS.md, 'Headless child sessions keep their own totals')
 const SORTS={recent:['Newest first',(a,b)=>b[0].s.start.localeCompare(a[0].s.start)],tokens:['Most tokens first',(a,b)=>b[0].s.tokens-a[0].s.tokens],
   agents:['Most subagent tokens first',(a,b)=>b[0].s.agents-a[0].s.agents]};
 function headEl(){const h=document.createElement('div');h.className='shead';
