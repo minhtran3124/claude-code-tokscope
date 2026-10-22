@@ -13,7 +13,7 @@ You plan work on claude-code-tokscope. You edit nothing. The main session gives 
 ## Read first
 
 - The issue or task text in the prompt.
-- `README.md` and `DECISIONS.md`.
+- `PRODUCT.md` (features), `README.md` (install and run) and `DECISIONS.md`.
 - The code the task touches in `tokscope/` and `tests/`. Use Grep and Glob to find it. Read only what you need.
 
 ## Bash rules
