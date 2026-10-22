@@ -72,14 +72,15 @@ Motion (working tool: state changes are fast, nothing loops)
 - Entrances play on the first paint only. A region that the 2 s poll swaps never replays one. No blur-in, no count-up.
 - A live value changes at once; a chip ("+1.2M") shows beside it for 2s: in 200ms, out 140ms.
 - The live dot is still. One ring (600ms) shows when a poll finds new data. Offline is a hollow dot.
-- Reduced motion keeps opacity and colour and removes travel and scale; an update still shows. Each keyframes set has
-  an opacity-only twin inside `@media (prefers-reduced-motion:reduce)`; there is no global `animation:none`.
+- Reduced motion keeps opacity and colour and removes travel and scale; an update still shows. The entrance, chip, ring and toast
+  keyframes each have an opacity-only twin inside `@media (prefers-reduced-motion:reduce)`; the endless motions (spinner,
+  run bar, Classic hero glow) are switched off by their own rule in that media query. There is no global `animation:none`.
 - Event map (names after motion-prompt, github.com/showheyohtaki/motion-prompt). Built now: #052 Accordion (open a
   session row or a fold, 320ms), #054 Tooltip (hover or focus a chart bar, 200ms, rises 6px), #056 Toast ("New data
   · reload" and copy feedback, 320ms), #060 Segmented control (range, sort, grouping, 200ms), #068 Step indicator
   (bench and optimize steps), #070 Spinner (inside buttons only), #071 Badge (delta chip, 200ms in, 140ms out),
   #072 Empty state (320ms, first paint), #125 Pulse (live dot, one ring, 600ms), #004 Line draw (first paint only,
-  0.6s; published 1.55s). Token only, until the screen exists: #055 Popover (filter list, 280ms), #069 Skeleton
+  640ms, 2 x --t-layout; published 1.55s). Token only, until the screen exists: #055 Popover (filter list, 280ms), #069 Skeleton
   (static, no shine), #144 Split screen and #057 Tabs (compare).
 
 Content rules

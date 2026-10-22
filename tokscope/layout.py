@@ -62,7 +62,7 @@ svg g.d:hover rect.m{opacity:1}
 .brand .logo{width:24px;height:15px;flex:none;position:relative;top:-1px}
 .toc{display:flex;flex-direction:column;gap:2px}
 [id]{scroll-margin-top:16px}
-#sessions{overflow:visible}
+#sessions{overflow:visible}  /* a scrolling card would stop the pick bar from sticking */
 .pickbar .acts{display:flex;gap:8px;align-items:center}
 .srow.dim:not(:hover):not([open]){opacity:.6}
 .btn.kids-more{margin:0 0 8px calc(var(--depth)*24px);padding:7px 14px}
@@ -239,7 +239,7 @@ table.sbs td.add{background:color-mix(in oklch,var(--pass) 12%,transparent)}
 /* a poll that finds new data: the live dot gives one ring (#125 Pulse, 600 ms, not a token), never a loop; offline shows a hollow dot */
 @keyframes ring{from{box-shadow:0 0 0 0 color-mix(in oklch,var(--pass) 60%,transparent)}to{box-shadow:0 0 0 8px transparent}}
 .dot.ring{animation:ring 600ms var(--ease) 1}
-.fresh.stale .dot{background:transparent;box-shadow:inset 0 0 0 1.5px var(--muted)}
+.fresh.stale .dot,body.offline h2>.dot{background:transparent;box-shadow:inset 0 0 0 1.5px var(--muted)}
 /* a live value changes at once; this chip says by how much for 2 s (#071 Badge: in --t-state, out 0.7 times that) */
 .kpi,.today-nums>div{position:relative}
 .dchip{font:600 11px/1.5 var(--mono);padding:0 7px;border-radius:999px;background:var(--chip);color:var(--ink);white-space:nowrap;
