@@ -109,7 +109,8 @@ def _delta(now, before):
         return ""
     pct = now / before - 1
     text = f"×{now / before:,.0f}" if pct >= 9.995 else f"{pct:+.0%}"  # +1,000% and up read better as a multiple
-    kind = "flat" if text in ("+0%", "-0%") else "up" if pct > 0 else "down"
+    kind = "flat" if abs(pct) < .01 else "up" if pct > 0 else "down"  # under 1% either way reads as no change
+    text = "+0%" if kind == "flat" else text
     return f'<span class="dl"><span class="trend {kind}">{text}</span></span>'
 
 
@@ -122,20 +123,24 @@ def _history_start(conn, f):
 
 
 def _history_days(conn, f):
-    """Calendar days from the first request to today, both counted (0 when there is no data)."""
+    """Days elapsed from the first request to now, as a fraction (0 when there is no data)."""
     start = _history_start(conn, f)
-    return (f.now.date() - date.fromisoformat(start[:10])).days + 1 if start else 0
+    if not start:
+        return 0.0
+    first = datetime.strptime(start[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+    return max(0.0, (f.now - first).total_seconds() / 86400)
 
 
 def _window(conn, f):
     """{"now": days of data in the range, "before": days of data in the window before it}, or None when a change would
-    say too little: no fixed range, 7 days of history or fewer, or nothing before the range. Both sides become an average
-    per day, so a window before that holds only part of the range still compares fairly."""
+    say too little: no fixed range, 7 days of history or fewer (elapsed time, not calendar days), or less than a full day
+    of data before the range. Both sides become an average per day, so a window before that holds only part of the range
+    still compares fairly."""
     if not f.days:
         return None
     hist = _history_days(conn, f)
-    before = min(f.days, max(0, hist - f.days))
-    return {"now": min(f.days, hist), "before": before} if hist > MIN_HISTORY_DAYS and before else None
+    before = min(f.days, max(0.0, hist - f.days))
+    return {"now": min(f.days, hist), "before": before} if hist > MIN_HISTORY_DAYS and before >= 1 else None
 
 
 def _day_rows(conn, f, shift=0):
@@ -170,12 +175,16 @@ def _kpis(conn, f):
     out = []
     for i, (key, label, raw, text, kind, idx, series) in enumerate(tiles):
         title = f' title="{html.escape(API_EQ_NOTE)}"' if key == "usd" else ""
+        if key == "cache":
+            title = ' title="Share of all tokens that came from cache, against the window before"'
         chip = ""
         if cmp:
             chip = _delta(cache(now), cache(before)) if idx is None else _delta(per_day(rows, idx, cmp["now"]), per_day(before_rows, idx, cmp["before"]))
         out.append(f'<div class="kpi" style="--i:{i}"{title}><span>{label}</span>'
                    f'<b data-count="{raw}" data-kind="{kind}" data-key="{key}">{text}</b>{_spark(series)}{chip}</div>')
-    note = f'<p class="note strip-note">Change = average per day in this range against the {cmp["before"]} days before it</p>' if cmp else ""
+    n = int(cmp["before"]) if cmp else 0
+    note = (f'<p class="note strip-note">Change = average per day in this range against the {n} day{"" if n == 1 else "s"} before it. '
+            f'From cache compares its share of all tokens, not a per-day average.</p>' if cmp else "")
     return f'<div class="kpis strip">{"".join(out)}</div>{note}'
 
 
@@ -227,14 +236,14 @@ def _at_hour(marks, x):
 
 def _hours(conn, f):
     """{local date: 24 hourly token counts} for the last TYPICAL_LOOKBACK days, today included; project/model/skill apply.
-    A request counts in the local hour its UTC hour falls in, which is exact for whole-hour time zones."""
+    Requests are grouped by UTC minute and each minute is converted to local time, so half-hour zones are exact."""
     whole = Filters({"range": ["all"], "project": [f.project], "model": [f.model], "skill": [f.skill]})
     cond, params = whole.cond()
     since = _iso(_local_midnight() - timedelta(days=TYPICAL_LOOKBACK))
     days = {}
-    for hour, tokens in _q(conn, f"SELECT substr(r.ts,1,13), sum({TOKENS}) FROM requests r JOIN sessions s USING (session_id) "
-                                 f"{cond} AND r.ts >= ? GROUP BY 1", (*params, since)):
-        local = datetime.strptime(hour, "%Y-%m-%dT%H").replace(tzinfo=timezone.utc).astimezone()
+    for minute, tokens in _q(conn, f"SELECT substr(r.ts,1,16), sum({TOKENS}) FROM requests r JOIN sessions s USING (session_id) "
+                                   f"{cond} AND r.ts >= ? GROUP BY 1", (*params, since)):
+        local = datetime.strptime(minute, "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc).astimezone()
         days.setdefault(local.date(), [0] * 24)[local.hour] += tokens or 0
     return days
 
@@ -252,7 +261,7 @@ def _today_chart(typ, mine, x_now, total):
     for frac in (0, .5, 1):
         y = pad_t + (h - pad_t - pad_b) * (1 - frac)
         out.append(f'<line class="g" x1="{pad_l}" x2="{w - pad_r}" y1="{y:.1f}" y2="{y:.1f}"/>'
-                   f'<text x="{pad_l - 6}" y="{y + 4:.1f}" text-anchor="end">{_tok(top * frac / 1.05 if frac == 1 else top * frac)}</text>')
+                   f'<text x="{pad_l - 6}" y="{y + 4:.1f}" text-anchor="end">{_tok(top * frac)}</text>')
     for hr in (0, 6, 12, 18, 24):
         out.append(f'<text x="{X(hr):.1f}" y="{h - 5}" text-anchor="{"start" if hr == 0 else "end" if hr == 24 else "middle"}">{hr:02d}:00</text>')
     line = " ".join(f"{X(k):.1f},{Y(v):.1f}" for k, v in mine) + f" {X(x_now):.1f},{Y(total):.1f}"
@@ -328,7 +337,11 @@ def _movers(conn, f, cmp):
     """One table of the skills and subagent types whose tokens per day moved most against the window before the range,
     with one sentence that names the biggest cause."""
     if not cmp:
-        return f"<p class='note'>Biggest movers appear once there are more than {MIN_HISTORY_DAYS} days of history.</p>"
+        if not f.days:
+            return "<p class='note'>All time has no range before it. Pick a range to see the biggest movers.</p>"
+        if _history_days(conn, f) <= MIN_HISTORY_DAYS:
+            return f"<p class='note'>Biggest movers appear once there are more than {MIN_HISTORY_DAYS} days of history.</p>"
+        return "<p class='note'>Less than a day of data before this range: nothing to compare yet.</p>"
     (cond, params), (pcond, pparams) = f.cond(), f.cond(1)
     rows = []
     for key, kind in (("r.skill", "skill"), ("r.agent_type", "subagent")):
@@ -340,12 +353,17 @@ def _movers(conn, f, cmp):
         return "<p class='note'>Nothing moved.</p>"
     total_now, total_before = _totals(conn, cond, params)[0] or 0, _totals(conn, pcond, pparams)[0] or 0
     up = total_now / cmp["now"] > total_before / cmp["before"] if total_before else True
-    # the cause is the biggest mover that went the same way as the total
-    name, kind, was, now_pd = next((r for r in rows if (r[3] > r[2]) == up), rows[0])
-    rise = now_pd > was
     pct = f" {abs(total_now / cmp['now'] / (total_before / cmp['before']) - 1):.0%}" if total_before else ""
-    cause = (f'<p class="cause">Tokens per day {"rose" if up else "fell"}{pct}. '
-             f'Biggest cause: <b>{html.escape(name)}</b> ({kind}), {"+" if rise else "−"}{_tok(abs(now_pd - was))} a day.</p>')
+    # the cause is the biggest mover that went the same way as the total; none did when the rest is main-thread tokens that no
+    # skill or subagent type accounts for
+    pick = next((r for r in rows if (r[3] > r[2]) == up), None)
+    if pick:
+        name, kind, was, now_pd = pick
+        cause = (f'<p class="cause">Tokens per day {"rose" if up else "fell"}{pct}. Biggest cause: <b>{html.escape(name)}</b> ({kind}), '
+                 f'{"+" if now_pd > was else "−"}{_tok(abs(now_pd - was))} a day.</p>')
+    else:
+        cause = (f'<p class="cause">Tokens per day {"rose" if up else "fell"}{pct}, mostly main-thread tokens that no skill or '
+                 f'subagent type accounts for.</p>')
     body = "".join(f'<tr><td title="{html.escape(k)}">{html.escape(k)}</td><td class="tagc"><span class="tag">{kind}</span></td>'
                    f'<td>{_tok(b) if b else "–"}</td><td>{_tok(a) if a else "–"}</td><td>{charts.change_text(b, a)}</td></tr>'
                    for k, kind, b, a in rows)
@@ -381,13 +399,17 @@ def _top(conn, f):
     ag = _q(conn, f"SELECT agent_type, sum({TOKENS}) {base} AND agent_id IS NOT NULL GROUP BY 1 ORDER BY 2 DESC LIMIT 5", params)
     se = _q(conn, f"SELECT session_id, max(s.title), sum({TOKENS}) {base} GROUP BY 1 ORDER BY 3 DESC LIMIT 5", params)
     link = lambda href, text: (f'<a href="{href}" title="{html.escape(text)}">{html.escape(text)}</a>', "raw")  # noqa: E731
-    cols = [("Skills", _table(["skill", "tokens", "share"], [(link(f.link("overview", skill=k), k), t, share(t)) for k, t in sk], 1)),
-            ("Subagent types", _table(["type", "tokens", "share"], [((f'<span title="{html.escape(k)}">{html.escape(k)}</span>', "raw"), t, share(t))
-                                                                    for k, t in ag], 1)),
-            ("Sessions", _table(["session", "tokens", "share"],
-                                [(link(f.link("sessions", q=sid[:8]), (title or sid[:8])[:44]), t, share(t)) for sid, title, t in se], 1))]
-    return ('<section class="card spenders"><h2>Top spenders</h2><div class="cols3">'
-            + "".join(f'<div class="col"><h3>{h}</h3>{t}</div>' for h, t in cols) + "</div></section>")
+    rows = [("Skills", "skill", [(link(f.link("overview", skill=k), k), t, share(t)) for k, t in sk]),
+            ("Subagent types", "type", [((f'<span title="{html.escape(k)}">{html.escape(k)}</span>', "raw"), t, share(t)) for k, t in ag]),
+            ("Sessions", "session", [(link(f.link("sessions", q=sid[:8]), (title or sid[:8])[:44]), t, share(t)) for sid, title, t in se])]
+    rows = [r for r in rows if r[2]]
+    if not rows:
+        return '<section class="card spenders"><h2>Top spenders</h2><p class="note">Nothing in this range.</p></section>'
+    # a column with fewer rows leaves a hole under it, so the columns show one row more than the shortest (at most 5)
+    keep = min(5, min(len(r[2]) for r in rows) + 1)
+    return (f'<section class="card spenders"><h2 title="Each column shows at most {keep} rows so the three stay level">Top spenders</h2>'
+            f'<div class="cols3" style="--n:{len(rows)}">'
+            + "".join(f'<div class="col"><h3>{h}</h3>{_table([k, "tokens", "share"], r[:keep], 1)}</div>' for h, k, r in rows) + "</div></section>")
 
 
 def _version_marks(conn, f, first, last):
@@ -406,20 +428,27 @@ def _daily_stacked(rows, changes, versions):
     on a narrow canvas with 4 day labels, is what a phone shows (layout.py /* phone */ swaps the two)."""
     if not rows:
         return "<p class='note'>No data.</p>"
+    by_day = {d: (t or 0, m or 0, u or 0) for d, t, u, _s, _o, _r, _c, m in rows}
+    first, last = date.fromisoformat(rows[0][0]), date.fromisoformat(rows[-1][0])
+    # every calendar day from the first to the last, a day off as an empty slot, so the axis is time and the average is per day
+    days = []
+    for k in range((last - first).days + 1):
+        d = (first + timedelta(days=k)).isoformat()
+        t, m, u = by_day.get(d, (0, 0, 0))
+        days.append((d, t, m, u))
     legend = ('<div class="legend"><span class="key"><i></i>Main thread</span><span class="key"><i class="a"></i>Subagents</span>'
               '<span class="key"><i class="ln"></i>7-day average</span>'
               + ('<span class="key"><i class="dash"></i>Skill version changed</span>' if versions else "") + "</div>")
-    return (legend + _daily_svg(rows, changes, versions, 1100, 240, 56, 8, "wide")
-            + _daily_svg(rows[-14:], changes, versions, 340, 200, 44, 4, "narrow"))
+    return (legend + _daily_svg(days, changes, versions, 1100, 240, 56, 8, "wide")
+            + _daily_svg(days[-14:], changes, versions, 340, 200, 44, 4, "narrow"))
 
 
-def _daily_svg(rows, changes, versions, w, h, pad_l, labels, cls):
-    days = [(d, t or 0, m or 0) for d, t, _u, _s, _o, _r, _c, m in rows]
+def _daily_svg(days, changes, versions, w, h, pad_l, labels, cls):
     pad_b, pad_t = 22, 34
-    top = max(t for _, t, _ in days) or 1
+    top = max(t for _, t, _, _ in days) or 1
     step = (w - pad_l) / len(days)
     bw = max(2, step - 2)
-    index = {d: i for i, (d, _t, _m) in enumerate(days)}
+    index = {d: i for i, (d, _t, _m, _u) in enumerate(days)}
     ph = h - pad_t - pad_b
     out = [f'<svg class="{cls}" viewBox="0 0 {w} {h}" width="100%" role="img" aria-label="Tokens per day, main thread and subagents">'
            f'<line class="guide" x1="0" x2="0" y1="{pad_t}" y2="{h - pad_b}"/>']
@@ -430,12 +459,12 @@ def _daily_svg(rows, changes, versions, w, h, pad_l, labels, cls):
     # labels: every n-th day on the wide chart; `labels` days spread from the first to the last on the narrow one
     narrow = cls == "narrow"
     marked = {round(k * (len(days) - 1) / (labels - 1)) for k in range(labels)} if narrow and len(days) >= labels else set()
-    for i, (day, total, main) in enumerate(days):
+    for i, (day, total, main, usd) in enumerate(days):
         x = pad_l + i * step
         sub = total - main
         hm, hs = ph * main / top, ph * sub / top
         tip = html.escape(f"<b>{day}</b><br>{_tok(total)} tokens<br>main {_tok(main)} · subagents {_tok(sub)}<br>"
-                          f"<span class='usd'>{_usd(rows[i][2])} API-eq</span>")
+                          f"<span class='usd'>{_usd(usd)} API-eq</span>")
         out.append(f'<g class="d" data-tip="{tip}"><rect class="hit" x="{x:.1f}" y="{pad_t}" width="{step:.1f}" height="{ph}"/>'
                    f'<rect class="m" x="{x:.1f}" y="{h - pad_b - hm:.1f}" width="{bw:.1f}" height="{hm:.1f}"/>'
                    + (f'<rect class="m a" x="{x:.1f}" y="{h - pad_b - hm - hs:.1f}" width="{bw:.1f}" height="{hs:.1f}"/>' if hs > 0 else "") + "</g>")
@@ -443,7 +472,7 @@ def _daily_svg(rows, changes, versions, w, h, pad_l, labels, cls):
             anchor = "start" if marked and i == min(marked) else "end" if marked and i == max(marked) else "middle"
             lx = x if anchor == "start" else x + bw if anchor == "end" else x + bw / 2
             out.append(f'<text x="{lx:.1f}" y="{h - 6}" text-anchor="{anchor}">{day[5:]}</text>')
-    vals = [t for _, t, _ in days]
+    vals = [t for _, t, _, _ in days]
     pts = []
     for i in range(len(days)):
         window = vals[max(0, i - 6):i + 1]
@@ -1479,13 +1508,31 @@ def _options(conn, f, only=None):
     ])
 
 
-def _nav_counts(conn):
-    """The number beside a page in the sidebar: projects, sessions, library skills and benchmark tasks."""
+_NAV_CACHE = {}  # (kind, data home, database) -> (time, count): folding projects and reading every SKILL.md is not for each render
+NAV_TTL = 30.0
+
+
+def _cached_count(conn, kind, compute):
+    db = next((r[2] for r in conn.execute("PRAGMA database_list")), "")
+    key = (kind, str(Path.home()), str(paths.home()), db)
+    hit = _NAV_CACHE.get(key)
+    if hit and time.monotonic() - hit[0] < NAV_TTL:
+        return hit[1]
+    value = compute()
+    _NAV_CACHE[key] = (time.monotonic(), value)
+    return value
+
+
+def _nav_counts(conn, level="full"):
+    """The all-time number beside a page in the sidebar (not filtered; the label says so). Projects, Library and Benchmarks
+    show their contents at the full level only, so they carry no count below it."""
     n = lambda sql: conn.execute(sql).fetchone()[0]  # noqa: E731
-    out = {"projects": n(f"SELECT count(DISTINCT project) FROM sessions WHERE project NOT LIKE '{BENCH_PROJECT}'"),
-           "sessions": n(f"SELECT count(*) FROM sessions WHERE project NOT LIKE '{BENCH_PROJECT}'")}
+    out = {"sessions": n(f"SELECT count(*) FROM sessions WHERE project NOT LIKE '{BENCH_PROJECT}'")}
+    if level != "full":
+        return out
     try:
-        out["library"] = len(library.discover(conn, None))
+        out["projects"] = _cached_count(conn, "projects", lambda: len([g for g in projects.discover(conn) if g["root"]]))
+        out["library"] = _cached_count(conn, "library", lambda: len(library.discover(conn, None)))
         out["benchmarks"] = sum(1 for p in paths.tasks().iterdir() if p.is_dir()) if paths.tasks().is_dir() else 0
     except OSError:
         pass
@@ -1534,9 +1581,9 @@ def render(conn, name, qs, stamp, level="full", token=""):
                + (LIB_JS if name in ("library", "projects") else "") + DASH_JS)
     # on the Library, ?skill= is a skill's id, not the filter bar's skill name: other pages must not get it
     navf = Filters({**qs, "skill": [""]}) if name == "library" else f
-    counts = _nav_counts(conn)
+    counts = _nav_counts(conn, level)
     nav = "".join(f'<a href="{navf.link(p, **({"skill": ""} if p == "library" else {}))}"{" class=on aria-current=page" if p == name else ""}>{t}'
-                  + (f'<span class="cnt">{counts[p]:,}</span>' if p in counts else "") + "</a>" for p, t in PAGES.items())
+                  + (f'<span class="cnt" title="All time, not filtered">{counts[p]:,}</span>' if p in counts else "") + "</a>" for p, t in PAGES.items())
     reset = f' <a href="/{name}">clear filters</a>' if (f.project if name == "library" else f.query()) else ""
     # a skill page or an optimize run has its own header; a ?skill= that matches no skill falls back to the list, with the bar
     bar = ("" if name == "projects" or (name == "library" and 'class="card libhead"' in body) else
