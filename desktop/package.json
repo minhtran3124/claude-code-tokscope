@@ -1,0 +1,9 @@
+{
+  "name": "tokscope-desktop",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Desktop window for tokscope: starts `tokscope serve` and shows the dashboard.",
+  "main": "main.js",
+  "scripts": { "start": "electron ." },
+  "devDependencies": { "electron": "^33.2.0" }
+}

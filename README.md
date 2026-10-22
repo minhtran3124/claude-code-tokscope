@@ -122,6 +122,13 @@ The receiver is not part of the package. `TOKSCOPE_DATA_DIR` sets the folder whe
 ExecStart=/usr/bin/python3 -I /path/to/tokscope/collector/otlp_receiver.py
 ```
 
+### Desktop app (optional)
+
+From a clone, `desktop/install.sh` installs a small Electron window around `tokscope serve` (needs Node.js and npm) and
+adds `tokscope` to the Linux app menu. Open it from there; right-click its icon and choose Add to Favorites to pin it.
+The window starts the server on a free port and stops it when you close the window. The CLI itself still has no
+dependencies. Undo with `desktop/install.sh --uninstall`.
+
 ## Quick start
 
 1. Read your transcripts into the database:
