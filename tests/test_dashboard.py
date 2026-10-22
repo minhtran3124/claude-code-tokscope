@@ -227,11 +227,30 @@ class SkinSwitchReportTest(unittest.TestCase):
         self.assertIn('<style id="skin-classic" media="not all">', page)
         self.assertIn('id="skin"', page)
 
-    def test_classic_nests_child_sessions_like_ink(self):
+    def test_one_layout_sheet_comes_before_both_skins(self):
         from tokscope.classic import CLASSIC_CSS
+        from tokscope.layout import LAYOUT_CSS
+        from tokscope.report import CSS, write_report
+        with tempfile.TemporaryDirectory() as d:
+            db = Path(d) / "t.db"
+            connect(db).close()
+            out = Path(d) / "r.html"
+            write_report(db, out, tasks_dir=Path(d))
+            page = out.read_text()
+        self.assertLess(page.index('<style id="layout">'), page.index('<style id="skin-ink">'))
+        self.assertEqual(page.count('<style id="layout">'), 1)
+        rule = ".changes{display:grid;"
+        self.assertIn(rule, LAYOUT_CSS)                   # a rule both skins share is written once, not in each skin
+        self.assertNotIn(rule, CSS)
+        self.assertNotIn(rule, CLASSIC_CSS)
+
+    def test_classic_nests_child_sessions_like_ink(self):
+        from tokscope.classic import CLASSIC_CSS, CLASSIC_DASH_CSS
+        from tokscope.layout import LAYOUT_CSS, LAYOUT_DASH_CSS
+        classic_sheets = LAYOUT_CSS + LAYOUT_DASH_CSS + CLASSIC_CSS + CLASSIC_DASH_CSS    # the sheets a Classic page applies
         for rule in (".srow.child{", ".srow.child::before{", ".btn.kids-more{", ".srow.orphan>summary .t{",
                      ".srow>summary .from{", ".srow.dim:not(:hover)"):
-            self.assertIn(rule, CLASSIC_CSS)
+            self.assertIn(rule, classic_sheets)
 
 
 if __name__ == "__main__":
