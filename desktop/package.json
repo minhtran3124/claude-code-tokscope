@@ -1,0 +1,77 @@
+{
+  "name": "tokscope",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Token usage per skill, subagent and phase for Claude Code",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --linux deb"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "author": "Minh Tran <minhtran061192@gmail.com>",
+  "homepage": "https://github.com/minhtran3124/claude-code-tokscope",
+  "build": {
+    "appId": "io.github.minhtran3124.tokscope",
+    "productName": "tokscope",
+    "executableName": "tokscope",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../bin",
+        "to": "bin"
+      },
+      {
+        "from": "../tokscope",
+        "to": "tokscope",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc"
+        ]
+      },
+      {
+        "from": "../LICENSE",
+        "to": "LICENSE"
+      }
+    ],
+    "linux": {
+      "target": [
+        "deb"
+      ],
+      "category": "Development",
+      "icon": "icon.png",
+      "maintainer": "Minh Tran <minhtran061192@gmail.com>",
+      "desktop": {
+        "Comment": "Token usage per skill, subagent and phase for Claude Code",
+        "StartupWMClass": "tokscope"
+      }
+    },
+    "deb": {
+      "depends": [
+        "python3 (>= 3.10)",
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0"
+      ],
+      "afterInstall": "build/after-install.sh",
+      "afterRemove": "build/after-remove.sh",
+      "packageCategory": "devel"
+    }
+  }
+}
