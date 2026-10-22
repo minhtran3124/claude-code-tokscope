@@ -11,7 +11,9 @@ def imports(f):
     here = f.relative_to(PKG).parent.parts
     out = set()
     for node in ast.walk(ast.parse(f.read_text())):
-        if isinstance(node, ast.ImportFrom) and node.level:
+        if isinstance(node, ast.Import):  # import tokscope.web.report
+            out.update(a.name.removeprefix("tokscope").lstrip(".") for a in node.names if a.name.startswith("tokscope."))
+        elif isinstance(node, ast.ImportFrom) and node.level:
             base = list(here[:len(here) - node.level + 1])
             mod = base + (node.module.split(".") if node.module else [])
             out.update(".".join(mod + ([] if node.module else [a.name])) for a in node.names)
