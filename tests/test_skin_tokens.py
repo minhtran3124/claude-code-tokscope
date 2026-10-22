@@ -58,12 +58,11 @@ class SkinTokensTest(unittest.TestCase):
         # tokens the layout sheet defines itself (motion, per-element values set inline or by a rule)
         own = {"--t-fast", "--t-state", "--t-layout", "--ease-exit", "--i", "--d", "--depth", "--n", "--mx", "--my", "--scols", "--tok-accent"}
         for tok in sorted(used - own):
-            if tok in ink or tok in classic:
-                self.assertIn(tok, ink, f"{tok} is missing from the Ink :root")
-                self.assertIn(tok, classic, f"{tok} is missing from the Classic :root")
+            self.assertIn(tok, ink, f"{tok} is missing from the Ink :root")
+            self.assertIn(tok, classic, f"{tok} is missing from the Classic :root")
         self.assertEqual({t for t in ink if t.startswith(("--r-", "--lab-", "--pad-"))}, {t for t in classic if t.startswith(("--r-", "--lab-", "--pad-"))})
 
-    def test_the_dark_theme_only_changes_colours(self):
+    def test_the_dark_theme_leaves_the_shape_tokens_alone(self):
         # the look tokens sit in the light :root and hold in dark too: the dark rules must not need to repeat them
         for css in (report.CSS, CLASSIC_CSS):
             dark = re.search(r":root\[data-theme=dark\]\{(.*?)\}", css, re.S).group(1)

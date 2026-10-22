@@ -446,7 +446,7 @@ details.finding-sec .empty code{overflow-wrap:anywhere}
 /* end breakdowns */
 """
 
-# The skin tokens (set in the :root rule of both skins; the dark rules only change colours). Ink value | Classic value.
+# The skin tokens (set in the :root rule of both skins; the dark rules only change colours and the line weight and shadow tokens). Ink value | Classic value.
 #   --line-w 1.5px | 1px         outline width of a card, control or tray
 #   --line-c ink | edge          outline colour;  --focus-c ink | mark: focus ring;  --row-c grid | edge: row and day rules
 #   --r-card 14px | 12px         radius of a card;  --r-tile 12px | 10px: tile, row, KPI;  --r-box 12px | 8px: panel, list
