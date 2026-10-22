@@ -321,7 +321,7 @@ SORT_SEG = ('<span class="seg" id="s-sort" role="group" aria-label="Sort session
 JS_SESSIONS = """
 const S=JSON.parse(document.getElementById('sessions-data').textContent);
 const list=document.getElementById('session-list'),q=document.getElementById('s-q'),sortBox=document.getElementById('s-sort');
-// sort is a segmented control (#060): Newest, Most tokens, Most subagent
+// sort is a segmented control (Segmented control, 200 ms): Newest, Most tokens, Most subagent
 let sortKey='recent';
 // durations come from the layout sheet's tokens, so the script and the stylesheet never disagree
 const cssVar=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -350,8 +350,8 @@ function row(s){
   const by=s.parent_title||s.parent?.slice(0,8)||'',from=s.parent?`\nstarted by ${by}${byId.has(s.parent)?'':' (outside this range)'}`:'';
   // a parent outside the range has no row to sit under, so the child names it
   d.innerHTML=`<summary><input type=checkbox aria-label="compare" ${picked.has(s.id)?'checked':''}>
-    <span class=d>${when(s)}</span><span class="t${/^session [0-9a-f]{8}$/.test(s.title||'')?' sid':''}" title="${esc(s.title+from)}"><span class=tt>${s.title?hl(s.title,q.value.trim()):'(untitled)'}</span>${/^session [0-9a-f]{8}$/.test(s.title||'')?'':`<code class=sid8>${s.id.slice(0,8)}</code>`}${s.parent&&!byId.has(s.parent)?`<small class=from>from ${DASH&&s.parent?`<a href="/sessions?range=all&amp;q=${encodeURIComponent(s.parent)}" title="show the session that started this one (all time)">${esc(by)}</a>`:esc(by)}</small>`:''}</span>
-    <span class=sk>${esc(s.top_skill||'')}</span><span class="r n">${s.prompts}</span><span class="r n" title="subagent runs">${s.runs||'–'}</span><span class=r><b>${fmt(s.tokens)}</b></span>${split(s.main,s.agents)}<span class=cv aria-hidden=true>›</span></summary><div class=body></div>`;
+    <span class=d>${esc(when(s))}</span><span class="t${/^session [0-9a-f]{8}$/.test(s.title||'')?' sid':''}" title="${esc(s.title+from)}"><span class=tt>${s.title?hl(s.title,q.value.trim()):'(untitled)'}</span>${/^session [0-9a-f]{8}$/.test(s.title||'')?'':`<code class=sid8>${esc(s.id.slice(0,8))}</code>`}${s.parent&&!byId.has(s.parent)?`<small class=from>from ${DASH&&s.parent?`<a href="/sessions?range=all&amp;q=${encodeURIComponent(s.parent)}" title="show the session that started this one (all time)">${esc(by)}</a>`:esc(by)}</small>`:''}</span>
+    <span class=sk>${esc(s.top_skill||'')}</span><span class="r n">${s.prompts}</span><span class="r n" title="${s.runs||0} subagent runs" aria-label="${s.runs||0} subagent runs">${s.runs||'–'}</span><span class=r><b>${fmt(s.tokens)}</b></span>${split(s.main,s.agents)}<span class=cv aria-hidden=true>›</span></summary><div class=body></div>`;
   const cb=d.querySelector('input');
   cb.addEventListener('click',e=>e.stopPropagation());
   cb.addEventListener('change',()=>{cb.checked?picked.add(s.id):picked.delete(s.id);if(picked.size>4){picked.delete(s.id);cb.checked=false}
@@ -383,7 +383,7 @@ function detail(s){
   const turns=s.turns.map((t,k)=>`<tr><td data-label="#">${t.i??'–'}</td><td class=l data-label="prompt">${esc(t.text||(t.i===0?'(session start)':''))}</td>
     <td class=lm data-label="skill">${esc(t.skill||'')}${t.version?` <code class=ver title="${t.version[1]?'exact: hashed at the Skill call':'inferred from the kept text or the date'} · tokscope skills ${esc(t.skill)}">${esc(t.version[0].slice(0,6))}</code>`:''}</td><td data-label="tokens">${bar(t.tokens,top,t.agents_tokens,Math.min(k,12))}</td><td data-label="output">${fmt(t.output)}</td>
     <td data-label="req">${t.requests}</td><td class="lm calls" data-label="calls">${callCell(t)}</td><td class=u data-label="API-eq">${usd(t.usd)}</td></tr>${runsRow(t.runs)}`).join('');
-  return `${ids(s)}<p class=note>${s.start.replace('T',' ').slice(0,16)} → ${s.end.replace('T',' ').slice(11,16)} UTC · ${esc(s.project)} ·
+  return `${ids(s)}<p class=note>${esc(s.start.replace("T"," ").slice(0,16))} → ${esc(s.end.replace("T"," ").slice(11,16))} UTC · ${esc(s.project)} ·
     main thread <span data-count="${s.main}">${fmt(s.main)}</span> · subagents <span data-count="${s.agents}">${fmt(s.agents)}</span> (${s.runs} runs) · output <span data-count="${s.output}">${fmt(s.output)}</span> · <span class=usd>${usd(s.usd)} API-eq</span></p>
     <div class=scroll><table><tr><th>#</th><th style="text-align:left">prompt</th><th style="text-align:left">skill</th><th>tokens</th><th>output</th><th title="model requests">req</th><th style="text-align:left">calls</th><th>API-eq</th></tr>${turns}</table></div>
     <p class=note>calls: subagent tokens are measured; MCP and tool tokens marked ~ are estimated from the size of the result each call put into the context.</p>`}
@@ -407,11 +407,11 @@ function moreBtn(e){let el=nodes.get('more:'+e.more.id);
 // a session and everything it started, for the day header (a collapsed "+N more" still counts)
 function tally(s,seen=new Set()){if(seen.has(s.id))return[0,0];seen.add(s.id);let n=1,t=s.tokens;
   (kids.get(s.id)||[]).forEach(k=>{const[a,b]=tally(k,seen);n+=a;t+=b});return[n,t]}
-const dayName=d=>new Date(d+'T00:00:00Z').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
+const dayName=d=>!d?'No date':new Date(d+'T00:00:00Z').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
 const SORTS={recent:['Newest first',(a,b)=>b[0].s.start.localeCompare(a[0].s.start)],tokens:['Most tokens first',(a,b)=>b[0].s.tokens-a[0].s.tokens],
   agents:['Most subagent tokens first',(a,b)=>b[0].s.agents-a[0].s.agents]};
-function headEl(){const h=document.createElement('div');h.className='shead';h.setAttribute('aria-hidden','true');
-  h.innerHTML='<span></span><span class=d title="UTC">time</span><span class=t>session</span><span class=sk>top skill</span><span class="r n">prompts</span><span class="r n" title="subagent runs started in the session">children</span><span class=r>tokens</span><span class=track title="length is tokens against the largest session in the list">split</span><span></span>';return h}
+function headEl(){const h=document.createElement('div');h.className='shead';
+  h.innerHTML='<span></span><span class=d title="UTC">time</span><span class=t>session</span><span class=sk>top skill</span><span class="r n">prompts</span><span class="r n" title="subagent runs started in the session">subagents</span><span class=r>tokens</span><span class=track title="length is tokens against the largest session in the list">split</span><span></span>';return h}
 function dayEl(label,n,tk){const h=document.createElement('div');h.className='dayhd';
   h.innerHTML=`<b>${esc(label)}</b><span>${n} session${n===1?'':'s'} · ${fmt(tk)} tokens</span>`;return h}
 function render(){
@@ -419,6 +419,8 @@ function render(){
   const match=s=>!needle||(s.title||'').toLowerCase().includes(needle)||s.id.startsWith(needle)||(s.top_skill||'').includes(needle);
   let rows=S.filter(isRoot).map(s=>group(s,match)).filter(g=>g.length);
   rows.sort(SORTS[sortKey][1]);
+  // sessions with no start go last under Newest, so "No date" never sits between two days
+  if(sortKey==='recent')rows.sort((a,b)=>!a[0].s.start-!b[0].s.start);
   const page=rows.slice(0,limit),shown=page.flat(),keep=new Set(shown.map(e=>e.s?e.s.id:'more:'+e.more.id)),anim=smoothOk(),before=new Map();
   let top=list.getBoundingClientRect().top;
   if(anim)list.querySelectorAll(':scope>.srow:not(.ghost),:scope>.kids-more').forEach(el=>{before.set(el.dataset.id,el.getBoundingClientRect().top-top);el.getAnimations().forEach(a=>a.cancel())});
@@ -432,7 +434,7 @@ function render(){
   // by day: a header for each day (its sessions and tokens), newest first. Ranked: one header, and the date moves into the time column.
   const els=[];
   if(page.length){els.push(headEl());
-    if(sortKey==='recent'){let cur='';page.forEach(g=>{const day=g[0].s.start.slice(0,10);
+    if(sortKey==='recent'){let cur=null;page.forEach(g=>{const day=g[0].s.start.slice(0,10);
       if(day!==cur){cur=day;let n=0,tk=0;rows.forEach(r=>{if(r[0].s.start.slice(0,10)===day){const[a,b]=tally(r[0].s);n+=a;tk+=b}});els.push(dayEl(dayName(day),n,tk))}
       g.forEach(e=>els.push(rowFor(e)))})}
     else{let n=0,tk=0;rows.forEach(r=>{const[a,b]=tally(r[0].s);n+=a;tk+=b});els.push(dayEl(SORTS[sortKey][0],n,tk));page.forEach(g=>g.forEach(e=>els.push(rowFor(e))))}}
@@ -467,7 +469,7 @@ function renderCompare(){
   const keys=(f,n)=>{const tot={};sel.forEach(s=>Object.entries(s[f]).forEach(([k,v])=>tot[k]=(tot[k]||0)+v));return Object.entries(tot).sort((a,b)=>b[1]-a[1]).slice(0,n).map(e=>e[0])};
   const line=(label,vals,low)=>{const nums=vals.map(v=>typeof v==='number'?v:null).filter(v=>v!=null),best=low&&nums.length?Math.min(...nums):null;
     return `<tr><td>${label}</td>${vals.map(v=>`<td>${typeof v==='number'?(v===best?'<b>'+fmt(v)+'</b>':fmt(v)):esc(v)}</td>`).join('')}</tr>`};
-  let h=`<tr><th></th>${sel.map(s=>`<th title="${esc(s.title)}">${esc((s.title||'').slice(0,26))}<br><span class=usd>${s.id.slice(0,8)}</span></th>`).join('')}</tr>`;
+  let h=`<tr><th></th>${sel.map(s=>`<th title="${esc(s.title)}">${esc((s.title||'').slice(0,26))}<br><span class=usd>${esc(s.id.slice(0,8))}</span></th>`).join('')}</tr>`;
   h+=line('started',sel.map(s=>s.start.slice(0,10)));h+=line('prompts',sel.map(s=>s.prompts));
   h+=line('tokens',sel.map(s=>s.tokens),1);h+=line('tokens per prompt',sel.map(s=>s.tokens/Math.max(s.prompts,1)),1);
   h+=line('output tokens',sel.map(s=>s.output),1);h+=line('subagent runs',sel.map(s=>s.runs));
@@ -484,7 +486,7 @@ const box=document.getElementById('compare'),pickBar=document.getElementById('pi
 function updatePick(){
   // the tray rises when a second session is ticked and sinks again below two
   const n=picked.size,on=n>=2;pickBar.hidden=false;pickBar.classList.toggle('show',on);pickBar.inert=!on;document.body.classList.toggle('picking',on);go.disabled=!on;
-  if(n)document.getElementById('pick-hint').textContent=`${n} of 4 picked`;
+  if(n)document.getElementById('pick-hint').textContent=`${n} of 4 picked${n>=4?' · the 5th is blocked':''}`;
   box.classList.remove('on')}  // a changed pick list makes a shown comparison stale
 go.addEventListener('click',()=>{renderCompare();box.classList.add('on');box.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})});
 document.getElementById('clear-pick').addEventListener('click',()=>{picked.clear();render();updatePick()});

@@ -199,7 +199,7 @@ class SessionsTableTest(unittest.TestCase):
         self.assertIn("100*(main+ag)/MAXT", js)
         self.assertIn("<u class=a", js)                            # the colours still split main thread and subagents
         head = js.split("function headEl", 1)[1].split("function dayEl", 1)[0]
-        for col in ("time", "session", "top skill", "prompts", "children", "tokens", "split"):
+        for col in ("time", "session", "top skill", "prompts", "subagents", "tokens", "split"):
             self.assertIn(f">{col}</span>", head)
 
     def test_sort_is_three_buttons_and_the_tray_shows_from_two_picks(self):
@@ -207,7 +207,7 @@ class SessionsTableTest(unittest.TestCase):
         for key in ("recent", "tokens", "agents"):
             self.assertIn(f"{key}:[", js)
         self.assertNotIn("sortSel", js)
-        self.assertIn("`${n} of 4 picked`", js)                    # "2 of 4 picked"
+        self.assertIn("${n} of 4 picked", js)                      # "2 of 4 picked"
         self.assertIn("pickBar.classList.toggle('show',on)", js)
         self.assertIn("const n=picked.size,on=n>=2", js)
 
@@ -240,6 +240,47 @@ class SessionsTableTest(unittest.TestCase):
         self.assertIn("#session-list{border:1px solid var(--edge);border-radius:8px", classic)
         self.assertNotIn("uppercase", classic)
         self.assertIn("box-shadow:0 10px 30px -12px", classic)     # the Classic tray: tinted, soft shadow
+
+    def test_a_hostile_session_id_is_escaped_everywhere_the_script_writes_html(self):
+        js = dashboard.JS_SESSIONS
+        self.assertIn("<code class=sid8>${esc(s.id.slice(0,8))}</code>", js)
+        self.assertIn("${esc(s.id.slice(0,8))}</span></th>", js)               # the compare header
+        self.assertIn("<span class=d>${esc(when(s))}</span>", js)
+
+    def test_hostile_session_id_reaches_the_page_only_as_json_data(self):
+        from tokscope.report import _sessions_json
+        with tempfile.TemporaryDirectory() as d:
+            conn = connect(Path(d) / "t.db")
+            bad = "<img src=x onerror=alert(1)>"
+            conn.execute("INSERT INTO sessions (session_id, project, title, prompts) VALUES (?, 'p', 't', 1)", (bad,))
+            conn.execute("INSERT INTO requests (session_id, request_key, ts, model, prompt_idx, input, output, cache_read, cache_write_5m, "
+                         "cache_write_1h, cost_usd) VALUES (?, 'a', ?, 'm', 1, 5, 0, 0, 0, 0, 0)", (bad, ts(1)))
+            conn.commit()
+            page = dashboard.page_sessions(conn, dashboard.Filters({"range": ["all"]}), {})
+        markup, _, data = page.partition('<script type="application/json"')
+        self.assertNotIn("<img src=x", markup)                     # the id is only in the inert JSON block
+        self.assertNotIn("</", data.split(">", 1)[1].rsplit("</script>", 1)[0])    # and "</" cannot close that block
+        self.assertEqual(_sessions_json(conn, "WHERE 1", ())[0]["id"], bad)    # it stays data; esc() in the script makes it text
+
+    def test_labels_say_subagents_not_children_and_a_session_without_a_date_is_handled(self):
+        js = dashboard.JS_SESSIONS
+        head = js.split("function headEl", 1)[1].split("function dayEl", 1)[0]
+        self.assertNotIn("children", head)
+        self.assertIn("subagent runs", js)
+        self.assertIn("!d?'No date'", js)
+        self.assertIn("let cur=null", js)                          # a first day with no start still gets its header
+        self.assertIn("!a[0].s.start-!b[0].s.start", js)           # undated sessions sort last
+        self.assertNotIn("aria-hidden','true'", head)              # the column names are for screen readers too
+        self.assertIn("the 5th is blocked", js)
+        self.assertNotIn("#060", js)
+
+    def test_a_narrow_page_keeps_the_from_link_and_the_title_column(self):
+        from tokscope.layout import LAYOUT_CSS
+        block = LAYOUT_CSS.split("/* sessions:", 1)[1].split("/* end sessions */", 1)[0]
+        phone = block.split("@media (max-width:640px)", 1)[1]
+        self.assertNotIn(".from", phone.split("{display:none}")[0])        # the parent link stays at 375 px
+        self.assertIn("@media (max-width:1200px)", block)
+        self.assertIn("@media (max-width:1040px)", block)
 
     def test_the_static_report_gets_the_same_sort_control(self):
         from tokscope.report import write_report
