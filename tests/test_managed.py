@@ -86,6 +86,9 @@ class ManagedReadTest(unittest.TestCase):
     def test_missing_ant_and_a_failed_command_raise_readable_errors(self):
         with mock.patch.object(managed.shutil, "which", return_value=None):
             self.assertRaisesRegex(RuntimeError, "not installed", managed._run, ["beta:agents", "list"])
+        with mock.patch.object(managed.shutil, "which", return_value="/bin/ant"), \
+                mock.patch.object(managed.subprocess, "run", side_effect=OSError(8, "Exec format error")):
+            self.assertRaisesRegex(RuntimeError, "could not start: Exec format error", managed._run, ["beta:agents", "list"])
         failed = subprocess.CompletedProcess([], 1, stdout="", stderr="GET ...: 401 Unauthorized\n")
         with mock.patch.object(managed.shutil, "which", return_value="/bin/ant"), \
                 mock.patch.object(managed.subprocess, "run", return_value=failed):
@@ -112,10 +115,27 @@ class ActTest(unittest.TestCase):
         self.assertRaisesRegex(RuntimeError, "409", managed.act, "unpause", "depl_01Abcdefgh", broken)
         self.assertEqual(managed._cache, {})
 
+    def test_a_failure_after_the_write_landed_counts_as_done(self):
+        calls = []
+        def late(args):
+            calls.append(args[:2])
+            if args[1] == "pause":
+                raise RuntimeError("ant did not answer in 30 s")
+            return [{"status": "paused"}]
+        self.assertEqual(managed.act("pause", "depl_01Abcdefgh", late), "paused")
+        self.assertEqual(calls, [["beta:deployments", "pause"], ["beta:deployments", "retrieve"]])
+
+    def test_a_failure_that_left_the_state_alone_is_still_an_error(self):
+        def refused(args):
+            if args[1] == "unpause":
+                raise RuntimeError("409 Conflict")
+            return [{"status": "paused"}]
+        self.assertRaisesRegex(RuntimeError, "409", managed.act, "unpause", "depl_01Abcdefgh", refused)
+
     def test_only_pause_and_unpause_of_a_deployment_id_reach_ant(self):
         never = mock.Mock(side_effect=AssertionError("ran ant"))
         for action, dep in (("archive", "depl_01Abcdefgh"), ("run", "depl_01Abcdefgh"), ("pause", "depl_01Abc --profile x"),
-                            ("pause", "agent_01Abcdefgh"), ("pause", "--help"), ("pause", None), ("pause", ["depl_01Abcdefgh"])):
+                            ("pause", "agent_01Abcdefgh"), ("pause", "--help"), ("pause", "depl_01Abcdefgh\n"), ("pause", None), ("pause", ["depl_01Abcdefgh"])):
             self.assertRaises(ValueError, managed.act, action, dep, never)
         never.assert_not_called()
 
@@ -190,6 +210,12 @@ class ManagedPageTest(unittest.TestCase):
             body = dashboard.page_managed({}, "full")
         self.assertIn('data-dep-act="pause" data-dep="depl_01Act" data-name="A &quot;quoted&quot; &lt;one&gt;">Pause</button>', body)
         self.assertEqual(body.count("data-dep-act="), 1)            # archived: no write
+
+    def test_a_reason_other_than_manual_sits_outside_the_unbreakable_part(self):
+        deps = [DEP | {"paused_reason": {"type": "budget_reached"}}]
+        with mock.patch.object(managed, "_run", lambda a: {"beta:deployments": deps}.get(a[0], [])):
+            body = dashboard.page_managed({}, "full")
+        self.assertIn('>Unpause</button></span> <span class="note dep-why">(budget reached)</span>', body)
 
     def test_below_full_the_page_never_runs_ant(self):
         with mock.patch.object(managed, "_run", side_effect=AssertionError("ran ant")):

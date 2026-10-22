@@ -1088,13 +1088,16 @@ def _id_cell(v):
 
 def _dep_status(d):
     """The status, with Pause for an active deployment and Unpause for a paused one; no write for any other state.
-    The button shares the status cell, and a manual pause (the usual one) names no reason, so the table still fits."""
-    text = html.escape(d["status"] + (f' ({d["paused"]})' if d["paused"] not in ("", "manual") else ""))
+    The button shares the status cell, and a manual pause (the usual one) names no reason, so the table still fits.
+    Any other reason follows on its own and may wrap, so a long one cannot widen a phone card."""
+    reason = (f' <span class="note dep-why">({html.escape(d["paused"].replace("_", " "))})</span>'
+              if d["paused"] not in ("", "manual") else "")
     action = {"active": "pause", "paused": "unpause"}.get(d["status"])
     if not action:
-        return (text, "raw")
-    return (f'<span class="dep-st">{text} <button type="button" class="btn" data-dep-act="{action}" data-dep="{html.escape(d["id"])}" '
-            f'data-name="{html.escape(d["name"] or d["id"])}">{action.capitalize()}</button></span>', "raw")
+        return (html.escape(d["status"]) + reason, "raw")
+    return (f'<span class="dep-st">{html.escape(d["status"])} <button type="button" class="btn" data-dep-act="{action}" '
+            f'data-dep="{html.escape(d["id"])}" data-name="{html.escape(d["name"] or d["id"])}">{action.capitalize()}</button></span>'
+            + reason, "raw")
 
 
 def page_managed(qs, level):
@@ -1565,7 +1568,7 @@ class Live:
 
 
 def post(db, path, body, level):
-    """(code, JSON) for a write: an optimize job, a project's MCP servers, or pausing a Managed Agents deployment."""
+    """(code, JSON) for a write: an optimize job, a project's MCP servers, or pausing or unpausing a Managed Agents deployment."""
     if level != "full":
         return 403, {"error": "writes need the full privacy level"}
     if m := re.match(r"^api/projects/([0-9a-f]{10})/health$", path):

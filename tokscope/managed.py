@@ -20,7 +20,7 @@ _cache = {}
 
 
 def _run(args):
-    """One `ant` list command as a list of objects; jsonl prints one object per line."""
+    """One `ant` command as a list of objects; jsonl prints one object per line."""
     exe = shutil.which("ant")
     if not exe:
         raise RuntimeError("ant is not installed")
@@ -28,6 +28,8 @@ def _run(args):
         out = subprocess.run([exe, *args, "--format", "jsonl"], capture_output=True, text=True, timeout=TIMEOUT)
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"ant did not answer in {TIMEOUT} s") from None
+    except OSError as e:  # found on PATH but cannot start (a broken interpreter line, another architecture)
+        raise RuntimeError(f"ant could not start: {e.strerror or e}") from None
     if out.returncode:
         lines = [l for l in (out.stderr or out.stdout).strip().splitlines() if l.strip()]
         raise RuntimeError(" ".join(lines[:3])[:300] or f"ant exited with {out.returncode}")
@@ -121,15 +123,28 @@ def forget():
     _cache.clear()
 
 
+def _status(out):
+    return (out[0].get("status") if out and isinstance(out[0], dict) else None) or ""
+
+
 def act(action, dep_id, run=None):
     """Pause or unpause one deployment and return its new status. ValueError: not an action or not a deployment id,
-    checked before ant runs; RuntimeError: ant failed."""
+    checked before ant runs; RuntimeError: ant failed and the deployment is not in the state asked for."""
     if action not in ACTIONS:
         raise ValueError("pause or unpause only")
-    if not isinstance(dep_id, str) or not DEPLOYMENT_ID.match(dep_id):
+    if not isinstance(dep_id, str) or not DEPLOYMENT_ID.fullmatch(dep_id):
         raise ValueError("not a deployment id")
+    run = run or _run
     try:
-        out = (run or _run)(["beta:deployments", action, "--deployment-id", dep_id])
+        return _status(run(["beta:deployments", action, "--deployment-id", dep_id]))
+    except RuntimeError:
+        # ant can fail after the write landed (a timeout, output it could not print): ask once what the state is now
+        want = "paused" if action == "pause" else "active"
+        try:
+            if _status(run(["beta:deployments", "retrieve", "--deployment-id", dep_id])) == want:
+                return want
+        except RuntimeError:
+            pass
+        raise
     finally:
         forget()  # whatever ant did, the next read shows it
-    return (out[0].get("status") if out and isinstance(out[0], dict) else None) or ""
