@@ -20,7 +20,7 @@ if data.get("agent_id"):
 else:
     text = (f"PR #{pr} was opened. Per the CLAUDE.md Review rule, the main session now runs "
             f"/code-review:code-review {pr} (Anthropic plugin, with REVIEW.md; first pick the reviewers, their model and effort for this change type: REVIEW.md), "
-            f"then git fetch -q origin and /security-review when the type needs it, unless the owner said to skip review. "
+            f"then a security review when the type needs it (an agent on gh pr diff {pr}: the repo has no origin/HEAD for /security-review), unless the owner said to skip review. "
             f"During /factory, ignore this: Phase 6 reviews after Phase 5b.")
 print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": text}}))
 '

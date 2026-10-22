@@ -16,9 +16,10 @@ python3 -m unittest discover -s tests -q    # tests
   issue's "Done when". Steps: [uat.md](.claude/skills/factory/references/uat.md). Fix a screenshot problem without
   asking when this PR caused it or it fails Done-when; ask about one that is also on `main`.
 - **Review every PR** (outside `/factory`, unless the owner says skip): run `/code-review:code-review <PR>` (Anthropic's
-  plugin) with `REVIEW.md`, then `/security-review` when the change type needs it. Pick reviewers, model and effort
-  per [REVIEW.md](REVIEW.md#pick-the-reviewers-first). Subagents stop at `gh pr create` and never review. Report
-  findings; fix them only when the owner asks.
+  plugin) with `REVIEW.md`. First name the change type, then pick reviewers, model and effort per
+  [REVIEW.md](REVIEW.md#pick-the-reviewers-first). When the type needs a security review, give an agent `gh pr diff <PR>`:
+  `/security-review` needs `origin/HEAD`, and the remote here is `github`. Subagents stop at `gh pr create`, return the PR
+  number and never review. Report findings; fix them only when the owner asks (the screenshot rule above is the one exception).
 - Models: the `model:` and `effort:` lines in `.claude/agents/*.md` apply; review roles are chosen per review.
 - More: [DECISIONS.md](DECISIONS.md) (why), [REVIEW.md](REVIEW.md) (what reviewers check),
   [docs/design-prompt.md](docs/design-prompt.md) (ink style), [factory](.claude/skills/factory/SKILL.md) (`/factory`).
