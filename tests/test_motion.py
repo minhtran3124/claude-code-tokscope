@@ -90,9 +90,9 @@ class MotionTokensTest(unittest.TestCase):
             self.assertNotIn("transform", "".join(re.findall(r"@keyframes %s\{([^\n]*)\}\n" % kf, LAYOUT_CSS.split("prefers-reduced-motion:reduce){", 1)[1] + LAYOUT_DASH_CSS.split("prefers-reduced-motion:reduce){", 1)[1])))
 
     def test_the_hero_glow_and_the_spinners_stop_under_reduced_motion(self):
-        self.assertIn("@media (prefers-reduced-motion:reduce){.hero::before{animation:none}}", CLASSIC_CSS)
-        for css in (CLASSIC_DASH_CSS, dashboard.DASH_CSS):
-            self.assertIn("@media (prefers-reduced-motion:reduce){.runbar i,.spin,.busy::before{animation:none}}", css)
+        self.assertRegex(CLASSIC_CSS, r"@media \(prefers-reduced-motion:reduce\)\{\s*\.hero::before\{animation:none\}")
+        from tokscope.layout import LAYOUT_TOKEN_DASH_CSS
+        self.assertRegex(LAYOUT_TOKEN_DASH_CSS, r"@media \(prefers-reduced-motion:reduce\)\{\s*\.runbar i,\.spin,\.busy::before\{animation:none\}")
 
 
 if __name__ == "__main__":

@@ -638,7 +638,6 @@ td:not(:first-child):not(.l):not(.lm):not(.u):not(:is(.runs-row,table.sbs) td){f
 td.l,td.lm,td.calls,.md td{font-family:var(--sans)}
 .today-nums b,.pnums b{font-weight:600}
 .btn,.chip{font-weight:var(--btn-w)}
-.tools select,.tools input[type=search]{font-size:var(--ctl-size);font-weight:400}
 .bar i u,.key i,.split u,.share i,.runbar i{box-shadow:var(--seg-ring)}
 """
 
@@ -833,5 +832,4 @@ table.mcp td.st{font-family:var(--num-font)}
 .movers th{font-size:var(--lab-size);text-transform:var(--lab-case);letter-spacing:var(--lab-track);color:var(--lab-c)}
 .spark polyline,.tline{stroke:var(--trace-c)}
 .tdot{fill:var(--trace-c);stroke:var(--dot-edge)}
-.viz .dot{stroke:var(--dot-edge);stroke-width:var(--dot-w)}
 """
