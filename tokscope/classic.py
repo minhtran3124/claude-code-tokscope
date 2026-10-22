@@ -3,8 +3,9 @@
 Pages carry both skin stylesheets: <style id="skin-ink"> and <style id="skin-classic" media="not all">. The Classic/Ink button
 (key `s`) flips their media attributes; SKIN_APPLY restores the saved choice (localStorage `tokscope-skin`) before paint.
 The code of the switch is named "skin" (`grep -rn -i skin tokscope tests`); the `s` rows of both shortcut dialogs say
-"Classic or Ink design" instead. The skin block in report.py's JS_CORE reads #skin, #skin-ink and #skin-classic
-unguarded: a page without any of them stops the page script.
+"Classic or Ink design" instead. The skin block in report.py's JS_CORE reads #skin-ink and #skin-classic
+unguarded: a page without them stops the page script. #skin (the report's button) and the dashboard's [data-set-skin]
+segments are both optional.
 
 Pages also carry <style id="layout"> (layout.py): the rules both skins share. This sheet holds the tokens and the look
 block, plus the rules that differ from Ink or that must stay after a rule of its own. New markup gets its rules in
@@ -249,15 +250,6 @@ main a{color:var(--mark-ink);text-underline-offset:2px}
 .cols3 th:nth-child(3),.cols3 td:nth-child(3){width:48px}
 .cols3 .bar i{width:48px}
 .cols3 td:first-child{white-space:normal;overflow-wrap:anywhere}
-/* the "What changed" tables share fixed number columns so they line up one under the other */
-[data-region=changed] table{table-layout:fixed}
-[data-region=changed] td:not(:first-child){text-align:right;white-space:nowrap}
-[data-region=changed] :is(th,td):nth-child(2){width:76px}
-[data-region=changed] :is(th,td):nth-child(3){width:80px}
-[data-region=changed] :is(th,td):nth-child(4){width:80px}
-[data-region=changed] .bar i{display:none}
-[data-region=changed] td:first-child{overflow-wrap:break-word}
-@container (max-width:520px){[data-region=changed] :is(th,td):nth-child(2){width:62px}[data-region=changed] :is(th,td):is(:nth-child(3),:nth-child(4)){width:70px}}
 @media (max-width:900px){.cols2,.cols3{grid-template-columns:1fr}}
 .today-nums span{display:block;font-size:12px;color:var(--ink2)}
 .today-nums b{font-size:22px;font-variant-numeric:tabular-nums}
@@ -425,6 +417,27 @@ select option{background:var(--surface);color:var(--ink)}
 border-radius:8px;padding:10px 12px;margin:0 0 16px}
 .fm dt{color:var(--muted)}
 .fm dd{margin:0}
+/* overview: look only (the layout is in layout.py, between "overview" and "end overview") */
+.answer{border-color:color-mix(in oklch,var(--mark) 55%,var(--edge));background:linear-gradient(var(--tint),transparent 110px),var(--surface)}
+.kpis.strip{border:1px solid var(--edge);border-radius:12px}
+.card.spenders{border-radius:12px}
+.fl span,.ctl-l{font-size:12px;color:var(--ink2)}
+.cause{font-size:13px}
+.cause b{font-weight:600}
+.tband{fill:var(--tint)}
+.tline{stroke:var(--mark)}
+.tdot{fill:var(--mark);stroke:var(--surface);stroke-width:1.5}
+.tk.now{background:var(--mark)}
+.movers th{font-weight:600;font-size:12px;color:var(--ink2)}
+.tag{background:var(--tint);color:var(--mark-ink)}
+.vs .trend.up,.vs .trend.down,.vs .trend.flat{padding:1px 8px}
+.privacy b{text-transform:uppercase;font-size:11px;letter-spacing:.04em;margin:0}
+.segctl .chip[aria-pressed=true]{background:var(--tint);border-color:var(--mark);color:var(--mark-ink)}
+.segctl .chip:first-child{border-radius:8px 0 0 8px}
+.segctl .chip:last-child{border-radius:0 8px 8px 0}
+#trend svg rect.m{stroke:var(--surface);stroke-width:1}
+.key i.dash{border-top-color:var(--agent-ink)}
+/* end overview */
 """
 
 SKIN_APPLY = ("<script>try{if(localStorage.getItem('tokscope-skin')==='classic'){"
