@@ -6,12 +6,12 @@ A reusable prompt for designing a tokscope screen (dashboard page or the HTML re
 - Changed on purpose: Claude Bot Local's swatches mean a project's state. tokscope has no states; its colours mean data. So the swatches are remapped to series and results below, and "no accent that isn't a state" becomes "no accent that isn't data".
 - Changed on purpose: tokscope pages are dense tables and numbers. Shadows go on one card per page, not every card, and tables keep thin rules.
 - Text colours were checked for WCAG AA on paper, sheet and chip in both themes (contrast in brackets, the lowest). Light-theme swatch fills are below 3:1 on sheet, so every filled mark carries an ink outline.
-- The colours below are the live palette: the `:root` and DARK blocks of `CSS` in `tokscope/web/report.py` (since #6).
-- The dashboard and the report share one stylesheet (`CSS` in `tokscope/web/report.py`). A design applies to both.
+- The colours below are the live palette: the `:root` and DARK blocks of `CSS` in `tokscope/web/report/styles.py` (since #6).
+- The dashboard and the report share one stylesheet (`CSS` in `tokscope/web/report/styles.py`). A design applies to both.
 
 ```text
 Design [SCREEN, e.g. "the Overview page" | "the Sessions page" | "the HTML report"] for tokscope in its "ink" style.
-Output: [mockup on a design canvas | CSS and markup changes in tokscope/web/report.py and tokscope/web/dashboard/].
+Output: [mockup on a design canvas | CSS and markup changes in tokscope/web/report/ and tokscope/web/dashboard/].
 
 ## Product
 tokscope measures the tokens Claude Code uses: per session, skill, subagent and phase. It reads
@@ -38,7 +38,7 @@ Data colours, one meaning each, never decoration (fill · text light · text dar
                        "Other" is the palest tint; never more than 5 in one chart.
                        Neighbouring series differ by at least 1.5:1 in luminance.
 Theme: light, dark and System via html[data-theme] and prefers-color-scheme (the :root and
-DARK blocks in tokscope/web/report.py). Every colour has both values and passes WCAG AA.
+DARK blocks in tokscope/web/report/styles.py). Every colour has both values and passes WCAG AA.
 
 Type
 - Mono = IBM Plex Mono (--mono): numbers, KPI values, token counts, costs, session ids,

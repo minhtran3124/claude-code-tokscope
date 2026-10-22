@@ -19,7 +19,7 @@ from ...integrations import managed, registry
 from ..theme import fonts
 from ..theme.brand import FAVICON
 from ...core.ingest import PROJECTS_DIR, connect, ingest
-from ..report import _sessions_json
+from ..report.sections.sessions import _sessions_json
 from .common import Filters, PAGES
 from .pages.library import JOB_ID
 from .pages.overview import _days, _totals

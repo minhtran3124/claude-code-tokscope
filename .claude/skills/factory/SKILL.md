@@ -87,7 +87,7 @@ Never weaken or delete a test to make it pass.
 
 ## Phase 5b: UAT for UI changes
 
-Only when the PR changes what the owner sees: `tokscope/web/report.py` or `tokscope/web/dashboard/` markup, CSS, or page script. Skip it for other PRs. Then read [references/uat.md](references/uat.md) and follow its steps.
+Only when the PR changes what the owner sees: `tokscope/web/report/` or `tokscope/web/dashboard/` markup, CSS, or page script. Skip it for other PRs. Then read [references/uat.md](references/uat.md) and follow its steps.
 
 ## Phase 6: Code and security review
 

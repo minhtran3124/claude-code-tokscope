@@ -9,7 +9,8 @@ from ....features import library
 from ... import charts
 from ....features.changes import list_changes
 from ....core.pricing import API_EQ_NOTE
-from ...report import TOKENS, _table, _tok, _usd
+from ...report.common import TOKENS
+from ...report.widgets import _table, _tok, _usd
 from ..common import Filters, _iso, _q
 
 

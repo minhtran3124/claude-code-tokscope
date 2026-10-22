@@ -2,10 +2,10 @@ import re
 import unittest
 
 from tokscope.web import dashboard
-from tokscope.web.report import JS_CORE
+from tokscope.web.report.scripts import JS_CORE
 from tokscope.web.theme.classic import CLASSIC_CSS, CLASSIC_DASH_CSS
 from tokscope.web.theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS
-from tokscope.web.report import CSS
+from tokscope.web.report.styles import CSS
 
 SHEETS = {"layout": LAYOUT_CSS, "layout-dash": LAYOUT_DASH_CSS, "ink": CSS, "ink-dash": dashboard.DASH_CSS,
           "classic": CLASSIC_CSS, "classic-dash": CLASSIC_DASH_CSS}

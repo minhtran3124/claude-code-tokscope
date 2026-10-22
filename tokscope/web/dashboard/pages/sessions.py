@@ -3,8 +3,8 @@
 import html
 import json
 
-from ...report import _sessions_json
-from ...report import SORT_SEG
+from ...report.sections.sessions import _sessions_json
+from ...report.scripts import SORT_SEG
 
 
 def page_sessions(conn, f, qs):

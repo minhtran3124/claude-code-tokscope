@@ -13,7 +13,8 @@ from ..theme.classic import CLASSIC_CSS, CLASSIC_DASH_CSS, SKIN_APPLY
 from ..theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS, LAYOUT_TOKEN_CSS, LAYOUT_TOKEN_DASH_CSS
 from ..theme.brand import MARK, favicon_link
 from ...features.changes import BENCH_PROJECT
-from ..report import CSS, JS_BENCH, JS_CORE, JS_SESSIONS, JS_TREND
+from ..report.scripts import JS_BENCH, JS_CORE, JS_SESSIONS, JS_TREND
+from ..report.styles import CSS
 from .common import Filters, PAGES, RANGES, _q
 from .pages.benchmarks import page_benchmarks
 from .pages.breakdowns import page_breakdowns

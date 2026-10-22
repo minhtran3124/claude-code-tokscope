@@ -3,7 +3,7 @@
 Pages carry both skin stylesheets: <style id="skin-ink"> and <style id="skin-classic" media="not all">. The Classic/Ink button
 (key `s`) flips their media attributes; SKIN_APPLY restores the saved choice (localStorage `tokscope-skin`) before paint.
 The code of the switch is named "skin" (`grep -rn -i skin tokscope tests`); the `s` rows of both shortcut dialogs say
-"Classic or Ink design" instead. The skin block in report.py's JS_CORE reads #skin-ink and #skin-classic
+"Classic or Ink design" instead. The skin block in report/scripts.py's JS_CORE reads #skin-ink and #skin-classic
 unguarded: a page without them stops the page script. #skin (the report's button) and the dashboard's [data-set-skin]
 segments are both optional.
 

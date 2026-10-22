@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 from ....features import projects
-from ...report import _tok, _usd
+from ...report.widgets import _tok, _usd
 
 
 def _project_card(g):
