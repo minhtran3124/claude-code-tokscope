@@ -249,6 +249,15 @@ class ManagedPageTest(unittest.TestCase):
         self.assertIn("&lt;b&gt;d&lt;/b&gt;", body)
         self.assertIn("<dt>&lt;k&gt;</dt><dd>&lt;v&gt;</dd>", body)
 
+    def test_odd_shapes_and_a_nameless_server_do_not_break_the_view(self):
+        agents = [AGENT | {"metadata": ["x"], "description": {"a": 1}, "system": None,
+                           "mcp_servers": [{"url": "https://nameless.example/"}],
+                           "tools": [{"type": "agent_toolset_20260401"}]}]
+        with mock.patch.object(managed, "_run", lambda a: {"beta:agents": agents}.get(a[0], [])):
+            body = dashboard.page_managed({"agent": ["agent_01A"]}, "full")
+        self.assertIn('id="agent-config"', body)
+        self.assertIn("<code>https://nameless.example/</code>", body)   # listed though the built-in toolset has no server
+
     def test_an_unknown_agent_says_so(self):
         with mock.patch.object(managed, "_run", fake()):
             body = dashboard.page_managed({"agent": ['agent_"<x>']}, "full")

@@ -47,7 +47,7 @@ subprocess.run(["ant", "beta:deployments", "pause", "--deployment-id", dep_id, "
 
 1. **Deployments**: tên, trạng thái (chip running/paused + lý do), cron và giờ địa phương, lần chạy kế tiếp, budget, tổng cost của các session thuộc deployment. Nút **Pause / Unpause**, và tùy chọn **Run now**.
 2. **Sessions**: list theo thời gian, lọc theo agent/deployment; cột status, thời lượng, input/output/cache tokens, `list_cost`.
-3. **Agents**: tên, model/effort, MCP servers, skills; system prompt thu gọn.
+3. **Agents**: tên, model/effort, MCP servers, skills. Đã làm (PR #70): bấm tên agent mở trang cấu hình, hiện system prompt đầy đủ, toolset và permission, chỉ ở level `full`.
 4. Lấy dữ liệu: cache trong bộ nhớ 30–60 s và có nút Refresh. Không đưa vào vòng poll 2 s của `api/version` (mỗi lần poll là một lần gọi mạng ra ngoài).
 
 Route khớp với handler hiện có:

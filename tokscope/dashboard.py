@@ -1105,8 +1105,8 @@ def _agent_link(a):
 
 
 def _toolsets(a):
-    """One block per toolset, as the Console shows them: what it is, its default, each tool set apart from that default,
-    and for an MCP toolset its server's URL. Blocks, not a table, so a phone needs no sideways scroll."""
+    """One block per toolset: what it is, its default, each tool set apart from that default, and for an MCP toolset
+    its server's URL. Blocks, not a table, so a phone needs no sideways scroll."""
     def state(enabled, policy):
         return "off" if enabled is False else policy or "on"
     urls = dict(a["servers"])
@@ -1123,13 +1123,14 @@ def _toolsets(a):
 
 
 def _agent_view(a, head):
-    """One agent's configuration, read-only: what the Console's Configuration tab shows, from the same list read."""
+    """One agent's configuration, read only, from the same list read: model, prompt, tools, MCP servers, skills."""
     model = " · ".join(x for x in (a["model"], a["effort"] and f'{a["effort"]} effort', a["speed"]) if x) or "–"
     version = " · ".join(x for x in (a["version"] is not None and f'v{a["version"]}' or "", a["updated_at"] and f'updated {_when(a["updated_at"])}') if x)
     meta = "".join(f"<dt>{html.escape(str(k))}</dt><dd>{html.escape(str(v))}</dd>" for k, v in sorted(a["metadata"].items()))
     tools = _toolsets(a)
-    in_tools = {t["server"] for t in a["tools"]}  # a server with no toolset is still listed, with its URL
-    servers = "".join(f'<li>{html.escape(n or "–")} <code>{html.escape(u)}</code></li>' for n, u in a["servers"] if n not in in_tools)
+    in_tools = {t["server"] for t in a["tools"] if t["server"]}  # a server with no toolset is still listed, with its URL
+    servers = "".join(f'<li>{html.escape(n or "–")} <code>{html.escape(u)}</code></li>' for n, u in a["servers"]
+                      if not n or n not in in_tools)
     multi = a["multiagent"]
     return "".join([
         '<p><a href="/managed">← All managed agents</a></p>', head,
