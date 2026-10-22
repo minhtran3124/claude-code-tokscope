@@ -127,9 +127,10 @@ ExecStart=/usr/bin/python3 -I /path/to/tokscope/collector/otlp_receiver.py
 **From a `.deb` (Ubuntu or Debian, x86_64).** Build it in a clone with `cd desktop && npm install && npm run dist`; the
 file is `desktop/dist/tokscope_<version>_amd64.deb`. On any machine, `sudo apt install ./tokscope_<version>_amd64.deb`
 installs the app in `/opt/tokscope` with a menu entry (right-click its icon and choose Add to Favorites to pin it).
-It needs `python3` 3.10 or later, which `apt` installs when it is missing. A systemd user service, `tokscope.service`,
-keeps `tokscope serve` on 127.0.0.1:8770 from each user's next login (start it now with
-`systemctl --user start tokscope`). The data stays in `~/.local/share/tokscope`. `sudo apt remove tokscope` removes it.
+It needs `python3` 3.10 or later, which `apt` installs when it is missing. It also installs a systemd user service, `tokscope.service`, that keeps `tokscope serve` on 127.0.0.1:8770; each
+user turns it on once with `systemctl --user enable --now tokscope` (it is not enabled for everyone, because another
+user of a shared machine could then reach the dashboard on that port). Without it, the window starts its own server.
+The data stays in `~/.local/share/tokscope`. `sudo apt remove tokscope` removes it.
 
 **From a clone.** `desktop/install.sh` installs the same window and service for your user (needs Node.js and npm) and
 adds `tokscope` to the Linux app menu. `desktop/install.sh --uninstall` removes the launcher, the service,

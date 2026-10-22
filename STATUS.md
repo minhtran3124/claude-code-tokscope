@@ -18,7 +18,7 @@ Close #23 after a look at the dashboard on `main` at 1440 and 375 px; fix CI bil
 - GitHub Actions jobs do not start: account payment or spending limit (see Settings > Billing).
 
 ## Recent
-- 2026-10-22: desktop `.deb` (electron-builder): bundles the app and the CLI, depends on python3 >= 3.10, setuid sandbox, user service enabled by postinst; installed and served on a clean ubuntu:22.04 in Docker (PR to `desktop-app`).
+- 2026-10-22: desktop `.deb` (electron-builder): bundles the app and the CLI, depends on python3 >= 3.10, setuid sandbox, user service file installed (each user enables it); installed and served on a clean ubuntu:22.04 in Docker (PR to `desktop-app`).
 - 2026-10-22: desktop app background service: `tokscope.service` (systemd user) keeps `tokscope serve` on 127.0.0.1:8770, the window reuses it (PR to `desktop-app`).
 - 2026-10-22: desktop app: Electron window in `desktop/` that starts `tokscope serve`, launcher installed and pinned to the GNOME dock (PR open).
 - 2026-10-22: released v0.2.0 (the #23 dashboard redesign): version bump and changelog entry (PR #40); tag v0.2.0 and GitHub release follow the merge.
