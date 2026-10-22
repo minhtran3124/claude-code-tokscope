@@ -254,4 +254,13 @@ pointer-events:none;animation:chip-in var(--t-state) var(--ease) both}
 @keyframes chip-out{to{opacity:0}}
 @keyframes toast-in{from{opacity:0}}
 }
+/* breakdowns: a folded section shows its finding; the "how this is counted" text sits inside, open */
+details.more>summary .finding b{color:var(--ink);font-weight:600}
+details.more>summary .mini{display:inline-block;vertical-align:middle;width:84px;height:6px;margin-left:10px;border-radius:3px;background:var(--track);overflow:hidden}
+details.more>summary .mini i{display:block;height:100%;min-width:2px;border-radius:3px;background:var(--mark)}
+details.more>.how{margin:2px 0 10px;max-width:84ch}
+details.finding-sec>.empty{text-align:left;padding:18px 16px}
+details.finding-sec .empty code{overflow-wrap:anywhere}
+@media (max-width:640px){details.more>summary .mini{display:block;margin:6px 0 0;width:min(100%,160px)}}
+/* end breakdowns */
 """

@@ -18,6 +18,7 @@ Review and merge the step 0 and step 1 PRs of #23, then start step 2 (Overview).
 - GitHub Actions jobs do not start: account payment or spending limit (see Settings > Billing).
 
 ## Recent
+- 2026-10-22: #23 step 4: Breakdowns sections show their finding in the summary line (share bar, empty-state hints); PR open on #26.
 - 2026-10-22: #23 step 3: Sessions is a 44 px table grouped by day, with a sort control and a compare tray (PR open, stacked on step 1).
 - 2026-10-22: #23 step 1: motion tokens, first-paint-only entrances, delta chip instead of count-up, one-ring live dot, per-rule reduced motion (PR open).
 - 2026-10-22: #23 step 0: shared layout sheet (`tokscope/layout.py`) loaded before both skins; 64 screenshots (all pages, both skins, light and dark, 1440 and 375) pixel-identical to main.
