@@ -4,7 +4,7 @@ import html
 from datetime import datetime, timedelta, timezone
 from statistics import median
 
-from ....core import errors, skills, tz
+from ....core import cache, errors, skills, tz
 from ... import charts
 from ....core.calls import est_tokens, mcp_server
 from ....core.ingest import CARRIED
@@ -66,6 +66,52 @@ def _errors_section(conn, cond, params):
         "the skill or subagent made them",
         (charts.share_bar([(k.replace("_", " "), n) for k, n in kinds], "failed calls") if kinds else "") + "".join(tables),
         "errors", total["errors"] / total["calls"])
+
+
+HINTS = {
+    "ttl_expired_5m": "keep the session warm (the 5 minute cache expires when you pause) or use the 1 hour cache TTL",
+    "ttl_expired_1h": "the 1 hour cache expired too: long breaks always re-cache, so start a fresh session instead",
+    "prefix_changed": "keep MCP tool lists and the system prompt stable inside a session (tools added or removed re-cache everything after them)",
+}
+
+
+def _cache_section(conn, cond, params):
+    """Hit ratio and cache-write $ per session, skill, subagent type and model, with the likely misses and their causes."""
+    reqs, misses = cache.scan(conn, cond, params)
+    ingest = "Run <code>tokscope ingest</code> after a Claude Code session to fill it."
+    if not any(r["reads"] or r["writes"] for r in reqs):
+        return _section("Prompt cache", "No cache use recorded", "", "", "cache",
+                        empty=("No cache data yet", "Cache hit ratio and re-cache cost show here. " + ingest))
+    t = cache.totals(reqs, misses)
+    top = cache.causes(misses)
+    finding = (f"{cache.pct(t['hit_ratio'])} of prompt tokens came from the cache; {_usd(t['write_usd'])} spent writing it"
+               + (f"; {t['misses']:,} likely miss{'es' * (t['misses'] != 1)} re-cached {_tok(t['recache_tokens'])} "
+                  f"({_usd(t['recache_usd'])}), top cause {html.escape(top[0][0])}" if misses else "; no likely miss"))
+    tables = []
+    for by, head in (("session", "Session"), ("skill", "Skill"), ("agent", "Subagent type"), ("model", "Model")):
+        found = cache.rows(reqs, by, 10)
+        tables.append(f"<h3>{head}</h3>" + _table(
+            [head.lower(), "requests", "hit ratio", "cache-write", "re-cache (misses)", "misses"],
+            [((d["key"][:8] if by == "session" else d["key"]), d["requests"], cache.pct(d["hit_ratio"]),
+              (_usd(d["write_usd"]), "u"), (_usd(d["recache_usd"]), "u"), d["misses"]) for d in found], 1))
+    why = ""
+    if top:
+        why = ("<h3>Likely miss causes</h3>" + _table(
+            ["cause", "misses", "re-cached", "API-eq", "what to do"],
+            [(c, n, _tok(tk), (_usd(usd), "u"), (HINTS.get(c, ""), "lm")) for c, n, tk, usd in top], 1))
+    off = cache.official(conn, cond, params)
+    official = ""
+    if off:
+        official = (f"<h3>Miss causes ({cache.OFFICIAL})</h3><p class='note'>{off['misses']:,} misses in {off['sessions']} "
+                    f"session{'s' * (off['sessions'] != 1)}, {_tok(off['recache_tokens'])} re-cached tokens.</p>"
+                    + _table(["cause", "misses"], sorted(off["causes"].items(), key=lambda kv: (-kv[1], kv[0])), 1))
+    return _section(
+        "Prompt cache", finding,
+        "hit ratio = cache_read / (cache_read + cache writes + uncached input). cache-write = what writing the cache cost at list "
+        "price (1.25x input for 5 minutes, 2x for 1 hour). A likely miss is a request whose cache_read fell below half of the "
+        "request before it in the same thread while it wrote at least 2K tokens, with no /compact between; the cause comes from "
+        "the idle gap, so it is a heuristic, not what Claude Code reported",
+        why + official + "".join(tables), "cache", t["hit_ratio"])
 
 
 def _breakdowns(conn, cond, params):
@@ -209,4 +255,5 @@ def _breakdowns(conn, cond, params):
                  empty=None if by_type else ("No subagent runs yet", "Each subagent type shows here once Claude Code starts one "
                                              "(the Agent tool). " + ingest)),
         _errors_section(conn, cond, params),
+        _cache_section(conn, cond, params),
     ])

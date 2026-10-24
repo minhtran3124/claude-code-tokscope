@@ -84,7 +84,7 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 <a href="#summary">Summary</a>
 <a href="#breakdowns">Breakdowns</a>
 <div class="sub-toc"><a href="#by-week">Week over week</a><a href="#by-mcp">By MCP server</a><a href="#by-tool">By tool</a><a href="#by-phase">By phase</a>
-<a href="#by-owner">By owner</a><a href="#by-skill">By skill</a><a href="#agent-types">Subagent types</a><a href="#errors">Errors</a></div>
+<a href="#by-owner">By owner</a><a href="#by-skill">By skill</a><a href="#agent-types">Subagent types</a><a href="#errors">Errors</a><a href="#cache">Prompt cache</a></div>
 </nav><div class="side-foot"><button type="button" class="chip" id="theme">Theme</button>
 <span class="segctl" role="group" aria-label="Time zone"><button type="button" class="chip" data-set-tz="local" aria-pressed="false" title="Show times in this browser's time zone">Local</button><button type="button" class="chip" data-set-tz="utc" aria-pressed="false">UTC</button></span>
 <button type="button" class="chip" id="keys-btn" aria-label="Keyboard shortcuts"><kbd>?</kbd></button>{SKIN_BUTTON}</div></aside><main>
