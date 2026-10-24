@@ -68,5 +68,14 @@ class SetupScriptTest(unittest.TestCase):
         self.assertTrue(self.link.is_symlink())
 
 
+class LauncherCwdTest(unittest.TestCase):
+    def test_a_relative_out_lands_in_the_callers_folder(self):
+        with tempfile.TemporaryDirectory() as d:
+            env = {**os.environ, "TOKSCOPE_HOME": str(Path(d) / "data")}
+            r = subprocess.run([str(ROOT / "bin" / "tokscope"), "report", "--out", "x.html"], cwd=d, env=env, capture_output=True, text=True)
+            self.assertTrue((Path(d) / "x.html").exists(), r.stdout + r.stderr)
+            self.assertFalse((ROOT / "x.html").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

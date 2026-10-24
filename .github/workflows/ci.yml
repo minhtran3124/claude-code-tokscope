@@ -40,6 +40,7 @@ jobs:
           cd /tmp
           export TOKSCOPE_HOME=/tmp/tokscope-home
           /tmp/venv/bin/tokscope --version
+          HOME=/tmp/empty-home /tmp/venv/bin/tokscope ingest
           /tmp/venv/bin/tokscope summary --by phase
           /tmp/venv/bin/tokscope report
           test -s /tmp/tokscope-home/reports/report.html
