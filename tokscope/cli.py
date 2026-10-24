@@ -299,6 +299,8 @@ def main():
     elif args.cmd == "serve":
         from .web.dashboard import serve
 
+        if args.projects_dir is not None and not (args.projects_dir and Path(args.projects_dir).expanduser().is_dir()):  # a typo would give an empty dashboard
+            sys.exit(f"tokscope: --projects-dir {args.projects_dir!r} is not a folder")
         try:
             serve(DB, PHASES, args.port, args.interval, not args.no_open, args.privacy, projects_dir=args.projects_dir)
         except OSError as e:  # the port is taken: say so instead of a traceback
