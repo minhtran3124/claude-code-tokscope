@@ -790,6 +790,11 @@ code.login{display:block;margin-top:2px;font-size:11.5px;color:var(--ink2);overf
 .spin{display:inline-block;width:12px;height:12px;margin-right:7px;vertical-align:-1px;border:2px solid var(--mark);border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
 .runbar{background:var(--track);overflow:hidden;margin:14px 0 10px}
 .runbar i{display:block;width:35%;height:100%;background:var(--mark);animation:slide 1.6s var(--ease) infinite}
+/* a page takes a moment to render: DASH_JS adds html.loading from a click on a link until the next page arrives */
+#navload{position:fixed;inset:0 0 auto 0;height:3px;z-index:50;overflow:hidden;opacity:0;pointer-events:none;transition:opacity var(--t-state) var(--ease)}
+#navload i{display:block;width:35%;height:100%;background:var(--mark);animation:slide 1.6s var(--ease) infinite}
+html.loading #navload{opacity:1}
+html.loading main{opacity:.6;transition:opacity var(--t-state) var(--ease)}
 .runline{margin:0 0 8px}
 .runline b{font-variant-numeric:tabular-nums}
 p.warn{color:var(--agent-ink);font-size:13px}
@@ -812,6 +817,7 @@ a.outcome.run{color:var(--ink);text-decoration:none;background:color-mix(in oklc
 a.outcome.run:hover{background:color-mix(in oklch,var(--mark) 15%,var(--surface))}
 @media (prefers-reduced-motion:reduce){
 .runbar i,.spin,.busy::before{animation:none}
+#navload i{animation:none;width:100%}
 }
 .cmp .viewbar{margin-bottom:8px}
 .cmp .path{margin:0}

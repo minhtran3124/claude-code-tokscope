@@ -18,7 +18,7 @@ def set_zone(name):
         except Exception:
             raise ValueError(f"unknown time zone {name!r}, e.g. UTC or Asia/Ho_Chi_Minh") from None
     _name = name or None
-    local_day.cache_clear()
+    _day_of_minute.cache_clear()
 
 
 def zone():
@@ -37,12 +37,17 @@ def now():
     return datetime.now(timezone.utc).astimezone(zone())
 
 
-@lru_cache(maxsize=65536)
 def local_day(ts):
-    """'YYYY-MM-DD' of a stored UTC timestamp in the zone (None stays None)."""
+    """'YYYY-MM-DD' of a stored UTC timestamp in the zone (None stays None). One answer per minute: a zone's offset
+    changes on a whole minute, so the seconds never change the day, and the SQL function calls this once per request."""
     if not ts:
         return None
-    return datetime.strptime(ts[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc).astimezone(zone()).strftime("%Y-%m-%d")
+    return _day_of_minute(ts[:16])
+
+
+@lru_cache(maxsize=262144)
+def _day_of_minute(minute):
+    return datetime.fromisoformat(minute).replace(tzinfo=timezone.utc).astimezone(zone()).strftime("%Y-%m-%d")
 
 
 def midnight(day=None):

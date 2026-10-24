@@ -168,6 +168,16 @@ document.querySelectorAll('[data-dep-act]').forEach(b=>b.addEventListener('click
 """
 
 DASH_JS = """
+// A page takes a moment to render (the Overview reads the whole range): from a click on a link or Apply until the next
+// page arrives, a bar runs along the top and the page dims. Quick pages (under 150 ms) show nothing.
+(()=>{const bar=document.createElement('div');bar.id='navload';bar.setAttribute('aria-hidden','true');bar.innerHTML='<i></i>';document.body.appendChild(bar);
+  let t;const on=()=>{clearTimeout(t);t=setTimeout(()=>root.classList.add('loading'),150)};
+  addEventListener('pageshow',()=>{clearTimeout(t);root.classList.remove('loading')});
+  document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest('a[href]');
+    if(!a||e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||a.target||a.hasAttribute('download'))return;
+    const u=new URL(a.href,location.href);
+    if(u.origin===location.origin&&u.pathname+u.search!==location.pathname+location.search&&!/^\/(api)\//.test(u.pathname))on()});
+  document.addEventListener('submit',e=>{if(e.target.matches('form.filters'))on()})})();
 // Apply keeps only the filters set, so the URL reads like the view (range=30 is the default)
 document.querySelectorAll('form.filters').forEach(fm=>fm.addEventListener('submit',e=>{e.preventDefault();const q=new URLSearchParams();
   fm.querySelectorAll('select').forEach(x=>{if(x.value&&!(x.name==='range'&&x.value==='30'))q.set(x.name,x.value)});

@@ -1,5 +1,5 @@
 // A window around `tokscope serve`: start the server on a free port, show it, stop it on quit.
-const { app, BrowserWindow, shell } = require("electron");
+const { app, BrowserWindow, nativeTheme, shell } = require("electron");
 const { spawn } = require("child_process");
 const net = require("net");
 const http = require("http");
@@ -55,8 +55,9 @@ function isTokscope(url) {
 }
 
 async function start() {
+  createWindow();  // at once, with a loading page: the server and the first page can take seconds
   const serviceUrl = `http://127.0.0.1:${SERVICE_PORT}/`;
-  if (await isTokscope(serviceUrl)) return openWindow(serviceUrl);  // the service is up: just show it
+  if (await isTokscope(serviceUrl)) return showDashboard(serviceUrl);  // the service is up: just show it
   const port = await freePort();
   // The server runs under a small sh that stops it when this process is gone, however it went (a quit, a signal,
   // SIGKILL, a crash). Killing the sh runs its trap, which stops the server.
@@ -66,7 +67,7 @@ async function start() {
   server.once("exit", (code) => { server = null; app.exit(code || 1); });
   const url = `http://127.0.0.1:${port}/`;
   await waitFor(url);
-  openWindow(url);
+  showDashboard(url);
 }
 
 // Only web links leave the window, and only to the browser. Whatever answers on the port could ask for a file:, smb: or
@@ -77,15 +78,37 @@ function openExternal(u) {
   } catch (e) { /* not a URL: ignore */ }
 }
 
-function openWindow(url) {
-  win = new BrowserWindow({ width: 1440, height: 900, title: "tokscope", autoHideMenuBar: true });
+// page and ink colours of the dashboard (--page and --ink in the light and dark themes)
+function loadingPage(dark) {
+  const bg = dark ? "#1d1a15" : "#f2efe7", fg = dark ? "#f2efe7" : "#231e16", mark = dark ? "#76a0e2" : "#2f5aa8";
+  const html = `<!doctype html><meta charset="utf-8"><title>tokscope</title><style>
+html,body{height:100%;margin:0;background:${bg};color:${fg};font:15px system-ui,sans-serif}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+i{width:26px;height:26px;border:3px solid ${mark};border-right-color:transparent;border-radius:50%;animation:s .8s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){i{animation:none}}</style>
+<i></i><div>Starting tokscope…</div>`;
+  return "data:text/html;charset=utf-8," + encodeURIComponent(html);
+}
+
+let base = null;  // the dashboard's address once it answers; nothing else may be shown in the window
+
+function createWindow() {
+  const dark = nativeTheme.shouldUseDarkColors;
+  // backgroundColor is what shows before anything is painted, so the window never flashes white
+  win = new BrowserWindow({ width: 1440, height: 900, title: "tokscope", autoHideMenuBar: true, backgroundColor: dark ? "#1d1a15" : "#f2efe7" });
   // anything that is not the local dashboard opens in the real browser
   win.webContents.setWindowOpenHandler(({ url: u }) => { openExternal(u); return { action: "deny" }; });
   // a server redirect must not move the window off the dashboard either
   for (const ev of ["will-navigate", "will-redirect"]) {
-    win.webContents.on(ev, (e, u) => { if (!u.startsWith(url)) { e.preventDefault(); openExternal(u); } });
+    win.webContents.on(ev, (e, u) => { if (!base || !u.startsWith(base)) { e.preventDefault(); openExternal(u); } });
   }
   win.on("closed", () => { win = null; });
+  win.loadURL(loadingPage(dark));
+}
+
+function showDashboard(url) {
+  if (!win) return;  // the window was closed while the server started
+  base = url;
   win.loadURL(url);
 }
 
