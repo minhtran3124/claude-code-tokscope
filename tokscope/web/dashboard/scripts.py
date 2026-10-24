@@ -214,6 +214,7 @@ function ring(){document.querySelectorAll('.fresh .dot,h2>.dot').forEach(d=>{d.c
 // overview: swap each region for its new render and show a delta chip on the numbers; other pages offer a reload
 async function refresh(){document.documentElement.classList.add('settled');const url=location.pathname+location.search+(location.search?'&':'?')+'partial=1';
   const doc=new DOMParser().parseFromString(await (await fetch(url)).text(),'text/html');
+  tzSync(doc);  // the fetched page has UTC text; format it the way the live one is, so an unchanged region compares equal
   document.querySelectorAll('[data-region]').forEach(r=>{const next=doc.querySelector(`[data-region="${r.dataset.region}"]`);if(!next||next.innerHTML===r.innerHTML)return;
     const old={};r.querySelectorAll('[data-key]').forEach(el=>old[el.dataset.key]=+el.dataset.count);
     r.innerHTML=next.innerHTML;bindTips(r);r.querySelectorAll('[data-key]').forEach(el=>{if(el.dataset.key in old)deltaChip(el,old[el.dataset.key])})})}

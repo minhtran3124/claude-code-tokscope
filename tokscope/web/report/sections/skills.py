@@ -101,6 +101,6 @@ def _change_cards(conn, changes):
                 for side, s in (("before", b), ("after", a))]
         cards.append(
             f'<section class="card" id="change-{cid}"><h3>#{cid} · {html.escape(note)}</h3>'
-            f'<p class="note">{at[:16].replace("T", " ")} UTC · {html.escape(agent_type or skill)} · ±{r["window_days"]} days</p>{delta}'
+            f'<p class="note"><time data-ts="{at}" data-fmt="dt">{at[:16].replace("T", " ")} UTC</time> · {html.escape(agent_type or skill)} · ±{r["window_days"]} days</p>{delta}'
             + _table(["window", "n", "tokens (median)", "output", "API-eq", "models"], rows, 2) + "</section>")
     return f'<div class="changes">{"".join(cards)}</div>'

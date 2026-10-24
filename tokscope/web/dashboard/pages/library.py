@@ -418,7 +418,7 @@ def _library_skill(k, qs, used, conn, linter=None, found=(), back="/library"):
     going = [j for j in optimize.jobs_for(k["folder"]) if j["state"] == "running"]
     if going:  # a run you started and left: one click back to its progress
         opt = (f'<a class="outcome run" href="/library?skill={k["id"]}&amp;job={going[0]["job"]}"><b><span class="spin"></span>'
-               f'An optimize run is going</b><span>Started {html.escape(going[0]["started"][11:16])} UTC · see its progress</span></a>') + opt
+               f'An optimize run is going</b><span>Started <time data-ts="{html.escape(going[0]["started"])}" data-fmt="hm">{html.escape(going[0]["started"][11:16])} UTC</time> · see its progress</span></a>') + opt
     # a skill with one version and every load tracked has nothing to compare
     versions = (f'<section class="card" id="versions"><h2 class="sec">Versions</h2>{_skill_versions(conn, "full", skill=k["dir"])[1]}</section>'
                 if len(skills.versions(conn, k["dir"])) > 1 else "")

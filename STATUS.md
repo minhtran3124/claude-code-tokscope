@@ -18,6 +18,7 @@ Review and merge the final PR to main; then close #89 and #90.
 - GitHub Actions jobs do not start: account payment or spending limit (Settings > Billing).
 
 ## Recent
+- 2026-10-24: times follow a Time zone setting (Local default, UTC; sidebar control, saved in localStorage `tokscope-tz`): session rows, day groups, session detail, Latest session, skill change notes, optimize start and report stamp use `<time data-ts>` rewritten by `tzSync`; 384 tests pass; not yet checked in a browser.
 - 2026-10-24: #89 summary export (`core/summary.py` rows for `tokscope summary --format table|json|csv`, `/api/summary`, a Summary section with Download CSV/JSON and Copy) and #90 always-on baseline (`core/baseline.py`, `mcp_defs` table, parser v15, session-start line on Overview, Projects and the report) merged on feat/summary-export-baseline, final PR #93 to main; review of #93 fixed: `starts()` one grouped query and skips sessions whose first request left the database (forks, filtered copies; `sessions.first_req_ts`, parser v16), cost priced at the real size, CSV/Copy cells that start with = + - @ get a quote; 383 tests pass.
 - 2026-10-24: ingest hardening (#47, #48, #49) combined on feat/ingest-hardening, final PR to main; 345 tests pass; #48 chip lacks screenshots.
 - 2026-10-24: #49 incremental ingest: `ingest_state` keeps per-file offset, inode, 4 KB tail hash and the parser state, so a grown session parses only the appended lines (full parse on truncate or rewrite); PR open on feat/ingest-hardening; 345 tests pass.
