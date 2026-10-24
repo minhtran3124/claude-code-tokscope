@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 from ....core.baseline import DEF_METHOD
+from ....core.context import METHOD
 from ....features import projects
 from ...report.widgets import _start_line, _tok, _usd
 from .overview import start_detail
@@ -77,9 +78,11 @@ def _project_view(g):
         d = e.get("def_tokens")
         share = (f' · {d / base["median"]:.0%} of start' if d and base and e["flag"] == "never used here" else "")
         defs = (f'<span title="{html.escape(DEF_METHOD)}">~{_tok(d)}{share}</span>' if d else '<span class="note">–</span>')
+        p95 = f'~{_tok(e["p95"])}' if e.get("p95") else "–"
         body.append(f'<tr><td data-label="Server">{name} {flag}</td><td data-label="Source">{html.escape(e["source"])}</td>'
                     f'<td data-label="Runs as">{html.escape(e["transport"])} <code>{html.escape(e["target"])}</code> {secrets}</td>'
                     f'<td data-label="Calls">{e["calls"]:,}</td><td data-label="≈Result tokens">{_tok(e["tokens"])}</td>'
+                    f'<td data-label="≈p95 result" title="{html.escape(METHOD)}">{p95}</td>'
                     f'<td data-label="≈Definition tokens">{defs}</td>'
                     f'<td data-label="Last session">{(e["last"] or "–")[:10]}</td><td data-label="Status" class="st {cls}">{status_html}</td>'
                     f'<td data-label="Change">{act}</td></tr>')
@@ -101,7 +104,7 @@ def _project_view(g):
              'The check runs <code>claude mcp list</code> here: it starts the stdio servers and connects to the remote ones.</span></p>'
              '<p class="err" id="opt-err" hidden></p>'
              '<table class="mcp"><thead><tr><th>Server</th><th>Source</th><th>Runs as</th><th>Calls</th><th>≈Result tokens</th>'
-             f'<th title="{html.escape(DEF_METHOD)}">≈Definition tokens</th><th>Last session</th><th>Status</th><th>Change</th></tr></thead><tbody>{"".join(body)}</tbody></table></section>')
+             f'<th title="{html.escape(METHOD)}">≈p95 result</th><th title="{html.escape(DEF_METHOD)}">≈Definition tokens</th><th>Last session</th><th>Status</th><th>Change</th></tr></thead><tbody>{"".join(body)}</tbody></table></section>')
     return head + table + _registry_panel() + _mcp_form()
 
 

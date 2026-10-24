@@ -4,7 +4,7 @@ import html
 from datetime import datetime, timedelta, timezone
 from statistics import median
 
-from ....core import cache, errors, skills, tz
+from ....core import cache, context, errors, skills, tz
 from ... import charts
 from ....core.calls import est_tokens, mcp_server
 from ....core.ingest import CARRIED
@@ -112,6 +112,53 @@ def _cache_section(conn, cond, params):
         "request before it in the same thread while it wrote at least 2K tokens, with no /compact between; the cause comes from "
         "the idle gap, so it is a heuristic, not what Claude Code reported",
         why + official + "".join(tables), "cache", t["hit_ratio"])
+
+
+def _est(text):
+    """A table cell for an estimated number: marked ~ with the method as its tooltip."""
+    return (f'<span title="{html.escape(context.SHORT)}">~{text}</span>', "raw")
+
+
+def _fat(r, split=False):
+    cells = [r["key"]] + ([r["split"]] if split else [])
+    return tuple(cells) + (r["calls"], _est(_tok(r["median"])), _est(_tok(r["p95"])), _est(_tok(r["total"])),
+                           f"{r['share']:.1%}", _est(_usd(r["carry"])))
+
+
+def _context_section(conn, cond, params):
+    """Which results fill the context: fat tools and MCP servers by result tokens, their carry cost, and the windows."""
+    where, call_params = errors.for_calls(cond, params)
+    calls = context.load(conn, cond, params)
+    rows, compacts, sessions = context.pressure(conn, cond, params)
+    ingest = "Run <code>tokscope ingest</code> after a Claude Code session to fill it."
+    if not calls and not sessions:
+        return _section("Context", "No tool result recorded", "", "", "context",
+                        empty=("No context data yet", "The biggest tool and MCP results and the context window show here. " + ingest))
+    head = ["calls", "~median", "~p95", "~total", "share", "~carry"]
+    tables = []
+    for by, title in (("tool", "Tool"), ("server", "MCP server"), ("mcp_tool", "MCP tool")):
+        found = context.rank(calls, by)
+        if found:
+            tables.append(f"<h3>{title}</h3>" + _table([title.lower()] + head, [_fat(r) for r in found], -1))
+    for split, title in (("project", "Project"), ("skill", "Skill")):
+        found = sorted(context.rank(calls, "tool", split, 50) + context.rank(calls, "mcp_tool", split, 50),
+                       key=lambda r: -r["total"])[:12]
+        if found:
+            tables.append(f"<h3>Split by {title.lower()}</h3>" + _table(["tool", title.lower()] + head, [_fat(r, True) for r in found], -1))
+    if rows:
+        tables.append("<h3>Context pressure</h3>" + _table(
+            ["session", "project", "peak input", "window", "of window", "compactions"],
+            [((r["title"] or r["session"][:8]), r["project"] or "", _tok(r["peak"]), _tok(r["window"]), f"{r['share']:.0%}",
+              r["compacts"]) for r in rows], -1))
+    notes = context.findings(calls, sessions, compacts)
+    tool_t = sum(c["tokens"] for c in calls)
+    finding = (f"~{_tok(tool_t)} tokens of tool results across {len(calls):,} calls; "
+               f"{compacts:,} compaction{'s' * (compacts != 1)}")
+    return _section(
+        "Context", finding,
+        html.escape(context.METHOD) + ". Peak input = input + cache read + cache write of the fullest request; "
+        "the window is 200K, or 1M once a request passed 200K. Filtered like the rest of the page",
+        ("".join(f"<p class='finding'>{html.escape(n)}</p>" for n in notes)) + "".join(tables), "context")
 
 
 def _breakdowns(conn, cond, params):
@@ -254,6 +301,7 @@ def _breakdowns(conn, cond, params):
                  p_type if by_type else None,
                  empty=None if by_type else ("No subagent runs yet", "Each subagent type shows here once Claude Code starts one "
                                              "(the Agent tool). " + ingest)),
+        _context_section(conn, cond, params),
         _errors_section(conn, cond, params),
         _cache_section(conn, cond, params),
     ])
