@@ -27,27 +27,6 @@ from .skills import canonical_name, loaded_text_hash
 CARRIED = "(r.skill IS NULL AND r.phase IS NOT NULL)"
 COMMAND_RE = re.compile(r"<command-name>/?([^<\s]+)</command-name>")
 COMMAND_ARGS_RE = re.compile(r"<command-args>(.*?)</command-args>", re.DOTALL)
-# a failed tool result's class, first match wins (an MCP tool's failure is "mcp" whatever its text says)
-ERROR_CLASSES = (
-    ("edit_mismatch", re.compile(r"string to replace not found|old_string|did not match|not unique|found \d+ matches", re.I)),
-    ("permission", re.compile(r"permission|access denied|was denied|doesn't want to proceed|not allowed|rejected", re.I)),
-    ("timeout", re.compile(r"timed? ?out", re.I)),
-    ("not_found", re.compile(r"does not exist|no such file|not found|enoent", re.I)),
-    ("exit_code", re.compile(r"^\s*exit code \d+", re.I)),
-)
-
-
-def error_class(name, text):
-    """Class of a failed tool result: mcp, edit_mismatch, permission, timeout, not_found, exit_code or other."""
-    if (name or "").startswith("mcp__"):
-        return "mcp"
-    return next((c for c, rx in ERROR_CLASSES if rx.search(text)), "other")
-
-
-def _input_hash(inp):
-    return hashlib.sha1(json.dumps(inp, sort_keys=True, default=str).encode()).hexdigest()[:12]
-
-
 SKILL_TEXT = "Base directory for this skill:"
 # built-in CLI commands, not skills; they do not start a new prompt either
 BUILTIN_COMMANDS = {
@@ -85,12 +64,7 @@ CREATE TABLE IF NOT EXISTS prompts (
     session_id TEXT, prompt_idx INTEGER, ts TEXT, text TEXT, PRIMARY KEY (session_id, prompt_idx)
 );
 CREATE TABLE IF NOT EXISTS tool_calls (
-    session_id TEXT, tool_use_id TEXT, prompt_idx INTEGER, agent_id TEXT, name TEXT, result_chars INTEGER,
-    is_error INTEGER, err_class TEXT, repeat INTEGER, skill TEXT, phase TEXT, ts TEXT,
-    PRIMARY KEY (session_id, tool_use_id)
-);
-CREATE TABLE IF NOT EXISTS turn_events (
-    session_id TEXT, ts TEXT, prompt_idx INTEGER, agent_id TEXT, skill TEXT, phase TEXT, kind TEXT
+    session_id TEXT, tool_use_id TEXT, prompt_idx INTEGER, agent_id TEXT, name TEXT, result_chars INTEGER, PRIMARY KEY (session_id, tool_use_id)
 );
 CREATE TABLE IF NOT EXISTS headless_calls (
     session_id TEXT, tool_use_id TEXT, cwds TEXT, start_ts TEXT, end_ts TEXT, child_ids TEXT,
@@ -102,13 +76,13 @@ CREATE TABLE IF NOT EXISTS mcp_defs (
 CREATE TABLE IF NOT EXISTS ingest_state (session_id TEXT PRIMARY KEY, state TEXT);
 CREATE INDEX IF NOT EXISTS idx_requests_ts ON requests (ts);
 """
-TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "turn_events", "headless_calls", "mcp_defs", "ingest_state", "sessions")
+TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "headless_calls", "mcp_defs", "ingest_state", "sessions")
 # bump when the parser records something new, so unchanged transcripts are parsed again once
-PARSER_VERSION = 17
+PARSER_VERSION = 16
 TAIL_BYTES = 4096  # the bytes before a stored offset that must be unchanged for a file to count as appended to
 # what a resumed parse restores: the parser's state after the last complete line of every file
 STATE_KEYS = ("requests", "subagents", "skill_calls", "prompts", "tool_ctx", "tool_calls", "result_chars",
-              "skill_texts", "skill_args", "headless", "mcp_defs", "meta", "files", "tool_err", "seen_calls", "events")
+              "skill_texts", "skill_args", "headless", "mcp_defs", "meta", "files")
 ARGS_RE = re.compile(r"<command-args>(.*?)</command-args>", re.S)
 PROMPT_CHARS = 160
 # a Bash command that starts a headless Claude Code session
@@ -185,11 +159,6 @@ def _text(content):
     return ""
 
 
-def _is_interrupt(rec):
-    """The line Claude Code writes when the person presses Esc."""
-    return _text(rec.get("message", {}).get("content")).lstrip().startswith("[Request interrupted")
-
-
 def _is_human_prompt(rec):
     if rec.get("isMeta") or "toolUseResult" in rec:
         return False
@@ -197,7 +166,7 @@ def _is_human_prompt(rec):
     if isinstance(content, list) and content and isinstance(content[0], dict) and content[0].get("type") == "tool_result":
         return False
     # Claude Code writes this line itself when the person presses Esc; it is not something they typed
-    if _is_interrupt(rec):
+    if _text(content).lstrip().startswith("[Request interrupted"):
         return False
     origin = rec.get("turnOrigin")
     if origin is not None:
@@ -246,9 +215,6 @@ class SessionParser:
         self.prompts = []
         self.tool_ctx = {}  # tool_use_id -> (prompt_idx, skill, phase, agent_id)
         self.tool_calls = {}  # tool_use_id -> (prompt_idx, agent_id, name)
-        self.tool_err = {}  # tool_use_id -> error class, for the results that failed
-        self.seen_calls = {}  # "prompt|agent|name|input hash" -> 1: the calls a later identical one repeats
-        self.events = []  # [ts, prompt_idx, agent_id, skill, phase, kind]: interrupt, api_error or retry
         self.result_chars = {}  # tool_use_id -> text size of the result that went into the context
         self.skill_texts = {}  # Skill tool_use_id -> the SKILL.md text it loaded, where a request blob kept it
         self.skill_args = {}  # Skill tool_use_id -> the args the call passed
@@ -357,7 +323,6 @@ class SessionParser:
                 kind = rec.get("type")
                 if is_main:
                     self._track_meta(rec)
-                self._on_events(rec, agent_id, state)
                 if kind == "assistant":
                     self._on_assistant(rec, agent_id, agent_type, state)
                 elif kind == "user":
@@ -395,19 +360,6 @@ class SessionParser:
         self.meta["cwd"] = self.meta["cwd"] or rec.get("cwd")
         self.meta["entrypoint"] = self.meta["entrypoint"] or rec.get("entrypoint")
 
-    def _event(self, rec, agent_id, state, kind):
-        self.events.append([rec.get("timestamp"), state["prompt_idx"], agent_id, state["skill"], state["phase"], kind])
-
-    def _on_events(self, rec, agent_id, state):
-        """What went wrong outside a tool call: the person's Esc, an API error message, an API retry."""
-        kind = rec.get("type")
-        if kind == "system" and rec.get("subtype") == "api_error":
-            self._event(rec, agent_id, state, "retry")
-        elif kind == "assistant" and (rec.get("isApiErrorMessage") or rec.get("apiError")):
-            self._event(rec, agent_id, state, "api_error")
-        elif kind == "user" and _is_interrupt(rec):
-            self._event(rec, agent_id, state, "interrupt")
-
     def _on_user(self, rec, state):
         if not _is_human_prompt(rec):
             return
@@ -440,9 +392,6 @@ class SessionParser:
         for block in content if isinstance(content, list) else []:
             if isinstance(block, dict) and block.get("type") == "tool_result" and block.get("tool_use_id"):
                 self.result_chars[block["tool_use_id"]] = len(_text(block.get("content")))
-                if block.get("is_error"):
-                    call = self.tool_calls.get(block["tool_use_id"])
-                    self.tool_err[block["tool_use_id"]] = error_class(call[2] if call else None, _text(block.get("content")))
                 call = self.headless.get(block["tool_use_id"])
                 if call is not None:
                     # a background run returns at once; its end is the task notification (_on_task_done)
@@ -500,11 +449,7 @@ class SessionParser:
             if not isinstance(block, dict) or block.get("type") != "tool_use":
                 continue
             self.tool_ctx[block.get("id")] = (state["prompt_idx"], state["skill"], state["phase"], agent_id)
-            if block.get("id") not in self.tool_calls:  # a line repeated by a resumed or forked file is not a repeat call
-                key = f'{state["prompt_idx"]}|{agent_id}|{block.get("name")}|{_input_hash(block.get("input"))}'
-                self.tool_calls[block.get("id")] = (state["prompt_idx"], agent_id, block.get("name"), state["skill"],
-                                                    state["phase"], rec.get("timestamp"), int(key in self.seen_calls))
-                self.seen_calls[key] = 1
+            self.tool_calls[block.get("id")] = (state["prompt_idx"], agent_id, block.get("name"))
             command = (block.get("input") or {}).get("command")
             if block.get("name") == "Bash" and isinstance(command, str) and is_headless(command):
                 self.headless[block.get("id")] = {"cwds": command_dirs(command, rec.get("cwd") or self.meta["cwd"]),
@@ -560,11 +505,8 @@ def open_db(db_path):
 def connect(db_path):
     conn = open_db(db_path)
     conn.executescript(SCHEMA)
-    have = {c[1] for c in conn.execute("PRAGMA table_info(tool_calls)")}
-    for name, typ in (("result_chars", "INTEGER"), ("is_error", "INTEGER"), ("err_class", "TEXT"), ("repeat", "INTEGER"),
-                      ("skill", "TEXT"), ("phase", "TEXT"), ("ts", "TEXT")):  # refilled by the PARSER_VERSION bump
-        if name not in have:
-            conn.execute(f"ALTER TABLE tool_calls ADD COLUMN {name} {typ}")
+    if "result_chars" not in {c[1] for c in conn.execute("PRAGMA table_info(tool_calls)")}:
+        conn.execute("ALTER TABLE tool_calls ADD COLUMN result_chars INTEGER")  # refilled by the PARSER_VERSION bump
     if "tool_use_id" not in {c[1] for c in conn.execute("PRAGMA table_info(skill_calls)")}:
         conn.execute("ALTER TABLE skill_calls ADD COLUMN tool_use_id TEXT")  # joins a load to its version mark
     if "text_hash" not in {c[1] for c in conn.execute("PRAGMA table_info(skill_calls)")}:
@@ -684,12 +626,9 @@ def store(conn, project, parser, signature):
             for a in parser.subagents
         ],
     )
-    conn.executemany("INSERT INTO tool_calls VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                     [(sid, tid, i, agent, name, parser.result_chars.get(tid), int(tid in parser.tool_err),
-                       parser.tool_err.get(tid), dup, skill, phase, ts)
-                      for tid, (i, agent, name, skill, phase, ts, dup) in parser.tool_calls.items() if tid])
-    conn.executemany("INSERT INTO turn_events VALUES (?,?,?,?,?,?,?)",
-                     [(sid, ts, i, agent, skill, phase, kind) for ts, i, agent, skill, phase, kind in parser.events])
+    conn.executemany("INSERT INTO tool_calls VALUES (?,?,?,?,?,?)",
+                     [(sid, tid, i, agent, name, parser.result_chars.get(tid))
+                      for tid, (i, agent, name) in parser.tool_calls.items() if tid])
     conn.executemany("INSERT INTO mcp_defs VALUES (?,?,?,?)",
                      [(sid, server, n, chars) for server, (n, chars) in (parser.mcp_defs or {}).items()])
     conn.executemany("INSERT INTO prompts VALUES (?,?,?,?)", [(sid, i, ts, text) for i, ts, text in parser.prompts])

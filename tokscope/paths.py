@@ -46,10 +46,6 @@ def report():
     return home() / "reports" / "report.html"
 
 
-def budgets():
-    return home() / "budgets.json"
-
-
 def tasks():
     return home() / "bench" / "tasks"
 

@@ -10,7 +10,6 @@ from .core.calls import turn_calls
 from .core.ingest import connect, ingest, ingest_session
 from .core import tz
 from .core.pricing import API_EQ_NOTE, unpriced, unpriced_text
-from .core import errors
 from .core.summary import SUMMARY_SQL, rows as summary_rows, to_csv as summary_csv, to_json as summary_json
 from .core.privacy import LEVELS
 
@@ -19,32 +18,11 @@ DB = paths.db()
 PHASES = paths.phases()
 REPORT = paths.report()
 
-def summary_errors(conn, args, where, params, fmt):
-    """`summary --errors`: failed and repeated tool calls, interrupts, API errors and retries per skill, agent or phase."""
-    if args.by not in errors.KEYS:
-        sys.exit(f"tokscope: --errors groups by {', '.join(errors.KEYS)}, not {args.by}")
-    found = errors.rows(conn, args.by, where, params, args.limit)
-    if fmt == "json":
-        print(summary_json(found))
-    elif fmt == "csv":
-        print(summary_csv(found, errors.FIELDS), end="")
-    else:
-        print(f"{args.by:<40} {'calls':>8} {'errors':>7} {'err %':>6} {'repeats':>8} {'interrupts':>10} {'api errors':>10} {'retries':>8}")
-        for r in found:
-            print(f"{r['key'][:40]:<40} {r['calls']:>8,} {r['errors']:>7,} {errors.pct(r['errors'], r['calls']):>6} "
-                  f"{r['repeats']:>8,} {r['interrupts']:>10,} {r['api_errors']:>10,} {r['retries']:>8,}")
-    kinds = errors.classes(conn, where, params)
-    if kinds:
-        print("error classes: " + ", ".join(f"{k} {n}" for k, n in kinds), file=sys.stdout if fmt == "table" else sys.stderr)
-
-
 def summary(args):
     where, params = _filters(args)
     conn = connect(DB)  # creates the tables on a fresh install
-    fmt = getattr(args, "format", "table")
-    if getattr(args, "errors", False):
-        return summary_errors(conn, args, where, params, fmt)
     found = summary_rows(conn, args.by, where, params, args.limit)
+    fmt = getattr(args, "format", "table")
     if fmt == "json":
         print(summary_json(found))
     elif fmt == "csv":
@@ -64,58 +42,6 @@ def summary(args):
     print(API_EQ_NOTE, file=note_out)
     if note := unpriced_text(unpriced(conn, where, params)):
         print(note, file=note_out)
-
-
-def _budgets(args):
-    """The loaded budgets (None when there is no file); a bad file ends the command with its message, exit 2."""
-    from .core import budgets
-
-    try:
-        return budgets.load()
-    except budgets.BudgetError as e:
-        sys.exit(f"tokscope: budgets.json: {e}")
-
-
-def check(args):
-    """`tokscope check --once`: print the budget state, exit 0 ok / 10 near / 11 over / 30 no data."""
-    from .core import budgets
-
-    result = budgets.check(connect(DB), _budgets(args))
-    print(json.dumps(result, indent=2) if args.json else budgets.text(result))
-    return result["exit"]
-
-
-def statusline(args):
-    """One line for Claude Code's statusLine: green when budgets.json is met, yellow near, red over. Never fails."""
-    from .core import budgets
-
-    if not sys.stdin.isatty():
-        sys.stdin.read()  # Claude Code pipes its session JSON; nothing in it is needed here
-    colour = {"near": "33", "over": "31", "ok": "32"}
-    try:
-        result = budgets.check(connect(DB), budgets.load())
-    except budgets.BudgetError:
-        return "\033[31mtokscope: budgets.json is invalid (run tokscope check --once)\033[0m"
-    warn = budgets.warnings(result)
-    if warn:
-        return f"\033[{colour[warn[0]['state']]}m{'OVER' if warn[0]['state'] == 'over' else 'near'}: {warn[0]['text']}\033[0m"
-    if result["state"] == "ok":
-        return "\033[32mtokscope: budgets ok\033[0m"
-    return "tokscope"
-
-
-def _budget_line(session_id):
-    """After a session ingest: one line when this session pushed a budget to near or over. Silent otherwise, and on a bad
-    or missing budgets.json, so the SessionEnd hook never fails on it."""
-    from .core import budgets
-
-    try:
-        found = budgets.load()
-        hit = budgets.crossed(connect(DB), found, session_id) if found else []
-    except budgets.BudgetError:
-        return
-    if hit:
-        print("tokscope budget: " + "; ".join(f"{i['state'].upper()} {i['text']}" for i in hit))
 
 
 def record_skill_versions(lines):
@@ -217,26 +143,12 @@ def session_json(conn, session_id):
         f"WHERE r.session_id = ? AND r.prompt_idx IS NOT NULL GROUP BY r.prompt_idx ORDER BY r.prompt_idx DESC LIMIT 1",
         (session_id,)).fetchone()
     return {
-        "budget": _budget_view(conn),
         "id": session_id, "empty": False, "title": title or "", "prompts": prompts or 0, "tokens": tokens, "output": out or 0,
         "usd": usd, "main": main or 0, "agents": agents or 0, "runs": runs,
         "owners": top("COALESCE(agent_type, 'main thread')"), "skills": [[f"{k} {versions[k][:6]}" if k in versions else k, t] for k, t in top("skill") if k],
         "last": {"i": last[0], "text": last[1] or "", "tokens": last[2] or 0, "agents": last[3] or 0} if last else None,
         "turns": session_turns(conn, session_id),
     }
-
-
-def _budget_view(conn):
-    """For the live pane: None without a budgets.json, else {"error"} or {"warn": [{text, pct, state}]} for budgets >= 80%."""
-    from .core import budgets
-
-    try:
-        found = budgets.load()
-    except budgets.BudgetError as e:
-        return {"error": str(e)}
-    if found is None:
-        return None
-    return {"warn": [{"text": i["text"], "pct": i["pct"], "state": i["state"]} for i in budgets.warnings(budgets.check(conn, found))]}
 
 
 def session_turns(conn, session_id, limit=20):
@@ -343,17 +255,11 @@ def main():
     pv.add_argument("--privacy", choices=LEVELS, default="full")
     pv.add_argument("--projects-dir", metavar="PATH", help="read this transcripts folder instead of the default ones "
                     "(a small sample keeps a test server from ingesting every transcript)")
-    pch = sub.add_parser("check", help="compare today's spend with budgets.json; exit 0 ok, 10 near, 11 over, 30 no data")
-    pch.add_argument("--once", action="store_true", required=True, help="print the state once and exit")
-    pch.add_argument("--json", action="store_true")
-    sub.add_parser("statusline", help="a one-line budget warning for Claude Code's statusLine")
     pk = sub.add_parser("skills", help="each skill's versions (content hash), loads and median tokens per load")
     pk.add_argument("skill", nargs="?", help="only this skill; `import [skill]` keeps older versions transcripts still show")
     pk.add_argument("name", nargs="?", help=argparse.SUPPRESS)
     ps = sub.add_parser("summary", help="print a cost table")
     ps.add_argument("--by", choices=SUMMARY_SQL, default="phase")
-    ps.add_argument("--errors", action="store_true", help="count failed and repeated tool calls, interrupts, API errors "
-                    "and retries instead of cost (--by skill, agent or phase)")
     ps.add_argument("--format", choices=("table", "json", "csv"), default="table", help="json or csv print only the rows")
     pr = sub.add_parser("report", help="write the HTML report")
     po = sub.add_parser("open", help="ingest new transcripts, rebuild the HTML report and open it in the browser")
@@ -378,15 +284,10 @@ def main():
     if args.cmd == "ingest" and args.session:
         if not ingest_session(DB, PHASES, args.session, args.projects_dir):
             sys.exit(f"tokscope: no transcript for session {args.session}")
-        _budget_line(args.session)
     elif args.cmd == "ingest":
         start = time.time()
         ingest(DB, PHASES, args.projects_dir, args.project)
         print(f"took {time.time() - start:.1f}s -> {DB}")
-    elif args.cmd == "check":
-        sys.exit(check(args))
-    elif args.cmd == "statusline":
-        print(statusline(args))
     elif args.cmd == "session":
         ingest_session(DB, PHASES, args.session_id)
         conn = connect(DB)  # creates the tables on a fresh install

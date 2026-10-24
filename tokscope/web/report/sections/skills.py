@@ -2,7 +2,7 @@
 
 import html
 
-from ....core import errors, skills
+from ....core import skills
 from ....features.changes import impact
 from ..widgets import _diff_html, _table, _tok, _usd, _vs
 
@@ -13,11 +13,6 @@ FEW_TAG = ' <span class="few" title="too few loads to judge">few</span>'
 
 def _loads(n):
     return (f"{n}{FEW_TAG if n and n < FEW_LOADS else ''}", "raw")
-
-
-def _err(calls, failed):
-    """`7.5% (3/40)` or a dash with no tool calls."""
-    return f"{errors.pct(failed, calls)} ({failed}/{calls})" if calls else "–"
 
 
 def _skill_versions(conn, level="full", where=None, skill=None):
@@ -48,7 +43,7 @@ def _skill_versions(conn, level="full", where=None, skill=None):
             label = f" v{v['label']}" if v["label"] else ""
             rows.append(((f"<code>{html.escape(v['version'] or 'before tracking')}</code>{html.escape(label)}", "raw"),
                          (v["first_seen"] or "")[:10] or "–", _loads(v["loads"]), v["exact"], v["tokens_median"] or 0,
-                         _vs(prev, v["tokens_median"]), _err(v["calls"], v["errors"]), v["repeats"], v["interrupts"]))
+                         _vs(prev, v["tokens_median"])))
             prev = v["tokens_median"] if v["tokens_median"] is not None else prev
         diffs = []
         versions = [v["version"] for v in tracked(vs)]
@@ -62,8 +57,7 @@ def _skill_versions(conn, level="full", where=None, skill=None):
                          f"<span class='note'>{added} added, {removed} removed</span></summary>"
                          f"{_diff_html(lines) if lines else '<p class=note>Same text; only file names changed.</p>'}</details>")
         cards.append(f'<section class="card" id="v-{html.escape(name)}"><h3>{html.escape(name)}</h3>'
-                     + _table(["version", "first seen", "loads", "exact", "median tokens / load", "vs before", "tool errors",
-                                       "repeats", "interrupts"], rows, 4)
+                     + _table(["version", "first seen", "loads", "exact", "median tokens / load", "vs before"], rows, 4)
                      + "".join(diffs) + "</section>")
     parts = ["<h3>Changed</h3>" + "".join(cards) if cards else
              "<p class='note'>No skill has changed since tracking began. Edit one and its next load shows here, with the diff.</p>"]
@@ -73,12 +67,11 @@ def _skill_versions(conn, level="full", where=None, skill=None):
         for name, (before, now) in sorted(started.items(), key=lambda kv: (not kv[1][1]["loads"], weight(kv[1]))):
             rows.append((name, _loads(before["loads"]), _tok(before["tokens_median"]) if before["tokens_median"] else "–",
                          (f"<code>{html.escape(now['version'])}</code>", "raw"), (now["first_seen"] or "")[:10],
-                         _loads(now["loads"]), now["tokens_median"] or 0, _vs(before["tokens_median"], now["tokens_median"]), _err(before["calls"], before["errors"]),
-                         _err(now["calls"], now["errors"])))
+                         _loads(now["loads"]), now["tokens_median"] or 0, _vs(before["tokens_median"], now["tokens_median"])))
         parts.append("<h3>Tracking started</h3><p class='note'>Loads from before tokscope saw the skill against its current "
                      "version. The older loads may span several unknown versions.</p>"
                      + _table(["skill", "loads before", "median before", "version now", "since", "loads", "median tokens / load",
-                               "vs before", "errors before", "errors now"], rows, 6))
+                               "vs before"], rows, 6))
     if single:
         parts.append(f"<p class='note'>One version, every load tracked: {html.escape(', '.join(single))}.</p>")
     if unknown:
@@ -101,17 +94,13 @@ def _change_cards(conn, changes):
         if b["n"] and a["n"] and b["tokens_median"]:
             pct = a["tokens_median"] / b["tokens_median"] - 1
             delta = f'<div class="delta">{pct:+.0%}</div><div class="note">median tokens per {unit}</div>'
-            if b["errors"]["calls"] and a["errors"]["calls"]:
-                delta += (f'<div class="note">tool error rate {errors.pct(b["errors"]["errors"], b["errors"]["calls"])} → '
-                          f'{errors.pct(a["errors"]["errors"], a["errors"]["calls"])}</div>')
         else:
             delta = f'<div class="note">Not enough {unit}s on both sides yet.</div>'
         rows = [(side, s["n"], s.get("tokens_median", 0), _tok(s.get("output_median", 0)), (_usd(s.get("usd_median")), "u"),
-                 _err(s["errors"]["calls"], s["errors"]["errors"]), s["errors"]["interrupts"],
                  (", ".join(m.removeprefix("claude-") for m in s.get("models", [])), "lm"))
                 for side, s in (("before", b), ("after", a))]
         cards.append(
             f'<section class="card" id="change-{cid}"><h3>#{cid} · {html.escape(note)}</h3>'
             f'<p class="note"><time data-ts="{html.escape(at)}" data-fmt="dt">{html.escape(at[:16].replace("T", " "))} UTC</time> · {html.escape(agent_type or skill)} · ±{r["window_days"]} days</p>{delta}'
-            + _table(["window", "n", "tokens (median)", "output", "API-eq", "tool errors", "interrupts", "models"], rows, 2) + "</section>")
+            + _table(["window", "n", "tokens (median)", "output", "API-eq", "models"], rows, 2) + "</section>")
     return f'<div class="changes">{"".join(cards)}</div>'

@@ -21,12 +21,10 @@ const PANE = {
 } as const
 
 async function start($: Parameters<Parameters<typeof test>[1]>[0], on: Parameters<Parameters<typeof test>[1]>[1],
-                     opts: { exitCode?: number; paneOn?: boolean; env?: Record<string, string>; source?: { view: unknown }; files?: string[]; ingestOut?: string } = {}) {
+                     opts: { exitCode?: number; paneOn?: boolean; env?: Record<string, string>; source?: { view: unknown }; files?: string[] } = {}) {
   const runs: Run[] = []
   const store: Record<string, unknown> = opts.paneOn ? { pane: true } : {}
   const panes: string[] = []
-  const toasts: string[] = []
-  on('ui.toast', (_, e) => { toasts.push((e as unknown as { text: string }).text); return { value: undefined } })
   const env: Record<string, string> = { HOME: '/home/u', ...opts.env }
   on('env.get', (_, e) => ({ value: env[e.name] }))
   const files = opts.files ?? ['/home/u/.local/bin/tokscope']
@@ -47,14 +45,13 @@ async function start($: Parameters<Parameters<typeof test>[1]>[0], on: Parameter
     runs.push(e)
     const json = e.argv.includes('--json')
     const out = json ? JSON.stringify(opts.source?.view ?? VIEW)
-      : e.argv[1] === 'ingest' ? (opts.ingestOut ?? '')
       : e.argv[1] === 'open' ? 'wrote /home/u/.local/share/tokscope/reports/report.html\nopened in google-chrome\n' : 'tokscope · $1.00\n'
     return { value: { exitCode: opts.exitCode ?? 0, stdout: out,
                       stderr: opts.exitCode ? 'boom' : '', isStdoutTruncated: false } }
   })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
 
-  return { runs, store, panes, clock, toasts }
+  return { runs, store, panes, clock }
 }
 
 const sessionRuns = (runs: Run[]) => runs.filter(r => r.argv[1] === 'session')
@@ -307,34 +304,4 @@ test('/tokscope skills lists skill versions, for one skill when named', async ($
 
   expect(runs.filter(r => r.argv[1] === 'skills').map(r => r.argv.slice(1))).toEqual([['skills'], ['skills', 'correctness-review']])
   expect(sessionRuns(runs)).toEqual([])
-})
-
-test('a budget at 80% or more shows as a warning line in the pane, red when over; a bad budgets.json shows its error', async ($, on) => {
-  const budget = { warn: [{ text: 'today 85% ($42.50 of $50.00)', pct: 85, state: 'near' }, { text: 'agent reviewer today 120% ($12.00 of $10.00)', pct: 120, state: 'over' }] }
-  await start($, on, { paneOn: true, source: { view: { ...VIEW, budget } } })
-  const ui = await $.ui.mount(PANE)
-  expect(await ui.find({ type: 'Text', text: /⚠ near today 85%/ })).toBeTruthy()
-  expect(await ui.find({ type: 'Text', text: /✗ OVER agent reviewer today 120%/ })).toBeTruthy()
-})
-
-test('the pane shows nothing about budgets without a budgets.json', async ($, on) => {
-  await start($, on, { paneOn: true, source: { view: { ...VIEW, budget: null } } })
-  expect(await (await $.ui.mount(PANE)).find({ type: 'Text', text: /budget/i })).toBeFalsy()
-})
-
-test('a bad budgets.json is named in the pane', async ($, on) => {
-  await start($, on, { paneOn: true, source: { view: { ...VIEW, budget: { error: '/home/u/budgets.json: not valid JSON (boom)' } } } })
-  expect(await (await $.ui.mount(PANE)).find({ type: 'Text', text: /✗ .*budgets.json: not valid JSON/ })).toBeTruthy()
-})
-
-test('when the session that ended crossed a budget, its one-line summary is shown; otherwise nothing is', async ($, on) => {
-  const { toasts } = await start($, on, { ingestOut: 'tokscope budget: NEAR today 85% ($42.50 of $50.00)\n' })
-  await $.session.end({ reason: 'prompt_input_exit', sessionId: 'ended', resume: { sessionId: 'ended' } as never })
-  expect(toasts).toEqual(['tokscope budget: NEAR today 85% ($42.50 of $50.00)'])
-})
-
-test('a session end with no budget line shows no toast', async ($, on) => {
-  const { toasts } = await start($, on)
-  await $.session.end({ reason: 'prompt_input_exit', sessionId: 'ended', resume: { sessionId: 'ended' } as never })
-  expect(toasts).toEqual([])
 })

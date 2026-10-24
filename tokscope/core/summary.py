@@ -39,9 +39,9 @@ def safe_cell(value):
     return "'" + value if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r") else value
 
 
-def to_csv(found, fields=FIELDS):
+def to_csv(found):
     out = io.StringIO()
-    w = csv.DictWriter(out, fields, lineterminator="\n", extrasaction="ignore")
+    w = csv.DictWriter(out, FIELDS, lineterminator="\n")
     w.writeheader()
     w.writerows({k: safe_cell(v) for k, v in row.items()} for row in found)
     return out.getvalue()

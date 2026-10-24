@@ -27,9 +27,6 @@ export type Run = {
   model: string
 }
 
-// budgets.json against today: warn lists the budgets at 80% or more; error is a budgets.json that cannot be read
-export type Budget = { error?: string; warn?: { text: string; pct: number; state: 'near' | 'over' }[] }
-
 export type SessionView = {
   id: string
   empty: boolean
@@ -45,7 +42,6 @@ export type SessionView = {
   skills?: Pair[]
   last?: { i: number; text: string; tokens: number; agents: number } | null
   turns?: Turn[]
-  budget?: Budget | null
   updatedAt?: number
   error?: string
 }

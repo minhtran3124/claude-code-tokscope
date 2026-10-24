@@ -121,21 +121,6 @@ class FindingTest(WeekTest):
         self.assertIn("db holds 60% of MCP result tokens across 2 servers", self.summary(page, "by-mcp")[0])
         self.assertIn("Read returns 100% of tool result tokens across 1 tool", self.summary(page, "by-tool")[0])
 
-    def test_errors_section_ranks_skills_agents_and_phases_by_failed_calls(self):
-        rows = [("t1", "a", "review", "a1", 1, "edit_mismatch", 0), ("t2", "a", "review", "a1", 1, "not_found", 1),
-                ("t3", "b", "plan", None, 0, None, 0), ("t4", "b", "plan", None, 0, None, 0)]
-        self.conn.executemany("INSERT INTO tool_calls (session_id, tool_use_id, skill, phase, agent_id, is_error, err_class, repeat, ts) "
-                              "VALUES ('real', ?, ?, ?, ?, ?, ?, ?, '2026-10-19T00:00:00+00:00')",
-                              [(t, s, p, a, e, c, r) for t, s, p, a, e, c, r in rows])
-        self.conn.execute("INSERT INTO subagents (session_id, agent_id, agent_type) VALUES ('real', 'a1', 'reviewer')")
-        self.conn.execute("INSERT INTO turn_events (session_id, skill, kind) VALUES ('real', 'a', 'interrupt')")
-        head, inner = self.summary(_breakdowns(self.conn, COND, PARAMS), "errors")
-        self.assertIn("2 of 4 tool calls failed (50.0%)", head)
-        self.assertIn("1 repeated, 1 interrupt", head)
-        self.assertIn("<h3>Subagent type</h3>", inner)
-        self.assertIn("reviewer", inner)
-        self.assertIn("100.0%", inner)  # skill a: both calls failed
-
     def test_an_empty_range_says_what_would_appear_and_how_to_get_it(self):
         page = _breakdowns(self.conn, COND, PARAMS)
         for anchor, head, hint in (("by-week", "No skill loaded in the last 7 days", "tokscope ingest"),

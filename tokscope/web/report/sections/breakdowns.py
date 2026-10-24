@@ -4,7 +4,7 @@ import html
 from datetime import datetime, timedelta, timezone
 from statistics import median
 
-from ....core import errors, skills, tz
+from ....core import skills, tz
 from ... import charts
 from ....core.calls import est_tokens, mcp_server
 from ....core.ingest import CARRIED
@@ -38,34 +38,6 @@ def _weekly_phases(conn, cond, params, today=None):
 
 def _pct(q):
     return lambda xs: xs[min(len(xs) - 1, int(q * len(xs)))]
-
-
-def _errors_section(conn, cond, params):
-    """Failed and repeated tool calls, interrupts and API errors per skill, subagent type and phase."""
-    where, call_params = errors.for_calls(cond, params)
-    total = errors.totals(conn, where, call_params)
-    kinds = errors.classes(conn, cond, params)
-    ingest = "Run <code>tokscope ingest</code> after a Claude Code session to fill it."
-    if not total["calls"]:
-        return _section("Errors", "No tool call recorded", "", "", "errors",
-                        empty=("No tool calls yet", "Failed calls, repeats and interrupts show here. " + ingest))
-    finding = (f"{total['errors']:,} of {total['calls']:,} tool calls failed ({errors.pct(total['errors'], total['calls'])})"
-               + (f"; mostly {html.escape(kinds[0][0].replace('_', ' '))}" if kinds else "")
-               + f"; {total['repeats']:,} repeated, {total['interrupts']:,} interrupt{'s' * (total['interrupts'] != 1)}")
-    tables = []
-    for by, head in (("skill", "Skill"), ("agent", "Subagent type"), ("phase", "Phase")):
-        found = errors.rows(conn, by, cond, params, 15)
-        tables.append(f"<h3>{head}</h3>" + _table(
-            [head.lower(), "calls", "failed", "error rate", "repeats", "interrupts", "API errors", "retries"],
-            [(d["key"], d["calls"], d["errors"], errors.pct(d["errors"], d["calls"]), d["repeats"], d["interrupts"],
-              d["api_errors"], d["retries"]) for d in found], 2))
-    return _section(
-        "Errors", finding,
-        "failed = the tool result came back with is_error; repeated = the same tool with the same input again in one prompt; "
-        "interrupts = the person pressed Esc; API errors and retries are the model call failing. Calls are counted where "
-        "the skill or subagent made them",
-        (charts.share_bar([(k.replace("_", " "), n) for k, n in kinds], "failed calls") if kinds else "") + "".join(tables),
-        "errors", total["errors"] / total["calls"])
 
 
 def _breakdowns(conn, cond, params):
@@ -208,5 +180,4 @@ def _breakdowns(conn, cond, params):
                  p_type if by_type else None,
                  empty=None if by_type else ("No subagent runs yet", "Each subagent type shows here once Claude Code starts one "
                                              "(the Agent tool). " + ingest)),
-        _errors_section(conn, cond, params),
     ])

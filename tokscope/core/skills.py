@@ -25,7 +25,6 @@ from pathlib import Path
 from statistics import median
 
 from .. import paths
-from . import errors
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS skill_versions (
@@ -302,12 +301,6 @@ def load_versions(conn):
     return out
 
 
-def _error_fields(e):
-    calls, errors, repeats, interrupts = e or (0, 0, 0, 0)
-    return {"calls": calls, "errors": errors, "repeats": repeats, "interrupts": interrupts,
-            "error_rate": errors / calls if calls else None}
-
-
 def versions(conn, skill=None, bench_project="%tokscope%-bench-%", where=None):
     """Per skill and version: label, first seen, loads, and median tokens per load (one prompt's requests).
     `where` is a (WHERE clause, params) over requests r and sessions s, such as the dashboard's filters; it replaces
@@ -318,22 +311,10 @@ def versions(conn, skill=None, bench_project="%tokscope%-bench-%", where=None):
     tokens = {(sid, i, sk): t for sid, i, sk, t in conn.execute(
         f"SELECT r.session_id, r.prompt_idx, r.skill, sum({TOKENS}) FROM requests r JOIN sessions s USING (session_id) "
         f"{cond} AND r.skill IS NOT NULL GROUP BY 1, 2, 3", params)}
-    per, errs = {}, {}
-    call_cond, call_params = errors.for_calls(cond, params)
-    # failed and repeated tool calls and interrupts of each prompt's skill, next to its tokens
-    found = {(sid, i, sk): [n, e, rep, 0] for sid, i, sk, n, e, rep in conn.execute(
-        f"SELECT r.session_id, r.prompt_idx, r.skill, count(*), sum(COALESCE(r.is_error, 0)), sum(COALESCE(r.repeat, 0)) "
-        f"FROM tool_calls r JOIN sessions s USING (session_id) {call_cond} AND r.skill IS NOT NULL GROUP BY 1, 2, 3", call_params)}
-    for sid, i, sk, n in conn.execute(
-            f"SELECT r.session_id, r.prompt_idx, r.skill, count(*) FROM turn_events r JOIN sessions s USING (session_id) "
-            f"{call_cond} AND r.skill IS NOT NULL AND r.kind = 'interrupt' GROUP BY 1, 2, 3", call_params):
-        found.setdefault((sid, i, sk), [0, 0, 0, 0])[3] = n
+    per = {}
     for key, (version, exact) in units.items():
         if key in tokens:
             per.setdefault((key[2], version), []).append((tokens[key], exact))
-            e = errs.setdefault((key[2], version), [0, 0, 0, 0])
-            for j, v in enumerate(found.get(key, ())):
-                e[j] += v or 0
     rows = []
     for sk, version, lbl, first, source in conn.execute(
             "SELECT skill, version, label, first_seen, source FROM skill_versions ORDER BY skill, first_seen"):
@@ -341,13 +322,11 @@ def versions(conn, skill=None, bench_project="%tokscope%-bench-%", where=None):
             continue
         us = per.get((sk, version), [])
         rows.append({"skill": sk, "version": version, "label": lbl, "first_seen": first, "source": source,
-                     "loads": len(us), "exact": sum(e for _, e in us), "tokens_median": median(t for t, _ in us) if us else None,
-                     **_error_fields(errs.get((sk, version)))})
+                     "loads": len(us), "exact": sum(e for _, e in us), "tokens_median": median(t for t, _ in us) if us else None})
     for (sk, version), us in sorted(per.items(), key=lambda kv: kv[0][0]):
         if version is None and (not skill or sk == skill):
             rows.append({"skill": sk, "version": None, "label": None, "first_seen": None, "source": "before tracking",
-                         "loads": len(us), "exact": 0, "tokens_median": median(t for t, _ in us),
-                         **_error_fields(errs.get((sk, version)))})
+                         "loads": len(us), "exact": 0, "tokens_median": median(t for t, _ in us)})
     # per skill, oldest first; loads from before tracking lead
     return sorted(rows, key=lambda r: (r["skill"], r["first_seen"] or ""))
 

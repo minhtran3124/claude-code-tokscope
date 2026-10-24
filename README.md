@@ -143,16 +143,6 @@ Things to know:
 - **Price overrides**: `<data home>/pricing.json` replaces rates; totals follow on the next run, no re-ingest. Example:
   `{"web_search_per_1000": 10, "claude-opus-5-5": {"input": 4, "output": 20, "cache_read": 0.2, "fast": 2, "us": 1.1}}`
   (USD per million tokens; every key is optional for a known model, a new model needs input, output and cache_read).
-- **Budgets**: `<data home>/budgets.json` sets limits for today (local day); no file means no budgets, a wrong file is an
-  error that names the problem. Keys: `daily_usd`, `daily_tokens`, `block_pct`, `weekly_pct` (quota %, needs statusline
-  snapshots that tokscope does not store yet, so it reports "no data"), `skills.<name>` and `agents.<name>` with
-  `daily_usd`, `daily_tokens` and (skills) `per_load_tokens` (median of a load). Per-skill and per-agent spend is
-  attributed as in `summary --by skill|agent`. Example:
-  `{"daily_usd": 50, "skills": {"xia2": {"per_load_tokens": 200000}}, "agents": {"reviewer": {"daily_usd": 10}}}`.
-  `tokscope check --once [--json]` prints the state and exits 0 ok, 10 near (80% or more of any budget), 11 over, 30 no
-  data (no file, nothing measurable, no requests) and 2 for a bad file. The live pane, the dashboard Overview and
-  `tokscope statusline` (set it as Claude Code's `statusLine` command) warn at 80% and when over; the `SessionEnd`
-  ingest prints one line when that session pushed a budget over a line. No network, no notifications of its own.
 - **Local only**: the dashboard answers only on `127.0.0.1` and accepts changes only from pages it served.
 - **Benchmarks and replays cost money or plan usage**: they start new `claude -p` sessions. Set `--runs` and `--budget`.
 - **Transcripts expire** after Claude Code's `cleanupPeriodDays`. Set it high (for example 365) to keep history.

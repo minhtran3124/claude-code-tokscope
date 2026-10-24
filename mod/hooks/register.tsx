@@ -281,10 +281,6 @@ export const register: Register = on => {
           <Text color={MAIN}>■</Text> main {fmt(shown.main)} <Text dimColor>{share(v.main)}</Text>{'   '}
           <Text color={AGENT}>■</Text> subagents {fmt(shown.agents)} <Text dimColor>{share(v.agents)}</Text>
         </Text>
-        {v.budget?.error && <Text color="red">✗ {v.budget.error}</Text>}
-        {(v.budget?.warn ?? []).map(w => (
-          <Text color={w.state === 'over' ? 'red' : AGENT}>{w.state === 'over' ? '✗ OVER' : '⚠ near'} {clip(w.text, width - 8)}</Text>
-        ))}
         <Text dimColor>{plural(v.prompts ?? 0, 'prompt')} · {plural(v.runs ?? 0, 'subagent run')} · $ = API-eq: a list-price estimate, not a plan bill</Text>
         {trend.length > 1 && (
           <Text>
@@ -412,12 +408,7 @@ export const register: Register = on => {
   }).catch(($, e, next) => next(e))
 
   on('session.end', async ($, e, next) => {
-    if (cli) {
-      const ran = await $.process.run([cli, 'ingest', '--session', e.sessionId])
-      // the CLI prints one "tokscope budget:" line when this session pushed a budget to near or over
-      const line = ran.stdout.split('\n').find(l => l.startsWith('tokscope budget:'))
-      if (line) $.ui.toast(line)
-    }
+    if (cli) await $.process.run([cli, 'ingest', '--session', e.sessionId])
 
     return next(e)
   })

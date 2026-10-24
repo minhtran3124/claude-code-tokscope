@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 from tokscope import cli
-from tokscope.core import errors, summary
+from tokscope.core import summary
 from tokscope.core.ingest import connect
 from tokscope.web.report import write_report
 
@@ -41,36 +41,6 @@ class CliTest(unittest.TestCase):
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), mock.patch.object(cli, "DB", self.db):
             cli.summary(args)
         return out.getvalue(), err.getvalue()
-
-    def seed_calls(self):
-        conn = connect(self.db)
-        conn.executemany("INSERT INTO tool_calls (session_id, tool_use_id, skill, phase, is_error, err_class, repeat, ts) "
-                         "VALUES ('s1', ?, ?, ?, ?, ?, ?, ?)",
-                         [("t1", "xia2", "plan", 1, "edit_mismatch", 0, ts(1)), ("t2", "xia2", "plan", 0, None, 1, ts(1)),
-                          ("t3", "xia2", "plan", 0, None, 0, ts(1)), ("t4", None, None, 1, "exit_code", 0, ts(5))])
-        conn.execute("INSERT INTO turn_events (session_id, ts, skill, phase, kind) VALUES ('s1', ?, 'xia2', 'plan', 'interrupt')",
-                     (ts(1),))
-        conn.commit()
-
-    def test_errors_count_failed_and_repeated_calls_and_interrupts_per_skill(self):
-        self.seed_calls()
-        text, err = self.run_cli(format="csv", errors=True)
-        rows = {r["key"]: r for r in csv.DictReader(io.StringIO(text))}
-        self.assertEqual(list(next(iter(rows.values()))), list(errors.FIELDS))
-        self.assertEqual({k: (r["calls"], r["errors"], r["repeats"], r["interrupts"]) for k, r in rows.items()},
-                         {"xia2": ("3", "1", "1", "1"), "(none)": ("1", "1", "0", "0")})
-        self.assertIn("edit_mismatch 1", err)
-        table, _ = self.run_cli(format="table", errors=True)
-        self.assertIn("33.3%", table)
-
-    def test_errors_follow_the_date_filter_and_refuse_a_cost_only_grouping(self):
-        self.seed_calls()
-        args = cli.argparse.Namespace(by="skill", since=None, until=None, project=None, limit=25, format="json", errors=True)
-        found = errors.rows(connect(self.db), "skill", "WHERE r.ts > ?", (ts(3),))
-        self.assertEqual([r["key"] for r in found], ["xia2"])
-        args.by = "model"
-        with mock.patch.object(cli, "DB", self.db), self.assertRaises(SystemExit):
-            cli.summary(args)
 
     def test_default_and_table_are_the_same_and_keep_the_notes_on_stdout(self):
         default, _ = self.run_cli()

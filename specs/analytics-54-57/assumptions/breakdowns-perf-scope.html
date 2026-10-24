@@ -1,0 +1,41 @@
+<title>Breakdowns Speed Assumption</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+:root{--paper:#f4f1ea;--panel:#fbf9f4;--side:#efebe2;--ink:#1d1a15;--muted:#5e584d;--blue:#2f4f9e;--blue-soft:#dfe5f1;--med:#a35a00;--med-soft:#f3e3c9;--low:#2f6b3f;--low-soft:#d9eadb;--rule:#d9d3c6;
+--sans:"Instrument Sans","Helvetica Neue",Arial,sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;color-scheme:light}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font:15.5px/1.55 var(--sans)}
+.app{display:grid;grid-template-columns:224px minmax(0,1fr);min-height:100vh}
+aside{background:var(--side);border-right:1px solid var(--rule);padding:24px 14px;padding-left:max(14px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:22px;position:sticky;top:0;height:100vh}
+.brand{font-weight:700;padding:0 10px}
+.nav{display:flex;justify-content:space-between;padding:7px 10px;border-radius:8px;background:var(--blue-soft);color:var(--blue);font-weight:600;text-decoration:none}
+.badge{font:500 11.5px var(--mono);background:#fff8;border-radius:99px;padding:1px 8px}
+.foot{margin-top:auto;padding:0 10px;font:12px/1.5 var(--mono);color:#8b8476}
+main{max-width:1080px;padding-block:26px 64px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px));display:grid;gap:22px;align-content:start;min-width:0}
+h1{margin:0;font-size:26px;text-wrap:balance}h2{margin:0;font-size:19px}p{margin:0}
+.label{font:600 11.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.panel{background:var(--panel);border:1.5px solid var(--ink);border-radius:14px;padding:18px;display:grid;gap:12px;min-width:0}
+.hero{box-shadow:10px 10px 0 0 var(--blue);margin:0 10px 10px 0}
+.pill{justify-self:start;font:600 11.5px var(--mono);padding:2px 10px;border-radius:99px;background:var(--med-soft);color:var(--med)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid .panel p{color:var(--muted)}
+code{font-family:var(--mono);font-size:.86em;background:#e4dfd4;padding:1px 5px;border-radius:5px}
+@media(max-width:860px){.app{grid-template-columns:1fr}aside{position:static;height:auto;flex-direction:row;align-items:center;overflow-x:auto;padding:12px 16px}.foot{margin:0;white-space:nowrap}.grid{grid-template-columns:1fr}}
+</style>
+<div class="app">
+<aside><div class="brand">tokscope</div><a class="nav" href="#assumption">Assumption <span class="badge">1</span></a><div class="foot">PR #104 · 2026-10-25</div></aside>
+<main id="assumption">
+<div><span class="label">Review fix · Breakdowns page speed</span><h1>Scope limited to overrides and rate hoisting</h1></div>
+<section class="panel hero">
+<span class="pill">ASSUMPTION</span>
+<h2>Only the pricing.json reads were fixed.</h2>
+<p>The review finding said the Breakdowns page got 5-10x slower because the new sections price every request in Python and re-read <code>pricing.json</code> each time. The fix hoists the overrides so the file is read once, and caches the per-model rate.</p>
+</section>
+<div class="grid">
+<div class="panel"><span class="label">Context</span><p>The finding also suggested summing in SQL, and mentioned a <code>compacted()</code> lookup for each candidate miss.</p></div>
+<div class="panel"><span class="label">Decision</span><p>Only hoisted the overrides and cached the per-model rate.</p></div>
+<div class="panel"><span class="label">Alternatives</span><p>Batch the <code>compacted()</code> lookups, or move the sums into SQL.</p></div>
+<div class="panel"><span class="label">Impact</span><p>Removes the repeated <code>pricing.json</code> reads, the main cost. The remaining speedup was not measured.</p></div>
+</div>
+</main></div>

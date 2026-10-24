@@ -501,15 +501,6 @@ code.ver{font-size:11px;color:var(--muted);background:var(--chip);border-radius:
 .trend{display:inline-block;padding:1px 8px;border-radius:999px;font-weight:600}
 .up{color:var(--fail);background:color-mix(in oklch,var(--fail) 13%,transparent)}
 .down{color:var(--pass);background:color-mix(in oklch,var(--pass) 13%,transparent)}
-.budgets li.bgt{display:grid;grid-template-columns:minmax(0,12em) minmax(60px,1fr) 4em;gap:2px 10px;align-items:center;margin:8px 0}
-.bgt .bl{overflow-wrap:anywhere}
-.bgt b{text-align:right;font-variant-numeric:tabular-nums}
-.bgt .note{grid-column:1/-1;margin:0}
-.bgt .bt{display:block;height:var(--bar-h);background:var(--track);border-radius:var(--r-bar);overflow:hidden}
-.bgt .bt u{display:block;height:100%;background:var(--pass);border-radius:0 4px 4px 0}
-.bgt.near .bt u{background:var(--agent)}
-.bgt.over .bt u{background:var(--fail)}
-.bgt.over b{color:var(--fail)}
 .kpi{background:var(--surface);border:var(--line-w) solid var(--line-c);border-radius:var(--r-tile);padding:10px 14px;min-width:120px;position:relative;overflow:hidden;animation:rise-in var(--t-layout) var(--ease-expo) backwards;animation-delay:calc(120ms + var(--i,0)*70ms)}
 .kpi span{display:block;color:var(--ink2);font-size:12px}
 .kpi b{font-size:19px;font-variant-numeric:tabular-nums}
