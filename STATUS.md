@@ -18,6 +18,7 @@ Try Pause / Unpause once on a real deployment; then close #23 after a look at th
 - GitHub Actions jobs do not start: account payment or spending limit (Settings > Billing).
 
 ## Recent
+- 2026-10-24: #89 summary export: `core/summary.py` rows shared by `tokscope summary --format table|json|csv`, `/api/summary?by=&format=`, and a Summary section (Breakdowns page and report) with Download CSV/JSON and Copy; 3 new test groups, suite green; PR open on feat/issue-89.
 - 2026-10-24: ingest hardening (#47, #48, #49) combined on feat/ingest-hardening, final PR to main; 345 tests pass; #48 chip lacks screenshots.
 - 2026-10-24: #49 incremental ingest: `ingest_state` keeps per-file offset, inode, 4 KB tail hash and the parser state, so a grown session parses only the appended lines (full parse on truncate or rewrite); PR open on feat/ingest-hardening; 345 tests pass.
 - 2026-10-24: #48 every database open goes through `open_db` (WAL, 10 s busy timeout), dashboard shows a failed ingest in the live chip; PR open on feat/ingest-hardening.
