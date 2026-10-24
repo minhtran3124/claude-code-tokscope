@@ -23,6 +23,7 @@
     },
     "files": [
       "main.js",
+      "loading.js",
       "package.json"
     ],
     "extraResources": [
