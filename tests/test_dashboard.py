@@ -2,6 +2,7 @@ import re
 import json
 import os
 import re
+import sys
 import tempfile
 import threading
 import time
@@ -790,3 +791,29 @@ class OverviewTest(unittest.TestCase):
         self.assertEqual((first["projects"], first["library"]), (2, 3))     # the Projects page's folded groups, benchmark rows left out
         self.assertEqual(lib.call_count, 1)                                 # the second render reads the cache
         self.assertEqual(set(shell._nav_counts(self.conn, "numbers")), {"sessions"})
+
+
+class ServeProjectsDirTest(unittest.TestCase):
+    def serve_args(self, *argv):
+        from tokscope import cli
+        with mock.patch.object(sys, "argv", ["tokscope", "serve", "--no-open", *argv]), mock.patch.object(dashboard, "serve") as serve:
+            cli.main()
+        return serve.call_args
+
+    def test_serve_reads_the_transcripts_folder_it_is_given_and_the_default_ones_otherwise(self):
+        sample = tempfile.mkdtemp()
+        self.assertEqual(self.serve_args("--projects-dir", sample, "--privacy", "redacted").kwargs["projects_dir"], sample)
+        self.assertIsNone(self.serve_args().kwargs["projects_dir"])  # None: ingest picks ~/.claude/projects and the others
+
+    def test_a_folder_that_does_not_exist_or_an_empty_value_stops_serve_before_it_starts(self):
+        for bad in ("/no/such/folder", ""):
+            with self.assertRaises(SystemExit) as raised:
+                self.serve_args("--projects-dir", bad)
+            self.assertIn("is not a folder", str(raised.exception))
+
+    def test_the_dashboard_ingests_from_the_folder_it_is_given(self):
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / "p").mkdir()
+        with mock.patch("tokscope.web.dashboard.server.ingest") as ing:
+            dashboard.Live(tmp / "t.db", ASSETS / "phases.json", 60, projects_dir=tmp / "p").tick()
+        self.assertEqual(ing.call_args.args[2], tmp / "p")

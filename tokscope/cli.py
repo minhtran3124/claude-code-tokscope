@@ -253,6 +253,8 @@ def main():
     pv.add_argument("--interval", type=float, default=10.0, help="seconds between background ingests")
     pv.add_argument("--no-open", action="store_true", help="do not open the browser")
     pv.add_argument("--privacy", choices=LEVELS, default="full")
+    pv.add_argument("--projects-dir", metavar="PATH", help="read this transcripts folder instead of the default ones "
+                    "(a small sample keeps a test server from ingesting every transcript)")
     pk = sub.add_parser("skills", help="each skill's versions (content hash), loads and median tokens per load")
     pk.add_argument("skill", nargs="?", help="only this skill; `import [skill]` keeps older versions transcripts still show")
     pk.add_argument("name", nargs="?", help=argparse.SUPPRESS)
@@ -297,8 +299,10 @@ def main():
     elif args.cmd == "serve":
         from .web.dashboard import serve
 
+        if args.projects_dir is not None and not (args.projects_dir and Path(args.projects_dir).expanduser().is_dir()):  # a typo would give an empty dashboard
+            sys.exit(f"tokscope: --projects-dir {args.projects_dir!r} is not a folder")
         try:
-            serve(DB, PHASES, args.port, args.interval, not args.no_open, args.privacy)
+            serve(DB, PHASES, args.port, args.interval, not args.no_open, args.privacy, projects_dir=args.projects_dir)
         except OSError as e:  # the port is taken: say so instead of a traceback
             sys.exit(f"tokscope: cannot listen on 127.0.0.1:{args.port} ({e.strerror}); try --port {args.port + 1}")
     elif args.cmd == "skills":
