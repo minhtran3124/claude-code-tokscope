@@ -70,7 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_requests_ts ON requests (ts);
 """
 TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "headless_calls", "sessions")
 # bump when the parser records something new, so unchanged transcripts are parsed again once
-PARSER_VERSION = 11
+PARSER_VERSION = 12
 ARGS_RE = re.compile(r"<command-args>(.*?)</command-args>", re.S)
 PROMPT_CHARS = 160
 # a Bash command that starts a headless Claude Code session
