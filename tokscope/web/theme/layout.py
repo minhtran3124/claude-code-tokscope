@@ -445,6 +445,7 @@ main :is(td,li,p,h1,h2,h3,b,.tt){overflow-wrap:break-word;hyphens:manual}
 html .layout .sheet,html .layout .sheet.open{transform:none;transition:opacity var(--t-state) var(--ease),visibility var(--t-state)}
 html .layout .sheet.open{transition:opacity var(--t-state) var(--ease),visibility calc(var(--t-fast)*0)}
 }
+@media (max-width:639px){#session-list .srow .live :is(.where,.lbl){display:none}#session-list .srow .live{padding:4px;margin-left:6px}}
 /* end phone */
 @media (prefers-reduced-motion:reduce){
 @keyframes ring{from{opacity:.35}}

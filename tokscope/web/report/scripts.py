@@ -100,7 +100,7 @@ function split(main,ag){const t=Math.max(main+ag,1),len=Math.max(3,100*(main+ag)
 // time of day when the list is by day; date and time when it is ranked
 const when=s=>sortKey==='recent'?s.start.slice(11,16):s.start.slice(5,16).replace('T',' ');
 // the dashboard fills LIVE from /api/live (open sessions: {id:{status,entry}}); the static report has none
-const liveTag=id=>{const l=(window.LIVE||{})[id];return l?`<span class="live ${l.status==='busy'?'working':'open'}" title="${l.status==='busy'?'working now':'open, waiting for you'} · ${esc(l.entry)}"><i></i>${l.status==='busy'?'running':'open'} · ${esc(l.entry)}</span>`:''};
+const liveTag=id=>{const l=(window.LIVE||{})[id];return l?`<span class="live ${l.status==='busy'?'working':'open'}" title="${l.status==='busy'?'working now':'open, waiting for you'} · ${esc(l.entry)}"><i></i><span class=lbl>${l.status==='busy'?'running':'open'}</span><span class=where> · ${esc(l.entry)}</span></span>`:''};
 window.paintLive=()=>document.querySelectorAll('#session-list .srow').forEach(d=>{const t=d.querySelector('.t'),old=t.querySelector('.live'),
   html=liveTag(d.dataset.id);if(!old&&!html)return;if(old)old.remove();if(html)t.querySelector('.tt').insertAdjacentHTML('afterend',html)});
 function row(s){
