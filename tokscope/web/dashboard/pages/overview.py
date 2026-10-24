@@ -4,13 +4,13 @@ import copy
 import html
 from datetime import date, datetime, timedelta, timezone
 
-from ....core import skills, tz
+from ....core import baseline, skills, tz
 from ....features import library, live
 from ... import charts
 from ....features.changes import list_changes
 from ....core.pricing import API_EQ_NOTE, unpriced, unpriced_text
 from ...report.common import TOKENS
-from ...report.widgets import _table, _tok, _usd
+from ...report.widgets import _start_line, _table, _tok, _usd
 from ..common import Filters, _iso, _q
 
 
@@ -27,6 +27,25 @@ def _spark(values, w=96, h=22):
     top = max(values)
     pts = " ".join(f"{w * i / (len(values) - 1):.1f},{h - 2 - (h - 4) * v / top:.1f}" for i, v in enumerate(values))
     return f'<svg class="spark" viewBox="0 0 {w} {h}" width="{w}" height="{h}" aria-hidden="true"><polyline points="{pts}"/></svg>'
+
+
+def start_detail(base):
+    """The sessions behind the start line: median, p90 and the 30-day trend (all `~`: estimates)."""
+    bits = [f"median of {base['n']:,} session{'s' * (base['n'] != 1)}", f"p90 ~{_tok(base['p90'])}"]
+    if base["first"] and base["last"] is not None:
+        bits.append(f"30 days: ~{_tok(base['first'])} → ~{_tok(base['last'])} ({base['last'] / base['first'] - 1:+.0%})")
+    return f'<span class="note" title="{html.escape(baseline.METHOD)}">{" · ".join(bits)}</span> {_spark(base["trend"])}'
+
+
+def _session_start(conn, f):
+    """What every new session starts at, over the range and project of the filter bar (not the model or skill filter)."""
+    cond, params = Filters({"range": [f.range], "project": [f.project]}).cond()
+    base = baseline.stats(baseline.starts(conn, cond, params), None,
+                          baseline.starts(conn, *Filters({"range": ["all"], "project": [f.project]}).cond()))
+    body = (f'<p>{_start_line(base)}</p><p>{start_detail(base)}</p>' if base
+            else '<p class="note">No sessions in this range.</p>')
+    return (f'<section class="card"><h2>Session start</h2><p class="note">{f.label()}, before you type anything: system prompt, '
+            f'tools, MCP servers, skills and CLAUDE.md</p>{body}</section>')
 
 
 MIN_HISTORY_DAYS = 7  # a change chip needs more than this many elapsed days of history; a typical day, more than this many active days
@@ -449,6 +468,7 @@ def page_overview(conn, f):
     return "".join([
         f'<section class="card answer live-card"><h2><span class="dot"></span>Today</h2><div data-region="running">{_running()}</div><div data-region="today">{_today(conn, f)}</div></section>',
         f'<div data-region="kpis">{_kpis(conn, f)}</div>',
+        _session_start(conn, f),
         f'<section class="card"><h2>Biggest movers</h2><p class="note">{f.label()}, tokens per day against the window before</p>'
         f'<div data-region="changed">{_movers(conn, f, cmp)}<h3>New skill versions</h3>{_new_versions(conn, f)}</div></section>',
         f'<section class="card" id="trend"><h2>Daily tokens</h2><p class="note">{f.label()}, days in {tz.label()}</p>'

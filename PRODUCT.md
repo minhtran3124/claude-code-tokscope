@@ -29,11 +29,31 @@ The dashboard answers only on `127.0.0.1` and refuses requests from other hosts 
   prompt; tick 2 to 4 rows to compare them.
 - **Projects** (full level only): each project with its sessions, tokens and API-equivalent cost. Worktrees, eval
   copies and subfolders count under their repository. Open a project to see and manage its MCP servers (below).
+  Each project also shows its **session start** (see "Always-on baseline").
 - **Library** (file contents at full level only): the skills that you wrote, with their files, the STE check and
   Optimize (below).
 - **Benchmarks**: benchmark runs and answers.
 - **Breakdowns**: tokens by MCP server, tool, skill, owner, phase and subagent type, each with its finding.
 - **Managed** (full level only): your Claude Managed Agents, read through the `ant` CLI (below).
+
+### Always-on baseline
+
+A session carries a fixed prefix before you type anything: system prompt, tool definitions, MCP servers, skills list and
+CLAUDE.md. Every new session pays for it again. tokscope reads it from the first main-thread request of each session
+(`input + cache write + cache read`; subagent requests are ignored), so no new parsing is needed for this part.
+
+- **Overview** and **Projects**: "Every new session starts at ~X tokens (~$Y)", the median of the sessions that began in
+  the filter-bar range, with the p90 and the trend over the last 30 days. The cost is those tokens at the cache-write
+  rate of the model. A project with no session in the range shows "No sessions in this range." The HTML report carries
+  the same line under its hero.
+- **MCP servers** (Projects): **≈Definition tokens** per server, and for a **never used here** server its share of the
+  start. A finding above the table adds them up: "3 unused MCP servers add ~9K tokens (~$0.05) to every session start in
+  this project; remove them". The Remove button stays where it was.
+- Every figure is an estimate (`~`) with the method as its tooltip. Definition sizes come from the `shape` record of the
+  first main-thread request (the tool list as JSON, about 4 characters per token). Tools Claude Code loads on demand
+  (`defer_loading`) are not in that request and count 0, so a server whose tools are all deferred shows no definition.
+  Older transcripts without a shape show a dash. The ingest stores them in the `mcp_defs` table; the parser version
+  changed, so the next ingest reads every transcript once more.
 
 ### Projects: MCP servers
 

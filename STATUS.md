@@ -18,6 +18,7 @@ Try Pause / Unpause once on a real deployment; then close #23 after a look at th
 - GitHub Actions jobs do not start: account payment or spending limit (Settings > Billing).
 
 ## Recent
+- 2026-10-24: #90 always-on baseline on feat/issue-90: `core/baseline.py` (first main-thread request per session, median, p90, 30-day trend, cache-write cost), `mcp_defs` table from the `shape` record (parser v15), session-start line on Overview, Projects and the report, per-server definition tokens and unused-server finding; 367 tests pass; PR open.
 - 2026-10-24: ingest hardening (#47, #48, #49) combined on feat/ingest-hardening, final PR to main; 345 tests pass; #48 chip lacks screenshots.
 - 2026-10-24: #49 incremental ingest: `ingest_state` keeps per-file offset, inode, 4 KB tail hash and the parser state, so a grown session parses only the appended lines (full parse on truncate or rewrite); PR open on feat/ingest-hardening; 345 tests pass.
 - 2026-10-24: #48 every database open goes through `open_db` (WAL, 10 s busy timeout), dashboard shows a failed ingest in the live chip; PR open on feat/ingest-hardening.
@@ -32,4 +33,3 @@ Try Pause / Unpause once on a real deployment; then close #23 after a look at th
 - 2026-10-22: #23 step 2: answer-first Overview (typical-day line and band, one KPI strip with per-day deltas, biggest movers, stacked daily tokens, one spenders container, labelled filters, segmented sidebar controls) (PR open).
 - 2026-10-22: #23 step 4: Breakdowns sections show their finding in the summary line (share bar, empty-state hints); PR open on #26.
 - 2026-10-22: #23 step 3: Sessions is a 44 px table grouped by day, with a sort control and a compare tray (PR open, stacked on step 1).
-- 2026-10-22: #23 step 1: motion tokens, first-paint-only entrances, delta chip instead of count-up, one-ring live dot, per-rule reduced motion (PR open).

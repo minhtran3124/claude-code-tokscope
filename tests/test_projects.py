@@ -2,6 +2,7 @@ import json
 import os
 import stat
 import tempfile
+import time
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -213,6 +214,63 @@ class ChangeTest(ProjectsTest):
         self.assertNotIn('data-mcp-remove="sentry"', page)
         self.assertIn("with the plugin: /plugin", page)
         self.assertIn('id="mcp-form"', page)
+
+
+class BaselineProjectTest(ProjectsTest):
+    """Reuses the projects fixture: s1-s4 belong to `app`, each with one main-thread request of 1000 input tokens."""
+
+    def test_the_baseline_ignores_sidechain_requests_and_prices_the_cache_write(self):
+        self.conn.execute("INSERT INTO requests (session_id, request_key, ts, model, agent_id, input, output, cache_read, "
+                          "cache_write_5m, cache_write_1h) VALUES ('s1','side',?, 'claude-opus-5-5','a1',99999,0,0,0,0)", (ts(2),))
+        found = projects.discover(self.conn)
+        projects.add_baselines(self.conn, found, 30)
+        g = next(g for g in found if g["name"] == "app")
+        self.assertEqual((g["base"]["n"], g["base"]["median"], g["base"]["p90"]), (4, 1000, 1000))
+        self.assertAlmostEqual(g["base"]["cost"], 1000 * 4.0 * 1.25 / 1e6)
+        page = projects_page._project_view(g)
+        self.assertIn("Every new session starts at ~1.0K tokens (~$0.01)", page)
+        self.assertIn("Estimate.", page)                              # the method is the tooltip
+
+    def test_a_project_with_no_sessions_in_the_range_shows_no_baseline_and_no_error(self):
+        found = projects.discover(self.conn)
+        projects.add_baselines(self.conn, found, 30, now=time.time() + 400 * 86400)
+        self.assertTrue(all(g["base"] is None for g in found))
+        page = projects_page._project_view(found[0])
+        self.assertIn("No sessions in this range.", page)
+        self.assertNotIn("Every new session starts", page)
+
+    def test_the_range_of_the_filter_bar_limits_the_sessions(self):
+        self.conn.execute("UPDATE requests SET ts = ? WHERE session_id = 's1'", (ts(20),))
+        found = projects.discover(self.conn)
+        projects.add_baselines(self.conn, found, 7)
+        self.assertEqual(found[0]["base"]["n"], 3)
+        projects.add_baselines(self.conn, found, None)
+        self.assertEqual(found[0]["base"]["n"], 4)
+
+    def test_definitions_split_per_server_and_unused_ones_sum_into_the_finding(self):
+        self.conn.executemany("INSERT INTO mcp_defs VALUES ('s1', ?, ?, ?)",
+                              [("docs", 3, 4000), ("api", 2, 2000), ("claude_ai_Notion", 1, 2400)])
+        found = projects.discover(self.conn)
+        projects.add_baselines(self.conn, found, 30)
+        g = next(g for g in found if g["name"] == "app")
+        rows = {(e["name"], e["source"]): e for e in projects.servers(g, {"claude.ai Notion": "✔ Connected"})}
+        self.assertEqual(rows[("docs", "project")]["def_tokens"], 1000)     # about 4 characters per token
+        self.assertEqual(rows[("api", "local")]["def_tokens"], 500)
+        self.assertIsNone(rows[("Linear", "connector")]["def_tokens"])      # no definition seen
+        servers, tokens, usd = projects.idle_cost(g, list(rows.values()))
+        self.assertEqual((servers, tokens), (2, 1600))                      # docs and Notion were never called
+        self.assertAlmostEqual(usd, 1600 * 4.0 * 1.25 / 1e6)
+        page = projects_page._project_view(g)
+        self.assertIn("≈Definition tokens", page)
+        self.assertIn("1 unused MCP server adds ~1.0K tokens (~$0.01) to every session start in this project;", page)  # no health check: Notion unknown
+        self.assertIn("~1.0K · 100% of start", page)
+
+    def test_the_projects_page_carries_the_baseline_and_honours_the_range(self):
+        f = dashboard.Filters({"range": ["7"]})
+        page = dashboard.page_projects(self.conn, f, {"p": [self.app_group()["id"]]}, "full")
+        self.assertIn("Every new session starts at ~1.0K tokens", page)
+        self.assertIn("median of 4 sessions", page)
+        self.assertIn("starts ~1.0K", dashboard.page_projects(self.conn, f, {}, "full"))
 
 
 if __name__ == "__main__":
