@@ -18,7 +18,7 @@ Try Pause / Unpause once on a real deployment; then close #23 after a look at th
 - GitHub Actions jobs do not start: account payment or spending limit (Settings > Billing).
 
 ## Recent
-- 2026-10-24: #45 fast mode 2x, US geo 1.1x and web search $10/1000 priced from `usage` (4 new requests columns, PARSER_VERSION 13); costs refresh on connect when rates or `<data home>/pricing.json` change, no re-ingest; 329 tests pass; PR on fix/bug-issues.
+- 2026-10-24: bug run #41-#46 verified (329 tests pass), final PR fix/bug-issues -> main; #45 fast mode 2x, US geo 1.1x and web search $10/1000 priced from `usage` (4 new requests columns, PARSER_VERSION 13); costs refresh on connect when rates or `<data home>/pricing.json` change, no re-ingest; 329 tests pass; PR on fix/bug-issues.
 - 2026-10-24: #43 unpriced models: 9 rates added (Opus 4/4.1/4.5, Sonnet 4/4.5, Haiku 3.5, Mythos 5/5.1), snapshot suffix must be 8 digits, `unpriced:` notice in summary, session, report and Overview, PARSER_VERSION 12; 309 tests pass; PR on fix/bug-issues.
 - 2026-10-24: #44 days use local time (or --timezone / TOKSCOPE_TZ) everywhere: `core/tz.py`, `localday()` SQL function, `--since`/`--until` as local dates; 308 tests pass; PR open against fix/bug-issues.
 - 2026-10-24: running sessions: `features/live.py` reads `~/.claude/sessions/*.json` (pid alive, status busy or idle, entrypoint), `/api/live`, Overview "N sessions running" with a pulsing dot while any works, Sessions rows tagged "running · Terminal" or "open · VS Code"; 302 tests pass; checked at 1440 and 375 px (phone shows the dot only); PR #75 merged; desktop app rebuilt (install.sh) and service restarted on main.
