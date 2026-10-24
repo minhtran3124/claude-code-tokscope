@@ -25,8 +25,11 @@ METHOD = ("~ estimate: result tokens = characters / chars per token (4.0, or 3.1
 
 
 def version(model):
-    """(major, minor) of claude-<family>-<major>-<minor>[-date], or None (claude-opus-4-1 reads as 4.1)."""
+    """(major, minor) of claude-<family>-<major>-<minor>[-date], or None (claude-opus-4-1 reads as 4.1).
+    Legacy claude-3-5-sonnet names, with the number before the family, are None (old tokenizer)."""
     parts = (model or "").split("-")
+    if len(parts) > 1 and parts[1].isdigit():
+        return None
     nums = [p for p in parts[2:] if p.isdigit() and len(p) < 4]
     return (int(nums[0]), int(nums[1]) if len(nums) > 1 else 0) if nums and parts[:1] == ["claude"] else None
 

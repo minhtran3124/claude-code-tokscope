@@ -64,6 +64,9 @@ class CarryTest(unittest.TestCase):
         self.assertEqual(context.chars_per_token("claude-opus-4-7-20260101"), context.NEW_CHARS_PER_TOKEN)
         self.assertEqual(context.chars_per_token("claude-opus-4-6"), 4)
         self.assertEqual(context.chars_per_token(None), 4)
+        for legacy in ("claude-3-5-sonnet-20241022", "claude-3-7-sonnet-20250219", "claude-3-5-haiku-20241022"):
+            self.assertIsNone(context.version(legacy))
+            self.assertEqual(context.chars_per_token(legacy), 4)
 
     def test_pressure_is_the_peak_request_against_the_window_with_its_compactions(self):
         rows, compacts, _ = context.pressure(self.conn, COND, PARAMS)
