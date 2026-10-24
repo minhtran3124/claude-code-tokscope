@@ -25,9 +25,10 @@ function freePort() {
 function waitFor(url, tries = 600) {
   return new Promise((resolve, reject) => {
     const attempt = (n) => {
-      const req = http.get(url, (res) => { res.resume(); resolve(); });
+      const again = () => (n <= 0 ? reject(new Error("the tokscope server did not start")) : setTimeout(() => attempt(n - 1), 100));
+      const req = http.get(new URL("api/version", url), (res) => { res.resume(); if (res.statusCode === 200) resolve(); else again(); });  // not the Overview: it can take over 2 s
       req.setTimeout(2000, () => req.destroy());
-      req.on("error", () => (n <= 0 ? reject(new Error("the tokscope server did not start")) : setTimeout(() => attempt(n - 1), 100)));
+      req.on("error", again);
     };
     attempt(tries);
   });
@@ -36,14 +37,17 @@ function waitFor(url, tries = 600) {
 // The background service (install.sh) keeps `tokscope serve` on this port. Same number as in install.sh.
 const SERVICE_PORT = 8770;
 
-// true when the page at url is a tokscope dashboard (a different program on the port must not be shown)
+// true when url answers like a tokscope dashboard (a different program on the port must not be shown). It asks
+// /api/version, which answers at once; the Overview can take longer than the timeout on a large database.
 function isTokscope(url) {
   return new Promise((resolve) => {
-    const req = http.get(url, (res) => {
+    const req = http.get(new URL("api/version", url), (res) => {
       let body = "";
       res.setEncoding("utf8");
       res.on("data", (c) => { if (body.length < 65536) body += c; });
-      res.on("end", () => resolve(res.statusCode === 200 && /tokscope/i.test(body)));
+      res.on("end", () => {
+        try { const j = JSON.parse(body); resolve(res.statusCode === 200 && !!j && typeof j === "object" && "stamp" in j && "live" in j); } catch (e) { resolve(false); }
+      });
     });
     req.setTimeout(2000, () => req.destroy());
     req.on("error", () => resolve(false));
