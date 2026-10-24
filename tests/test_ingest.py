@@ -74,6 +74,23 @@ class IngestTest(Fixture):
         self.run_ingest()
         self.assertEqual(self.rows("SELECT count(*), sum(output) FROM requests"), [(2, 50)])
 
+    def test_a_fork_copying_earlier_requests_into_a_new_file_does_not_count_them_twice(self):
+        # issue #46, confirmed with `claude -p --resume <id> --fork-session`: the fork repeats requests and their keys
+        def write(name, records):
+            (self.project / f"{name}.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
+
+        base = [human("hi"), assistant("r1", out=40), human("again"), assistant("r2")]
+        write("a-orig", base)
+        write("b-fork", base + [human("more", ts="2026-10-01T00:05:00Z"), assistant("r3")])
+        for order in ("a-orig", "b-fork"):  # the same result whichever file is parsed first
+            self.db.unlink(missing_ok=True)
+            self.run_ingest()
+            self.assertEqual(self.rows("SELECT session_id, request_key FROM requests ORDER BY request_key"),
+                             [("a-orig", "r1"), ("a-orig", "r2"), ("b-fork", "r3")])
+            (self.project / f"{order}.jsonl").touch()
+            self.run_ingest()
+            self.assertEqual(self.rows("SELECT count(*), sum(output) FROM requests"), [(3, 60)])
+
     def test_streamed_lines_of_one_request_count_once(self):
         # Claude Code writes one line per content block, each repeating the request's usage
         self.write_main([human("hi"), assistant("r1", out=5), assistant("r1", out=40), assistant("r1", out=40)])

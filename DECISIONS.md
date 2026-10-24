@@ -1,10 +1,10 @@
 # Decisions
 
-## 2026-10-24 · Resumed and forked sessions are not deduplicated across files (issue #46)
+## 2026-10-24 · A request copied into a fork is kept by one session (issue #46)
 
 | Decision | Why | Rejected |
 | --- | --- | --- |
-| Requests stay keyed per session `(session_id, request_key)`. No cross-file dedup. | Not confirmed on real data: in 333 transcripts under `~/.claude/projects` (16338 request keys, read-only scan), no `requestId`, `message.id` or `uuid` appears in more than one file, and no line carries a `sessionId` other than its file's name. So resume writes to the same file and nothing is copied. A fork or rewind that copies history was not among the local files, so it is unchecked: rerun the scan if one shows up. | A global `(message.id, requestId)` key or `copied_from` column (no copies to remove; would hide a real request under another session). |
+| `claude -p --resume <id> --fork-session` writes a new transcript that repeats the earlier assistant lines with the same `requestId`, `message.id` and `uuid` (confirmed 2026-10-24; plain `--resume` appends to the same file). Ingest keeps a shared request on the session that sorts first by `(first_ts, last_ts, session_id)`, whichever file is parsed first. `PARSER_VERSION` 14. | Counting it in both files doubled its tokens and cost. A fork's own `first_ts` is copied from the original, so `last_ts` and the id break the tie. If the original keeps going after the fork, its later requests stay with it. | Per-session keys only (the bug); a `copied_from` column (totals would need a filter everywhere); a fork marker (the file has none). |
 
 ## 2026-10-22 · Desktop app is an optional Electron window
 
