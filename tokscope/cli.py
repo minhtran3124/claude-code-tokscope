@@ -10,6 +10,7 @@ from .core.calls import turn_calls
 from .core.ingest import connect, ingest, ingest_session
 from .core import tz
 from .core.pricing import API_EQ_NOTE, unpriced, unpriced_text
+from .core import errors
 from .core.summary import SUMMARY_SQL, rows as summary_rows, to_csv as summary_csv, to_json as summary_json
 from .core.privacy import LEVELS
 
@@ -18,11 +19,32 @@ DB = paths.db()
 PHASES = paths.phases()
 REPORT = paths.report()
 
+def summary_errors(conn, args, where, params, fmt):
+    """`summary --errors`: failed and repeated tool calls, interrupts, API errors and retries per skill, agent or phase."""
+    if args.by not in errors.KEYS:
+        sys.exit(f"tokscope: --errors groups by {', '.join(errors.KEYS)}, not {args.by}")
+    found = errors.rows(conn, args.by, where, params, args.limit)
+    if fmt == "json":
+        print(summary_json(found))
+    elif fmt == "csv":
+        print(summary_csv(found, errors.FIELDS), end="")
+    else:
+        print(f"{args.by:<40} {'calls':>8} {'errors':>7} {'err %':>6} {'repeats':>8} {'interrupts':>10} {'api errors':>10} {'retries':>8}")
+        for r in found:
+            print(f"{r['key'][:40]:<40} {r['calls']:>8,} {r['errors']:>7,} {errors.pct(r['errors'], r['calls']):>6} "
+                  f"{r['repeats']:>8,} {r['interrupts']:>10,} {r['api_errors']:>10,} {r['retries']:>8,}")
+    kinds = errors.classes(conn, where, params)
+    if kinds:
+        print("error classes: " + ", ".join(f"{k} {n}" for k, n in kinds), file=sys.stdout if fmt == "table" else sys.stderr)
+
+
 def summary(args):
     where, params = _filters(args)
     conn = connect(DB)  # creates the tables on a fresh install
-    found = summary_rows(conn, args.by, where, params, args.limit)
     fmt = getattr(args, "format", "table")
+    if getattr(args, "errors", False):
+        return summary_errors(conn, args, where, params, fmt)
+    found = summary_rows(conn, args.by, where, params, args.limit)
     if fmt == "json":
         print(summary_json(found))
     elif fmt == "csv":
@@ -260,6 +282,8 @@ def main():
     pk.add_argument("name", nargs="?", help=argparse.SUPPRESS)
     ps = sub.add_parser("summary", help="print a cost table")
     ps.add_argument("--by", choices=SUMMARY_SQL, default="phase")
+    ps.add_argument("--errors", action="store_true", help="count failed and repeated tool calls, interrupts, API errors "
+                    "and retries instead of cost (--by skill, agent or phase)")
     ps.add_argument("--format", choices=("table", "json", "csv"), default="table", help="json or csv print only the rows")
     pr = sub.add_parser("report", help="write the HTML report")
     po = sub.add_parser("open", help="ingest new transcripts, rebuild the HTML report and open it in the browser")

@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from statistics import median
 
+from ..core import errors
 from ..core.ingest import connect, ingest_session
 
 BENCH_SCHEMA = """
@@ -198,7 +199,7 @@ def diff(db_path, task_name):
     conn = connect(db_path)
     _schema(conn)
     rows = conn.execute(
-        """SELECT b.variant, b.passed, b.is_error, b.duration_s, b.reported_cost, b.skill_check,
+        """SELECT b.variant, b.passed, b.is_error, b.duration_s, b.reported_cost, b.skill_check, b.session_id,
                   sum(r.cost_usd), sum(CASE WHEN r.agent_id IS NULL THEN r.cost_usd END),
                   sum(CASE WHEN r.agent_id IS NOT NULL THEN r.cost_usd END), sum(r.output),
                   group_concat(DISTINCT CASE WHEN r.agent_id IS NOT NULL THEN r.model END)
@@ -207,12 +208,15 @@ def diff(db_path, task_name):
         (task_name,),
     ).fetchall()
     by_variant = {}
-    for v, passed, err, dur, reported, check, total, main, agents, out, models in rows:
-        d = by_variant.setdefault(v, {"n": 0, "pass": 0, "err": 0, "total": [], "main": [], "agents": [], "out": [],
+    for v, passed, err, dur, reported, check, sid, total, main, agents, out, models in rows:
+        d = by_variant.setdefault(v, {"n": 0, "pass": 0, "err": 0, "tools": [], "interrupts": 0, "total": [], "main": [], "agents": [], "out": [],
                                       "dur": [], "reported": [], "models": set(), "checks": {}})
         if check:
             d["checks"][check] = d["checks"].get(check, 0) + 1
         d["n"] += 1
+        e = errors.session(conn, sid)
+        d["tools"].append(e)
+        d["interrupts"] += e["interrupts"]
         d["pass"] += passed
         d["err"] += err
         for key, val in (("total", total), ("main", main), ("agents", agents), ("out", out), ("dur", dur),
@@ -230,6 +234,10 @@ def diff(db_path, task_name):
             f"{_spread(d['agents']):<22} {out_spread:<26} {_spread(d['dur']):<22} {','.join(sorted(m for m in d['models'] if m))}"
             + (f"  skill: {', '.join(f'{k} {n}' for k, n in sorted(d['checks'].items()))}" if d["checks"] else "")
         )
+    lines.append("tool calls per variant (all runs): failed / total, repeats, interrupts")
+    for v, d in by_variant.items():
+        calls, failed, repeats = (sum(e[k] for e in d["tools"]) for k in ("calls", "errors", "repeats"))
+        lines.append(f"{v:<10} {failed}/{calls} failed ({errors.pct(failed, calls)}), {repeats} repeats, {d['interrupts']} interrupts")
     if any(set(d["checks"]) - {"ok"} for d in by_variant.values()):
         lines.append("skill check: only 'ok' runs read the pinned version; compare variants on those, or rerun.")
     return "\n".join(lines)
