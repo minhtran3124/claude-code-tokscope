@@ -11,6 +11,7 @@ Attribution rules:
   link_sessions.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -68,11 +69,16 @@ CREATE TABLE IF NOT EXISTS headless_calls (
     session_id TEXT, tool_use_id TEXT, cwds TEXT, start_ts TEXT, end_ts TEXT, child_ids TEXT,
     PRIMARY KEY (session_id, tool_use_id)
 );
+CREATE TABLE IF NOT EXISTS ingest_state (session_id TEXT PRIMARY KEY, state TEXT);
 CREATE INDEX IF NOT EXISTS idx_requests_ts ON requests (ts);
 """
-TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "headless_calls", "sessions")
+TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "headless_calls", "ingest_state", "sessions")
 # bump when the parser records something new, so unchanged transcripts are parsed again once
 PARSER_VERSION = 14
+TAIL_BYTES = 4096  # the bytes before a stored offset that must be unchanged for a file to count as appended to
+# what a resumed parse restores: the parser's state after the last complete line of every file
+STATE_KEYS = ("requests", "subagents", "skill_calls", "prompts", "tool_ctx", "tool_calls", "result_chars",
+              "skill_texts", "skill_args", "headless", "meta", "files")
 ARGS_RE = re.compile(r"<command-args>(.*?)</command-args>", re.S)
 PROMPT_CHARS = 160
 # a Bash command that starts a headless Claude Code session
@@ -211,9 +217,42 @@ class SessionParser:
         self.headless = {}  # Bash tool_use_id that ran `claude -p` -> {cwd, start_ts, end_ts, child_ids}
         self.meta = {"title": None, "version": None, "cwd": None, "first_ts": None, "last_ts": None, "prompts": 0,
                      "entrypoint": None}
+        self.files = {}  # file name ("" = main) -> {ino, off, tail, state, unresolved}: where the next parse resumes
+        self.lines_read = 0
+        self._f = [0, ""]  # sort key of the file being read: a resumed parse keeps full-parse row order
 
-    def parse(self):
-        self._walk(self.main_path, agent_id=None, agent_type=None, state={"prompt_idx": 0, "skill": None, "phase": None})
+    def dump(self):
+        return json.dumps({"v": PARSER_VERSION, **{k: getattr(self, k) for k in STATE_KEYS}})
+
+    def _valid(self, prev):
+        """True when every file only grew since `prev`: same inode, not shorter, the bytes before the offset the same."""
+        if prev.get("v") != PARSER_VERSION:
+            return False
+        sub_dir = self.main_path.with_suffix("") / "subagents"
+        for rel, info in prev["files"].items():
+            if info.get("unresolved"):
+                return False  # its spawning call was not seen yet; a full parse may find it
+            path = sub_dir / rel if rel else self.main_path
+            st = path.stat()
+            if st.st_ino != info["ino"] or st.st_size < info["off"]:
+                return False
+            if _tail_hash(path, info["off"]) != info["tail"]:
+                return False
+        return True
+
+    def parse(self, prev=None):
+        """Read the session. With `prev` (the dump of an earlier parse) read only the lines appended since, when the
+        files only grew; else read everything."""
+        try:
+            ok = bool(prev) and self._valid(prev)
+        except (KeyError, TypeError, ValueError, OSError):
+            ok = False
+        if ok:
+            for k in STATE_KEYS:
+                setattr(self, k, prev[k])
+        self._f = [0, ""]
+        main = self.files.get("")
+        self._walk(self.main_path, "", None, None, main["state"] if main else {"prompt_idx": 0, "skill": None, "phase": None})
         sub_dir = self.main_path.with_suffix("") / "subagents"
         agents = []
         for path in sub_dir.glob("agent-*.jsonl") if sub_dir.is_dir() else []:
@@ -223,20 +262,46 @@ class SessionParser:
         # parents before children so a nested agent finds its spawning tool call
         for depth, path, meta in sorted(agents, key=lambda a: (a[0], a[1].name)):
             agent_id = path.stem.removeprefix("agent-")
-            prompt_idx, skill, phase, parent = self.tool_ctx.get(meta.get("toolUseId"), (None, None, None, None))
             agent_type = meta.get("agentType") or "unknown"
-            self.subagents.append({
-                "agent_id": agent_id, "agent_type": agent_type, "description": meta.get("description"),
-                "tool_use_id": meta.get("toolUseId"), "spawn_depth": depth, "parent_agent_id": parent,
-                "prompt_idx": prompt_idx, "skill": skill, "phase": phase,
-            })
-            self._walk(path, agent_id, agent_type, {"prompt_idx": prompt_idx, "skill": skill, "phase": phase})
+            self._f = [depth, path.name]
+            known = self.files.get(path.name)
+            if known:
+                state = known["state"]
+            else:
+                prompt_idx, skill, phase, parent = self.tool_ctx.get(meta.get("toolUseId"), (None, None, None, None))
+                self.subagents.append({
+                    "agent_id": agent_id, "agent_type": agent_type, "description": meta.get("description"),
+                    "tool_use_id": meta.get("toolUseId"), "spawn_depth": depth, "parent_agent_id": parent,
+                    "prompt_idx": prompt_idx, "skill": skill, "phase": phase,
+                })
+                state = {"prompt_idx": prompt_idx, "skill": skill, "phase": phase}
+            self._walk(path, path.name, agent_id, agent_type, state, unresolved=not known and prompt_idx is None)
+        self.subagents.sort(key=lambda a: (a["spawn_depth"], a["agent_id"]))
+        self.skill_calls.sort(key=lambda c: tuple(c["_f"]))
         return self
 
-    def _walk(self, path, agent_id, agent_type, state):
+    def _walk(self, path, rel, agent_id, agent_type, state, unresolved=False):
         is_main = agent_id is None
-        with open(path, encoding="utf-8", errors="replace") as f:
-            for line in f:
+        info = self.files.get(rel) or {"off": 0}
+        with open(path, "rb") as f:
+            f.seek(info["off"])
+            data = f.read()
+            ino = os.fstat(f.fileno()).st_ino
+            end = data.rfind(b"\n") + 1
+            try:  # a last line without its newline counts when it is complete
+                if data[end:].strip():
+                    json.loads(data[end:])
+                    end = len(data)
+            except ValueError:
+                pass
+            off = info["off"] + end
+            self.files[rel] = {"ino": ino, "off": off, "tail": _tail_hash(f, off), "state": state,
+                               "unresolved": unresolved or info.get("unresolved", False)}
+            for raw in data[:end].split(b"\n"):
+                if not raw.strip():
+                    continue
+                self.lines_read += 1
+                line = raw.decode("utf-8", errors="replace")
                 # request blobs and shapes are large and carry no usage; a blob can hold the skill text a load put in
                 if '"api-request-blob"' in line[:40] and SKILL_TEXT in line:
                     self._on_skill_blob(line)
@@ -334,7 +399,7 @@ class SessionParser:
         state["phase"] = phase_of(skill, self.phases)
         self.skill_calls.append({
             "ts": rec.get("timestamp"), "skill": skill, "phase": state["phase"], "source": source,
-            "agent_id": agent_id, "prompt_idx": state["prompt_idx"], "tool_use_id": tool_use_id,
+            "agent_id": agent_id, "prompt_idx": state["prompt_idx"], "tool_use_id": tool_use_id, "_f": self._f,
         })
 
     def _on_assistant(self, rec, agent_id, agent_type, state):
@@ -371,6 +436,28 @@ class SessionParser:
                 self.skill_args[block.get("id")] = (block.get("input") or {}).get("args")
                 if skill:
                     self._load_skill(skill, "tool", rec, agent_id, state, block.get("id"))
+
+
+def _tail_hash(src, off):
+    """Hash of the TAIL_BYTES before `off` in a path or an open binary file."""
+    def read(f):
+        f.seek(max(0, off - TAIL_BYTES))
+        return hashlib.sha1(f.read(min(off, TAIL_BYTES))).hexdigest()
+    if hasattr(src, "seek"):
+        return read(src)
+    with open(src, "rb") as f:
+        return read(f)
+
+
+def parse_session(conn, main_path, phases):
+    """Parse a session, resuming from the state stored by its last ingest when its files only grew."""
+    parser = SessionParser(main_path, phases)
+    row = conn.execute("SELECT state FROM ingest_state WHERE session_id = ?", (parser.session_id,)).fetchone()
+    try:
+        prev = json.loads(row[0]) if row else None
+    except ValueError:
+        prev = None
+    return parser.parse(prev)
 
 
 def session_signature(main_path):
@@ -488,6 +575,7 @@ def store(conn, project, parser, signature):
         (sid, project, m["cwd"], m["title"], m["version"], m["first_ts"], m["last_ts"], m["prompts"], signature,
          m["entrypoint"]),
     )
+    conn.execute("INSERT INTO ingest_state VALUES (?,?)", (sid, parser.dump()))
     conn.executemany("INSERT INTO headless_calls VALUES (?,?,?,?,?,?)",
                      [(sid, tid, c["cwds"], c["start_ts"], c["end_ts"], c["child_ids"])
                       for tid, c in parser.headless.items() if tid])
@@ -535,7 +623,7 @@ def ingest_session(db_path, phases_path, session_id, projects_dir=None):
         return False
     main_path = matches[0]
     conn = connect(db_path)
-    store(conn, main_path.parent.name, SessionParser(main_path, load_phases(phases_path)).parse(),
+    store(conn, main_path.parent.name, parse_session(conn, main_path, load_phases(phases_path)),
           session_signature(main_path))
     link_sessions(conn)
     conn.commit()
@@ -566,7 +654,7 @@ def ingest(db_path, phases_path, projects_dir=None, project_filter=None, log=pri
             if known.get(main_path.stem) == signature:
                 skipped += 1
                 continue
-            parser = SessionParser(main_path, phases).parse()
+            parser = parse_session(conn, main_path, phases)
             store(conn, project_dir.name, parser, signature)
             conn.commit()
             parsed += 1
