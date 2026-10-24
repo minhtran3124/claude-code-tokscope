@@ -94,6 +94,7 @@ class MotionTokensTest(unittest.TestCase):
         self.assertRegex(CLASSIC_CSS, r"@media \(prefers-reduced-motion:reduce\)\{\s*\.hero::before\{animation:none\}")
         from tokscope.web.theme.layout import LAYOUT_TOKEN_DASH_CSS
         self.assertRegex(LAYOUT_TOKEN_DASH_CSS, r"@media \(prefers-reduced-motion:reduce\)\{\s*\.runbar i,\.spin,\.busy::before\{animation:none\}")
+        self.assertIn("#navload i{animation:none;width:100%}", LAYOUT_TOKEN_DASH_CSS)   # the page-load bar stops, full width
 
 
 if __name__ == "__main__":

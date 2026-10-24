@@ -47,6 +47,13 @@ class DayBoundaryTest(unittest.TestCase):
         self.assertEqual(tz.local_day("2026-10-21T16:59:59.000Z"), "2026-10-21")
         self.assertEqual(tz.local_day("2026-10-21T17:00:00.000Z"), "2026-10-22")
 
+    def test_the_day_is_cached_per_minute_and_a_half_hour_zone_is_exact(self):
+        tz.set_zone("Asia/Kolkata")  # UTC+5:30, so local midnight is 18:30Z
+        self.assertEqual(tz.local_day("2026-10-21T18:29:59.999Z"), "2026-10-21")
+        self.assertEqual(tz.local_day("2026-10-21T18:30:00.000Z"), "2026-10-22")
+        self.assertEqual(tz.local_day("2026-10-21T18:30:59.000Z"), "2026-10-22")
+        self.assertIsNone(tz.local_day(None))
+
     def test_since_and_until_are_local_dates(self):
         tz.set_zone(SAIGON)
         self.assertEqual(self.count(since="2026-10-22", until="2026-10-22"), 1)  # local 10-22, though the UTC date is 10-21
