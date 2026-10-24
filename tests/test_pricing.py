@@ -51,7 +51,7 @@ class UnpricedTest(Fixture):
         self.assertEqual(unpriced_text([]), "")
 
     def test_cli_names_them(self):
-        args = cli.argparse.Namespace(by="model", since=None, project=None, limit=10)
+        args = cli.argparse.Namespace(by="model", since=None, until=None, project=None, limit=10)
         out = io.StringIO()
         with contextlib.redirect_stdout(out), mock.patch.object(cli, "DB", self.db):
             cli.summary(args)

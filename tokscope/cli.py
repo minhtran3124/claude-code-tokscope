@@ -8,6 +8,7 @@ from pathlib import Path
 from . import __version__, paths
 from .core.calls import turn_calls
 from .core.ingest import CARRIED, PROJECTS_DIR, connect, ingest, ingest_session
+from .core import tz
 from .core.pricing import API_EQ_NOTE, unpriced, unpriced_text
 from .core.privacy import LEVELS
 
@@ -205,9 +206,14 @@ def _skill_versions(args):
 
 def _filters(args):
     clauses, params = [], []
-    if args.since:
-        clauses.append("r.ts >= ?")
-        params.append(args.since)
+    for text, op, end in ((args.since, ">=", False), (args.until, "<", True)):
+        if text:
+            try:
+                bound = tz.utc_bound(text, end)
+            except ValueError:
+                sys.exit(f"tokscope: bad date {text!r}, use YYYY-MM-DD")
+            clauses.append(f"r.ts {op} ?")
+            params.append(bound)
     if args.project:
         clauses.append("s.project LIKE ?")
         params.append(f"%{args.project}%")
@@ -245,6 +251,7 @@ def main():
     pb.add_argument("task", help="task name under bench/tasks/ or a path to its JSON")
     pb.add_argument("--runs", type=int, default=3)
     pb.add_argument("--variants", help="comma-separated subset of the task's variants")
+    tz_help = "IANA zone for days (default: local, or TOKSCOPE_TZ), e.g. UTC"
     pv = sub.add_parser("serve", help="live dashboard on 127.0.0.1 that ingests new transcripts as they land")
     pv.add_argument("--port", type=int, default=8765)
     pv.add_argument("--interval", type=float, default=10.0, help="seconds between background ingests")
@@ -261,11 +268,18 @@ def main():
         q.add_argument("--out", type=Path, help="default: reports/report.html, or reports/report-<level>.html")
         q.add_argument("--privacy", choices=LEVELS, default="full",
                        help="redacted: no prompts, titles, descriptions, answers or paths; numbers: also alias every name")
+    pv.add_argument("--timezone", help=tz_help)
     for q in (ps, pr, po):
-        q.add_argument("--since", help="ISO date, e.g. 2026-10-01")
+        q.add_argument("--timezone", help=tz_help)
+        q.add_argument("--since", help="first day, e.g. 2026-10-01, in the time zone")
+        q.add_argument("--until", help="last day, in the time zone")
         q.add_argument("--project", help="project dir name contains this text")
     ps.add_argument("--limit", type=int, default=25)
     args = p.parse_args()
+    try:
+        tz.set_zone(getattr(args, "timezone", None))
+    except ValueError as e:
+        sys.exit(f"tokscope: {e}")
 
     DB.parent.mkdir(parents=True, exist_ok=True)
     if args.cmd == "ingest" and args.session:

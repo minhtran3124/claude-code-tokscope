@@ -4,7 +4,7 @@ import copy
 import html
 from datetime import date, datetime, timedelta, timezone
 
-from ....core import skills
+from ....core import skills, tz
 from ....features import library, live
 from ... import charts
 from ....features.changes import list_changes
@@ -73,10 +73,10 @@ def _window(conn, f):
 
 
 def _day_rows(conn, f, shift=0):
-    """One row per UTC day with data (the stored timestamps' day, not local time like Today): day, tokens, API-eq, sessions,
+    """One row per day with data (local days, or TOKSCOPE_TZ's, like Today): day, tokens, API-eq, sessions,
     output, subagent runs, cache read, main-thread tokens (shift=1: the window before the range)."""
     cond, params = f.cond(shift)
-    return _q(conn, f"SELECT substr(r.ts,1,10) d, sum({TOKENS}), sum(cost_usd), count(DISTINCT session_id), sum(output), "
+    return _q(conn, f"SELECT localday(r.ts) d, sum({TOKENS}), sum(cost_usd), count(DISTINCT session_id), sum(output), "
                     f"count(DISTINCT CASE WHEN agent_id IS NOT NULL THEN session_id || agent_id END), sum(cache_read), "
                     f"sum(CASE WHEN agent_id IS NULL THEN {TOKENS} ELSE 0 END) FROM requests r JOIN sessions s USING (session_id) "
                     f"{cond} GROUP BY d ORDER BY d", params)
@@ -122,12 +122,12 @@ def _kpis(conn, f):
 
 def _days(conn, f):
     cond, params = f.cond()
-    return _q(conn, f"SELECT substr(r.ts,1,10) d, sum({TOKENS}), sum(cost_usd) FROM requests r JOIN sessions s "
+    return _q(conn, f"SELECT localday(r.ts) d, sum({TOKENS}), sum(cost_usd) FROM requests r JOIN sessions s "
                     f"USING (session_id) {cond} GROUP BY d ORDER BY d", params)
 
 
 def _local_midnight():
-    return datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
+    return tz.midnight()
 
 
 TYPICAL_DAYS = 14      # a typical day is the median of this many of the latest active days
@@ -175,7 +175,7 @@ def _hours(conn, f):
     days = {}
     for minute, tokens in _q(conn, f"SELECT substr(r.ts,1,16), sum({TOKENS}) FROM requests r JOIN sessions s USING (session_id) "
                                    f"{cond} AND r.ts >= ? GROUP BY 1", (*params, since)):
-        local = datetime.strptime(minute, "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc).astimezone()
+        local = datetime.strptime(minute, "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc).astimezone(tz.zone())
         days.setdefault(local.date(), [0] * 24)[local.hour] += tokens or 0
     return days
 
@@ -216,7 +216,7 @@ def _today(conn, f):
             f'data-key="today-usd">{_usd(usd)}</b></div><div><span>Sessions today</span><b data-count="{n or 0}" data-kind="int" '
             f'data-key="today-sessions">{n or 0}</b></div></div>')
     # is today normal? today's running total against the typical day at the same local time
-    hours, clock = _hours(conn, f), datetime.now().astimezone()
+    hours, clock = _hours(conn, f), tz.now()
     typ = typical_day(hours, clock.date())
     chart = ""
     if typ:
@@ -417,7 +417,7 @@ def _daily_svg(days, changes, versions, w, h, pad_l, labels, cls):
     short = 9 if narrow else 18
     marks = [(i, f"{charts.short(sk, short)} {v[:6]}", f"<b>{html.escape(sk)}</b> changed<br>version {v[:6]}{' v' + html.escape(lbl) if lbl else ''}")
              for day, sk, v, lbl in versions if (i := nxt(day)) is not None and (not narrow or day >= days[0][0])]
-    marks += [(index[at[:10]], f"#{cid}", f"<b>change #{cid}</b><br>{html.escape(note)}") for cid, at, note, *_ in changes if at[:10] in index]
+    marks += [(index[tz.local_day(at)], f"#{cid}", f"<b>change #{cid}</b><br>{html.escape(note)}") for cid, at, note, *_ in changes if tz.local_day(at) in index]
     for n, (i, text, tip) in enumerate(sorted(marks)):
         x = pad_l + i * step + bw / 2
         end = x > w - (110 if narrow else 150)
@@ -451,7 +451,7 @@ def page_overview(conn, f):
         f'<div data-region="kpis">{_kpis(conn, f)}</div>',
         f'<section class="card"><h2>Biggest movers</h2><p class="note">{f.label()}, tokens per day against the window before</p>'
         f'<div data-region="changed">{_movers(conn, f, cmp)}<h3>New skill versions</h3>{_new_versions(conn, f)}</div></section>',
-        f'<section class="card" id="trend"><h2>Daily tokens</h2><p class="note">{f.label()}</p>'
+        f'<section class="card" id="trend"><h2>Daily tokens</h2><p class="note">{f.label()}, days in {tz.label()}</p>'
         f'<div data-region="trend">{_daily_stacked(rows, list_changes(conn), versions)}</div></section>',
         f'<div data-region="top">{_top(conn, f)}</div>',
     ])
