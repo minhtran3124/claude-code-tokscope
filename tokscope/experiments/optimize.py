@@ -22,6 +22,7 @@ from pathlib import Path
 
 from .. import paths
 from ..core import skills
+from ..core.ingest import connect
 from . import bench
 from ..features import library
 
@@ -457,13 +458,12 @@ def bench_status(job):
 
 def bench_results(job, db):  # db: the database path
     """Per version of this benchmark: runs, passes, errors, median cost, tokens and seconds, and skill checks."""
-    import sqlite3
     from statistics import median
 
     b = _read(job).get("bench") or {}
     if not b.get("versions"):
         return []
-    conn = sqlite3.connect(db)
+    conn = connect(db)
     try:
         bench._schema(conn)
         rows = conn.execute(

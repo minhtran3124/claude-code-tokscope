@@ -34,6 +34,24 @@ class PathsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as h, mock.patch.dict(os.environ, {"TOKSCOPE_HOME": h}):
             self.assertTrue(paths.db().parent.is_dir())
 
+    def test_claude_config_dir_lists_projects_folders(self):
+        with mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": "/x, /y/"}):
+            self.assertEqual(paths.projects_dirs(), [Path("/x/projects"), Path("/y/projects")])
+
+    def test_an_explicit_folder_wins_over_the_env(self):
+        with mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": "/x"}):
+            self.assertEqual(paths.projects_dirs("/p"), [Path("/p")])
+
+    def test_the_xdg_and_dot_claude_folders_are_both_used_when_present(self):
+        with tempfile.TemporaryDirectory() as h, mock.patch.dict(os.environ, {"HOME": h}), \
+                mock.patch.object(Path, "home", return_value=Path(h)):
+            os.environ.pop("CLAUDE_CONFIG_DIR", None)
+            self.assertEqual(paths.projects_dirs(), [Path(h) / ".claude" / "projects"])  # none exist: the default
+            (Path(h) / ".config/claude/projects").mkdir(parents=True)
+            self.assertEqual(paths.projects_dirs(), [Path(h) / ".config/claude/projects"])
+            (Path(h) / ".claude/projects").mkdir(parents=True)
+            self.assertEqual(paths.projects_dirs(), [Path(h) / ".config/claude/projects", Path(h) / ".claude/projects"])
+
 
 if __name__ == "__main__":
     unittest.main()

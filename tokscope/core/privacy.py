@@ -18,6 +18,7 @@ import sqlite3
 from .. import paths
 from . import tz
 from .calls import mcp_server
+from .ingest import open_db
 
 LEVELS = ("full", "redacted", "numbers")
 
@@ -46,6 +47,7 @@ COLUMNS = {
                        "source": KEEP, "body_hash": KEEP},
     "skill_load_versions": {"session_id": KEEP, "tool_use_id": KEEP, "skill": SKILL, "version": KEEP, "ts": KEEP},
     "prompts": {"session_id": KEEP, "prompt_idx": KEEP, "ts": KEEP, "text": PROMPT},
+    "ingest_state": {"session_id": KEEP, "state": DROP},  # the parser state holds prompt and skill text
     "headless_calls": {"session_id": KEEP, "tool_use_id": KEEP, "cwds": DROP, "start_ts": KEEP, "end_ts": KEEP,
                        "child_ids": KEEP},
     "tool_calls": {"session_id": KEEP, "tool_use_id": KEEP, "prompt_idx": KEEP, "agent_id": KEEP, "name": TOOL,
@@ -158,7 +160,7 @@ class Redactor:
 
 def redacted_copy(db_path, level, where="", params=(), redactor=None):
     """An in-memory copy of the database, filtered by the report's WHERE clause on the real values, then redacted."""
-    src = sqlite3.connect(db_path)
+    src = open_db(db_path)  # the backup API reads the WAL too, so the copy has the latest rows
     conn = tz.register(sqlite3.connect(":memory:"))
     src.backup(conn)
     src.close()

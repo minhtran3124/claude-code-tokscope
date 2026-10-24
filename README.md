@@ -58,7 +58,7 @@ Without the script: `pipx install .` (or `uv tool install .`), then add the full
 ## Run
 
 ```sh
-tokscope ingest              # read your transcripts into the database
+tokscope ingest              # read your transcripts into the database (see below for other folders)
 tokscope summary --by phase  # a table in the terminal (--by skill | agent | model)
 tokscope open                # write the HTML report and open it
 tokscope serve               # the live dashboard on http://127.0.0.1:8765
@@ -119,7 +119,10 @@ when they are missing.
 
 Things to know:
 
-- The dashboard shows the Claude Code usage of **that** machine (its `~/.claude/projects`). Data is not copied
+- Transcripts come from `$CLAUDE_CONFIG_DIR/projects` (comma-separated list allowed), else every existing
+  `~/.config/claude/projects` and `~/.claude/projects`. `tokscope ingest --projects-dir PATH` reads one folder instead;
+  `ingest` prints the folders it read.
+- The dashboard shows the Claude Code usage of **that** machine (its transcripts folders). Data is not copied
   between machines. It is kept in `~/.local/share/tokscope`.
 - For `/tokscope` and the live pane in Claude Code on that machine, install from a clone as above; the `.deb` does
   not include the mod.

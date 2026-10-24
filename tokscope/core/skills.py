@@ -417,7 +417,8 @@ def _kept_body(text, args):
 
 
 def _transcripts(projects_dir, project, session_id):
-    main = Path(projects_dir) / project / f"{session_id}.jsonl"
+    main = next((m for d in paths.projects_dirs(projects_dir) if (m := d / project / f"{session_id}.jsonl").exists()),
+                Path(paths.projects_dirs(projects_dir)[0]) / project / f"{session_id}.jsonl")
     subs = main.with_suffix("") / "subagents"
     return [main, *sorted(subs.glob("agent-*.jsonl"))] if main.exists() else []
 

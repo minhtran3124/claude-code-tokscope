@@ -8,7 +8,6 @@ measures the current harness on yesterday's task. Tool access is an allow-list o
 import json
 import os
 import re
-import sqlite3
 import subprocess
 import time
 import uuid
@@ -16,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from statistics import median
 
-from ..core.ingest import COMMAND_RE, PROJECTS_DIR, _is_human_prompt, _text, BUILTIN_COMMANDS, ingest_session
+from ..core.ingest import COMMAND_RE, find_transcripts, _is_human_prompt, _text, BUILTIN_COMMANDS, connect, ingest_session
 
 ARGS_RE = re.compile(r"<command-args>(.*?)</command-args>", re.S)
 TOKENS = "(input + cache_read + cache_write_5m + cache_write_1h + output)"
@@ -63,8 +62,8 @@ def _schema(conn):
             conn.execute(f"ALTER TABLE replay_runs ADD COLUMN {col} TEXT")
 
 
-def find_transcript(session_id, projects_dir=PROJECTS_DIR):
-    matches = sorted(Path(projects_dir).glob(f"*/{session_id}.jsonl"))
+def find_transcript(session_id, projects_dir=None):
+    matches = find_transcripts(session_id, projects_dir)
     if not matches:
         raise FileNotFoundError(f"no transcript for session {session_id}")
     return matches[0]
@@ -157,7 +156,7 @@ def run(root, db_path, phases_path, source_session, runs=2, budget_total=6.0, mo
     repo = subprocess.run(["git", "-C", cwd, "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True).stdout.strip()
     sha = commit_at(repo, first_ts)
     log(f"replaying {len(prompts)} prompts of {source_session[:8]} at {sha[:10]}, {runs} runs, budget ${budget_total}")
-    conn = sqlite3.connect(db_path)
+    conn = connect(db_path)
     _schema(conn)
     spent = 0.0
     for run_idx in range(runs):
@@ -227,10 +226,10 @@ def _fmt(v):
     return str(int(v))
 
 
-def diff(db_path, source_session, projects_dir=PROJECTS_DIR):
+def diff(db_path, source_session, projects_dir=None):
     """Tokens per turn as the model saw it, original vs each replay; a run that replayed merged prompts one by
     one (before merging existed) is summed over the same group."""
-    conn = sqlite3.connect(db_path)
+    conn = connect(db_path)
     _schema(conn)
     runs = conn.execute("SELECT run_id, run_idx, session_id, errors, denials, duration_s, status, variant, skill_check "
                         "FROM replay_runs WHERE source_session = ? ORDER BY started_at", (source_session,)).fetchall()
