@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from tokscope import paths
+from tokscope.core import ingest as ingest_mod
 from tokscope.core.ingest import connect, ingest, open_db
 from tokscope.core.skills import canonical_name, loaded_text_hash
 from tokscope.core.pricing import cost_usd
@@ -272,6 +273,99 @@ class IngestTest(Fixture):
         self.write_main([human("x"), assistant("r1"), assistant("r2", out=99)])
         self.assertEqual(self.run_ingest(), (1, 0))
         self.assertEqual(self.rows("SELECT count(*) FROM requests"), [(2,)])
+
+
+class IncrementalTest(Fixture):
+    BASE = [
+        human("plan it"), assistant("r1", tools=[("t1", "Skill", {"skill": "writing-plans"})]), assistant("r2", out=5),
+        assistant("r2", out=9, tools=[("t2", "Agent", {})]), result("t2", "ok"),
+    ]
+    MORE = [human("go on", ts="2026-10-01T00:05:00Z"), assistant("r3", tools=[("t3", "Bash", {"command": "ls"})]),
+            result("t3", "files"), assistant("r2", out=20)]
+
+    def write_agent_lines(self, records):
+        self.write_agent("a1", {"agentType": "Explore", "toolUseId": "t2", "spawnDepth": 1}, records)
+
+    def append(self, path, records):
+        with open(path, "a") as f:
+            f.write("".join(json.dumps(r) + "\n" for r in records))
+
+    def dump(self, db):
+        conn = sqlite3.connect(db)
+        out = {}
+        for t in ("sessions", "requests", "subagents", "skill_calls", "prompts", "tool_calls", "headless_calls"):
+            out[t] = sorted(map(repr, conn.execute(f"SELECT * FROM {t}")))
+        return out
+
+    def parsed_lines(self):
+        """Lines the next ingest reads from the transcripts."""
+        parsers = []
+        real = ingest_mod.parse_session
+        with mock.patch.object(ingest_mod, "parse_session", side_effect=lambda *a: parsers.append(real(*a)) or parsers[-1]):
+            self.run_ingest()
+        return sum(p.lines_read for p in parsers)
+
+    def test_appended_lines_are_the_only_ones_read_and_the_result_equals_a_full_parse(self):
+        main = self.project / f"{SID}.jsonl"
+        self.write_main(self.BASE)
+        self.write_agent_lines([assistant("r4")])
+        self.run_ingest()
+        self.append(main, self.MORE)
+        self.append(self.project / SID / "subagents" / "agent-a1.jsonl", [assistant("r5", out=7)])
+        self.assertEqual(self.parsed_lines(), len(self.MORE) + 1)
+        got = self.dump(self.db)
+        self.db.unlink()
+        for ext in ("-wal", "-shm"):
+            Path(str(self.db) + ext).unlink(missing_ok=True)
+        self.run_ingest()
+        self.assertEqual(got, self.dump(self.db))
+
+    def test_a_new_subagent_file_and_an_unchanged_session_resume_to_the_full_result(self):
+        main = self.project / f"{SID}.jsonl"
+        self.write_main(self.BASE)
+        self.run_ingest()
+        self.append(main, self.MORE)
+        self.write_agent_lines([assistant("r4")])
+        self.run_ingest()
+        got = self.dump(self.db)
+        self.db.unlink()
+        self.run_ingest()
+        self.assertEqual(got, self.dump(self.db))
+
+    def test_a_request_shared_with_an_earlier_session_stays_with_it_when_the_later_one_grows(self):
+        base = [human("hi"), assistant("r1", out=40)]
+        (self.project / "a-orig.jsonl").write_text("".join(json.dumps(r) + "\n" for r in base))
+        fork = self.project / "b-fork.jsonl"
+        fork.write_text("".join(json.dumps(r) + "\n" for r in [*base, human("more", ts="2026-10-01T00:05:00Z")]))
+        self.run_ingest()
+        self.append(fork, [assistant("r3")])
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT session_id, request_key FROM requests ORDER BY request_key"),
+                         [("a-orig", "r1"), ("b-fork", "r3")])
+
+    def test_a_truncated_or_rewritten_file_is_parsed_in_full(self):
+        main = self.project / f"{SID}.jsonl"
+        self.write_main(self.BASE + self.MORE)
+        self.run_ingest()
+        self.write_main(self.BASE[:3])  # shorter than the stored offset
+        self.assertEqual(self.parsed_lines(), 3)
+        self.assertEqual(self.rows("SELECT count(*) FROM requests"), [(2,)])
+        self.write_main([human("other")] + self.BASE[1:] + self.MORE)  # longer, but the bytes before the offset differ
+        self.assertEqual(self.parsed_lines(), 1 + len(self.BASE) - 1 + len(self.MORE))
+        self.assertEqual(self.rows("SELECT count(*) FROM requests WHERE request_key = 'r3'"), [(1,)])
+
+    def test_a_half_written_last_line_waits_for_its_end(self):
+        main = self.project / f"{SID}.jsonl"
+        self.write_main(self.BASE)
+        line = json.dumps(assistant("r9"))
+        with open(main, "a") as f:
+            f.write(line[:30])
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT count(*) FROM requests WHERE request_key = 'r9'"), [(0,)])
+        with open(main, "a") as f:
+            f.write(line[30:] + "\n")
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT count(*) FROM requests WHERE request_key = 'r9'"), [(1,)])
 
 
 class ConfigDirTest(Fixture):
