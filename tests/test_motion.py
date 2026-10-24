@@ -24,17 +24,17 @@ class MotionTokensTest(unittest.TestCase):
             self.assertIn(t, LAYOUT_CSS)
 
     def test_every_duration_uses_a_token_except_the_commented_ones(self):
-        allowed = ("animation:spin", "animation:slide", "animation:drift", "animation:ring 600ms")
+        allowed = ("animation:spin", "animation:slide", "animation:drift", "animation:ring 600ms", "animation:pulse 1600ms")
         for name, css in SHEETS.items():
             for line in strip(css).split("\n"):
                 if DURATION.search(line) and not any(a in line for a in allowed):
                     self.fail(f"{name}: a literal duration outside the tokens: {line[:120]}")
 
-    def test_only_the_spinners_and_the_hero_glow_loop(self):
+    def test_only_the_spinners_the_hero_glow_and_the_working_dot_loop(self):
         for name, css in SHEETS.items():
             for line in strip(css).split("\n"):
                 if "infinite" in line:
-                    self.assertTrue(any(k in line for k in ("spin", "slide", "drift")), f"{name}: {line[:100]}")
+                    self.assertTrue(any(k in line for k in ("spin", "slide", "drift", "pulse")), f"{name}: {line[:100]}")
 
     def test_reduced_motion_has_a_fallback_per_rule_not_a_global_off_switch(self):
         for name, css in SHEETS.items():

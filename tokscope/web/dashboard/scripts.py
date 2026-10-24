@@ -218,9 +218,14 @@ async function refresh(){document.documentElement.classList.add('settled');const
     r.innerHTML=next.innerHTML;bindTips(r);r.querySelectorAll('[data-key]').forEach(el=>{if(el.dataset.key in old)deltaChip(el,old[el.dataset.key])})})}
 function offerReload(){if(document.getElementById('newdata'))return;const b=document.createElement('button');b.id='newdata';b.className='primary';
   b.textContent='New data · reload';b.addEventListener('click',()=>location.reload());document.body.append(b)}
+// sessions page: tag the rows of sessions that are open (running = working, open = waiting for you), every poll
+async function syncLive(){if(page!=='sessions')return;window.LIVE=await (await fetch('/api/live')).json();window.paintLive()}
+let liveSig=null;syncLive().catch(()=>{});
 async function poll(){if(document.hidden)return;
   try{const j=await (await fetch('/api/version')).json();seenAt=Date.now();
-    if(j.stamp!==stamp){stamp=j.stamp;page==='overview'?await refresh():offerReload();ring()}fresh(true)}catch(_){fresh(false)}}
+    const changed=j.stamp!==stamp,moved=liveSig!==null&&j.live!==liveSig;liveSig=j.live;
+    if(changed||(moved&&page==='overview')){stamp=j.stamp;page==='overview'?await refresh():offerReload();ring()}
+    if(moved||changed)syncLive();fresh(true)}catch(_){fresh(false)}}
 setInterval(poll,2000);setInterval(()=>fresh(!freshEl.classList.contains('stale')),30000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});
 """

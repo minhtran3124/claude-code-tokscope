@@ -99,12 +99,16 @@ function split(main,ag){const t=Math.max(main+ag,1),len=Math.max(3,100*(main+ag)
   return `<span class=track><span class=split style="width:${len.toFixed(1)}%" title="main ${fmt(main)} · subagents ${fmt(ag)}"><u style="width:${(100*main/t).toFixed(1)}%"></u>${ag?`<u class=a style="width:${(100*ag/t).toFixed(1)}%"></u>`:''}</span></span>`}
 // time of day when the list is by day; date and time when it is ranked
 const when=s=>sortKey==='recent'?s.start.slice(11,16):s.start.slice(5,16).replace('T',' ');
+// the dashboard fills LIVE from /api/live (open sessions: {id:{status,entry}}); the static report has none
+const liveTag=id=>{const l=(window.LIVE||{})[id];return l?`<span class="live ${l.status==='busy'?'working':'open'}" title="${l.status==='busy'?'working now':'open, waiting for you'} · ${esc(l.entry)}"><i></i><span class=lbl>${l.status==='busy'?'running':'open'}</span><span class=where> · ${esc(l.entry)}</span></span>`:''};
+window.paintLive=()=>document.querySelectorAll('#session-list .srow').forEach(d=>{const t=d.querySelector('.t'),old=t.querySelector('.live'),
+  html=liveTag(d.dataset.id);if(!old&&!html)return;if(old)old.remove();if(html)t.querySelector('.tt').insertAdjacentHTML('afterend',html)});
 function row(s){
   const d=document.createElement('details');d.className='srow'+(picked.has(s.id)?' picked':'')+(s.parent&&!byId.has(s.parent)?' orphan':'');d.dataset.id=s.id;
   const by=s.parent_title||s.parent?.slice(0,8)||'',from=s.parent?`\nstarted by ${by}${byId.has(s.parent)?'':' (outside this range)'}`:'';
   // a parent outside the range has no row to sit under, so the child names it
   d.innerHTML=`<summary><input type=checkbox aria-label="compare" ${picked.has(s.id)?'checked':''}>
-    <span class=d>${esc(when(s))}</span><span class="t${/^session [0-9a-f]{8}$/.test(s.title||'')?' sid':''}" title="${esc(s.title+from)}"><span class=tt>${s.title?hl(s.title,q.value.trim()):'(untitled)'}</span>${/^session [0-9a-f]{8}$/.test(s.title||'')?'':`<code class=sid8>${esc(s.id.slice(0,8))}</code>`}${s.parent&&!byId.has(s.parent)?`<small class=from>from ${DASH&&s.parent?`<a href="/sessions?range=all&amp;q=${encodeURIComponent(s.parent)}" title="show the session that started this one (all time)">${esc(by)}</a>`:esc(by)}</small>`:''}</span>
+    <span class=d>${esc(when(s))}</span><span class="t${/^session [0-9a-f]{8}$/.test(s.title||'')?' sid':''}" title="${esc(s.title+from)}"><span class=tt>${s.title?hl(s.title,q.value.trim()):'(untitled)'}</span>${liveTag(s.id)}${/^session [0-9a-f]{8}$/.test(s.title||'')?'':`<code class=sid8>${esc(s.id.slice(0,8))}</code>`}${s.parent&&!byId.has(s.parent)?`<small class=from>from ${DASH&&s.parent?`<a href="/sessions?range=all&amp;q=${encodeURIComponent(s.parent)}" title="show the session that started this one (all time)">${esc(by)}</a>`:esc(by)}</small>`:''}</span>
     <span class=sk>${esc(s.top_skill||'')}</span><span class="r n">${s.prompts}</span><span class="r n" title="${s.runs||0} subagent runs" aria-label="${s.runs||0} subagent runs">${s.runs||'–'}</span><span class=r><b>${fmt(s.tokens)}</b></span>${split(s.main,s.agents)}<span class=cv aria-hidden=true>›</span></summary><div class=body></div>`;
   const cb=d.querySelector('input');
   cb.addEventListener('click',e=>e.stopPropagation());

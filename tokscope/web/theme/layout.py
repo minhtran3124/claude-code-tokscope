@@ -241,6 +241,18 @@ table.sbs td.add{background:color-mix(in oklch,var(--pass) 12%,transparent)}
 @keyframes ring{from{box-shadow:0 0 0 0 color-mix(in oklch,var(--pass) 60%,transparent)}to{box-shadow:0 0 0 8px transparent}}
 .dot.ring{animation:ring 600ms var(--ease) 1}
 .fresh.stale .dot,body.offline h2>.dot{background:transparent;box-shadow:inset 0 0 0 1.5px var(--muted)}
+/* a session that is working now: its dot pulses for as long as it works (the one loop besides the spinners; off under reduced motion) */
+@keyframes pulse{from{box-shadow:0 0 0 0 color-mix(in oklch,var(--pass) 55%,transparent)}to{box-shadow:0 0 0 var(--pr,9px) transparent}}
+.runnow{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;margin:0 0 14px;font-size:15px}
+.runnow b{font-size:28px;line-height:1}
+.runnow .note{flex-basis:100%;margin:0 0 0 16px}
+.runnow .dot{align-self:center}
+.dot.off{background:transparent;box-shadow:inset 0 0 0 1.5px var(--muted)}
+.dot.live.busy-now,.srow .live.working i{animation:pulse 1600ms var(--ease) infinite}
+.srow .live{display:inline-flex;align-items:center;gap:6px;flex:none;font-size:11px;padding:1px 8px;border-radius:99px;margin-left:8px;color:var(--muted);box-shadow:inset 0 0 0 1px var(--line,currentColor)}
+.srow .live i{--pr:5px;width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.srow .live.working{color:var(--ink)}
+.srow .live.working i{background:var(--pass)}
 /* a live value changes at once; this chip says by how much for 2 s (#071 Badge: in --t-state, out 0.7 times that) */
 .kpi,.today-nums>div{position:relative}
 .dchip{font:600 11px/1.5 var(--mono);padding:0 7px;border-radius:999px;background:var(--chip);color:var(--ink);white-space:nowrap;
@@ -433,6 +445,7 @@ main :is(td,li,p,h1,h2,h3,b,.tt){overflow-wrap:break-word;hyphens:manual}
 html .layout .sheet,html .layout .sheet.open{transform:none;transition:opacity var(--t-state) var(--ease),visibility var(--t-state)}
 html .layout .sheet.open{transition:opacity var(--t-state) var(--ease),visibility calc(var(--t-fast)*0)}
 }
+@media (max-width:639px){#session-list .srow .live :is(.where,.lbl){display:none}#session-list .srow .live{padding:4px;margin-left:6px}}
 /* end phone */
 @media (prefers-reduced-motion:reduce){
 @keyframes ring{from{opacity:.35}}
@@ -440,6 +453,7 @@ html .layout .sheet.open{transition:opacity var(--t-state) var(--ease),visibilit
 @keyframes chip-out{to{opacity:0}}
 @keyframes toast-in{from{opacity:0}}
 }
+@media (prefers-reduced-motion:reduce){.dot.live.busy-now,.srow .live.working i{animation:none}}
 /* breakdowns: a folded section shows its finding; the "how this is counted" text sits inside the section, shown only when it is opened */
 details.more>summary .finding b{color:var(--ink);font-weight:600}
 details.more>summary .mini{display:inline-block;vertical-align:middle;width:84px;height:6px;margin-left:10px;border-radius:3px;background:var(--track);overflow:hidden}

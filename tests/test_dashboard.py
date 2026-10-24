@@ -68,6 +68,11 @@ class ServerTest(unittest.TestCase):
         ant.start()
         self.addCleanup(ant.stop)
         self.addCleanup(managed.forget)
+        self.claude = self.tmp / "claude"  # open sessions come from <config dir>/sessions, never the real one
+        (self.claude / "sessions").mkdir(parents=True)
+        patcher = mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": str(self.claude)})
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.db = self.tmp / "t.db"
         conn = connect(self.db)
         conn.executemany("INSERT INTO sessions (session_id, project, cwd, title, prompts) VALUES (?,?,?,?,1)",
@@ -100,8 +105,38 @@ class ServerTest(unittest.TestCase):
         with mock.patch.object(core_privacy, "redacted_copy", side_effect=AssertionError("copied")) as copy:
             code, body = self.get("/api/version")
         self.assertEqual(code, 200)
-        self.assertEqual(json.loads(body), {"stamp": self.live.stamp})
+        self.assertEqual(json.loads(body), {"stamp": self.live.stamp, "live": ""})
         copy.assert_not_called()
+
+    def open_session(self, pid, sid, status="busy", entrypoint="cli"):
+        (self.claude / "sessions" / f"{pid}.json").write_text(json.dumps(
+            {"pid": pid, "sessionId": sid, "status": status, "entrypoint": entrypoint}))
+
+    def test_open_sessions_show_on_the_live_endpoint_and_the_overview_and_dead_pids_do_not(self):
+        self.open_session(os.getpid(), "now1-aaaa", "busy")
+        self.open_session(os.getppid(), "old1-bbbb", "idle", "claude-vscode")
+        (self.claude / "sessions" / "2.json").write_text(json.dumps({"pid": 2 ** 22 + 12345, "sessionId": "dead", "status": "busy"}))
+        (self.claude / "sessions" / "3.json").write_text("{half")
+        code, body = self.get("/api/live")
+        self.assertEqual(code, 200)
+        self.assertEqual(json.loads(body), {"now1-aaaa": {"status": "busy", "entry": "Terminal"},
+                                            "old1-bbbb": {"status": "idle", "entry": "VS Code"}})
+        _, over = self.get("/overview")
+        self.assertRegex(over, r'data-region="running"><p class="runnow"><span class="dot live busy-now"></span><b data-count="2"')
+        self.assertIn("1 working · 1 waiting for you", over)
+        self.assertIn("VS Code", over)
+        self.assertNotIn("dead", over)
+        self.assertNotEqual(json.loads(self.get("/api/version")[1])["live"], "")
+
+    def test_the_overview_says_so_when_nothing_is_open(self):
+        _, over = self.get("/overview")
+        self.assertIn("No Claude Code session is open", over)
+        self.assertNotIn('class="dot live', over)
+
+    def test_the_sessions_page_tags_open_rows_from_the_live_endpoint(self):
+        _, page = self.get("/sessions")
+        self.assertIn("/api/live", page)
+        self.assertIn("liveTag", page)
 
     def test_every_page_renders_and_names_itself(self):
         for name, title in dashboard.PAGES.items():
