@@ -112,13 +112,16 @@ function createWindow() {
     win.webContents.on(ev, (e, u) => { if (!base || !u.startsWith(base)) { e.preventDefault(); openExternal(u); } });
   }
   win.on("closed", () => { win = null; });
-  win.loadURL(statusPage(dark, "Starting tokscope…"));
+  win.loadURL(statusPage(dark, "Starting tokscope…")).catch(() => {});  // aborted when the dashboard load replaces it
+  win.webContents.on("did-fail-load", (e, code, desc, u, isMain) => {
+    if (isMain && code !== -3 && base && u.startsWith(base)) showFailure(`the dashboard did not load (${desc})`);  // -3 is an aborted load
+  });
 }
 
 function showDashboard(url) {
   if (!win) return;  // the window was closed while the server started
   base = url;
-  win.loadURL(url);
+  win.loadURL(url).catch(() => {});  // a failure arrives as did-fail-load
 }
 
 if (!app.requestSingleInstanceLock()) {
