@@ -33,7 +33,7 @@ TITLE, PROJECT, CWD = "title", "project", "cwd"
 COLUMNS = {
     "sessions": {"session_id": KEEP, "project": PROJECT, "cwd": CWD, "title": TITLE, "version": KEEP,
                  "first_ts": KEEP, "last_ts": KEEP, "prompts": KEEP, "signature": DROP, "entrypoint": KEEP,
-                 "parent_session_id": KEEP},
+                 "parent_session_id": KEEP, "first_req_ts": KEEP},
     "requests": {"session_id": KEEP, "request_key": KEEP, "ts": KEEP, "model": KEEP, "agent_id": KEEP, "agent_type": AGENT,
                  "prompt_idx": KEEP, "skill": SKILL, "phase": PHASE, "input": KEEP, "output": KEEP, "thinking": KEEP,
                  "cache_read": KEEP, "cache_write_5m": KEEP, "cache_write_1h": KEEP, "cost_usd": KEEP,

@@ -57,7 +57,7 @@ class ShapeIngestTest(Fixture):
         self.run_ingest()
         conn = sqlite3.connect(self.db)
         conn.execute("DROP TABLE mcp_defs")                       # a database from before this feature
-        conn.execute("UPDATE ingest_state SET state = replace(state, '\"v\": 15', '\"v\": 14')")
+        conn.execute("UPDATE ingest_state SET state = replace(state, '\"v\": 16', '\"v\": 15')")
         conn.execute("UPDATE sessions SET signature = 'v14:old'")
         conn.commit()
         conn.close()
@@ -102,23 +102,36 @@ class BaselineTest(Fixture):
         s = baseline.stats([("s", "/p", "2026-10-01T00:00:00Z", model, 50_000)])
         self.assertAlmostEqual(s["cost"], baseline.start_usd(model, 50_000))
 
-    def _insert(self, conn, sid, first_ts, request_ts):
-        conn.execute("INSERT INTO sessions (session_id, project, cwd, first_ts) VALUES (?, 'p', '/p', ?)", (sid, first_ts))
+    def _insert(self, conn, sid, first_ts, request_ts, first_req_ts):
+        conn.execute("INSERT INTO sessions (session_id, project, cwd, first_ts, first_req_ts) VALUES (?, 'p', '/p', ?, ?)",
+                     (sid, first_ts, first_req_ts))
         for i, ts in enumerate(request_ts):
             conn.execute("INSERT INTO requests (session_id, request_key, ts, model, input, cache_read, cache_write_5m, "
                          "cache_write_1h) VALUES (?, ?, ?, 'claude-opus-5-5', 1, 5000, 0, 0)", (sid, f"{sid}{i}", ts))
 
+    def test_a_session_that_opens_with_a_slow_first_prompt_still_counts(self):
+        opened = human("/clear")                                   # a local command opens the file, the prompt comes later
+        opened["timestamp"] = "2026-10-01T00:00:00Z"
+        prompt = human("hi")
+        prompt["timestamp"] = "2026-10-01T00:05:00Z"
+        first = assistant("r1", cw5=2000)
+        first["timestamp"] = "2026-10-01T00:09:00Z"                # nine minutes after the first record
+        self.write_main([opened, prompt, first])
+        self.run_ingest()
+        self.assertEqual([r[2] for r in baseline.starts(connect(self.db))], ["2026-10-01T00:09:00Z"])
+
     def test_a_session_whose_first_request_is_not_in_the_database_is_skipped(self):
         conn = connect(self.db)
-        self._insert(conn, "own", "2026-10-01T10:00:00Z", ["2026-10-01T10:00:05Z"])
+        self._insert(conn, "own", "2026-10-01T10:00:00Z", ["2026-10-01T10:00:05Z"], "2026-10-01T10:00:05Z")
         # a fork: its early requests were copied from an earlier session and kept only there (ingest._share_requests)
-        self._insert(conn, "fork", "2026-10-01T10:00:00Z", ["2026-10-01T10:30:00Z"])
+        self._insert(conn, "fork", "2026-10-01T10:00:00Z", ["2026-10-01T10:30:00Z"], "2026-10-01T10:00:07Z")
         self.assertEqual([r[0] for r in baseline.starts(conn)], ["own"])
 
     def test_a_range_gives_the_same_sessions_in_a_filtered_copy_as_in_the_full_database(self):
         conn = connect(self.db)
-        self._insert(conn, "old", "2026-10-01T00:00:00Z", ["2026-10-01T00:00:10Z", "2026-10-02T09:00:00Z"])
-        self._insert(conn, "new", "2026-10-02T08:00:00Z", ["2026-10-02T08:00:05Z"])
+        self._insert(conn, "old", "2026-10-01T00:00:00Z", ["2026-10-01T00:00:10Z", "2026-10-02T09:00:00Z"],
+                     "2026-10-01T00:00:10Z")
+        self._insert(conn, "new", "2026-10-02T08:00:00Z", ["2026-10-02T08:00:05Z"], "2026-10-02T08:00:05Z")
         cond, params = "WHERE r.ts >= ?", ("2026-10-02",)
         full = [r[0] for r in baseline.starts(conn, cond, params)]
         conn.execute("DELETE FROM requests WHERE ts < '2026-10-02'")  # what privacy.redacted_copy does with the range

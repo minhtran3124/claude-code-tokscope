@@ -40,7 +40,8 @@ BUILTIN_COMMANDS = {
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
     session_id TEXT PRIMARY KEY, project TEXT, cwd TEXT, title TEXT, version TEXT,
-    first_ts TEXT, last_ts TEXT, prompts INTEGER, signature TEXT, entrypoint TEXT, parent_session_id TEXT
+    first_ts TEXT, last_ts TEXT, prompts INTEGER, signature TEXT, entrypoint TEXT, parent_session_id TEXT,
+    first_req_ts TEXT
 );
 CREATE TABLE IF NOT EXISTS requests (
     session_id TEXT, request_key TEXT, ts TEXT, model TEXT, agent_id TEXT, agent_type TEXT,
@@ -77,7 +78,7 @@ CREATE INDEX IF NOT EXISTS idx_requests_ts ON requests (ts);
 """
 TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "headless_calls", "mcp_defs", "ingest_state", "sessions")
 # bump when the parser records something new, so unchanged transcripts are parsed again once
-PARSER_VERSION = 15
+PARSER_VERSION = 16
 TAIL_BYTES = 4096  # the bytes before a stored offset that must be unchanged for a file to count as appended to
 # what a resumed parse restores: the parser's state after the last complete line of every file
 STATE_KEYS = ("requests", "subagents", "skill_calls", "prompts", "tool_ctx", "tool_calls", "result_chars",
@@ -517,7 +518,7 @@ def connect(db_path):
             conn.execute(f"ALTER TABLE requests ADD COLUMN {name} {typ}")
     refresh_costs(conn)
     columns = {c[1] for c in conn.execute("PRAGMA table_info(sessions)")}
-    for name in ("entrypoint", "parent_session_id"):  # entrypoint is refilled by the PARSER_VERSION bump
+    for name in ("entrypoint", "parent_session_id", "first_req_ts"):  # refilled by the PARSER_VERSION bump (not parent_session_id)
         if name not in columns:
             conn.execute(f"ALTER TABLE sessions ADD COLUMN {name} TEXT")
     return conn
@@ -591,13 +592,15 @@ def store(conn, project, parser, signature):
     sid = parser.session_id
     for table in TABLES:
         conn.execute(f"DELETE FROM {table} WHERE session_id = ?", (sid,))
+    # the first main-thread request as the transcript has it, before a fork's copies move to the session that owns them
+    first_req = min((r["ts"] for r in parser.requests.values() if not r["agent_id"] and r["ts"]), default=None)
     _share_requests(conn, parser)
     m = parser.meta
     conn.execute(
-        "INSERT INTO sessions (session_id, project, cwd, title, version, first_ts, last_ts, prompts, signature, entrypoint) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO sessions (session_id, project, cwd, title, version, first_ts, last_ts, prompts, signature, entrypoint, "
+        "first_req_ts) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (sid, project, m["cwd"], m["title"], m["version"], m["first_ts"], m["last_ts"], m["prompts"], signature,
-         m["entrypoint"]),
+         m["entrypoint"], first_req),
     )
     conn.execute("INSERT INTO ingest_state VALUES (?,?)", (sid, parser.dump()))
     conn.executemany("INSERT INTO headless_calls VALUES (?,?,?,?,?,?)",

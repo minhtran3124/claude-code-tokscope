@@ -15,16 +15,11 @@ DEF_METHOD = ("Estimate. MCP tool definitions are read from the first request's 
               f"{CHARS_PER_TOKEN} characters per token. Tools loaded on demand are not in the first request and count 0.")
 
 
-# a session's first request comes within seconds of its first record; later means the real first request is not
-# here: a fork or resume copy (its early requests live in the session it was copied from, see ingest._share_requests)
-# or one outside the range of a filtered (redacted) copy
-START_SLACK_S = 60
-
-
 def starts(conn, cond="", params=()):
     """[(session_id, cwd, ts, model, tokens)] oldest first: each session's first main-thread request. `cond` is a WHERE
     clause over requests r and sessions s (empty: every session). A session whose first request left the database
-    (copied into a fork, or filtered out) is skipped, so the figures do not depend on the filter or the privacy level."""
+    (copied into a fork, or filtered out) is skipped, so the figures do not depend on the filter or the privacy level:
+    `sessions.first_req_ts` is that request's time as the transcript has it (empty on a database not yet re-parsed)."""
     cond = f"{cond} AND" if cond else "WHERE"
     seen, out = set(), []
     for sid, cwd, ts, model, tokens in conn.execute(
@@ -32,7 +27,7 @@ def starts(conn, cond="", params=()):
             f"FROM requests r JOIN sessions s USING (session_id) "
             f"JOIN (SELECT session_id, min(ts) AS first FROM requests WHERE agent_id IS NULL GROUP BY session_id) f "
             f"ON f.session_id = r.session_id {cond} r.agent_id IS NULL AND r.ts = f.first "
-            f"AND COALESCE((julianday(r.ts) - julianday(s.first_ts)) * 86400, 0) <= {START_SLACK_S} "
+            f"AND (s.first_req_ts IS NULL OR r.ts = s.first_req_ts) "
             f"ORDER BY r.ts, r.request_key", params):
         if sid not in seen and tokens:
             seen.add(sid)
