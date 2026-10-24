@@ -49,7 +49,8 @@ def rows(conn, by, where="", params=(), limit=25):
     for k, kind, n in conn.execute(
             f"SELECT {key}, r.kind, count(*) FROM turn_events r JOIN sessions s USING (session_id) {join} {where} "
             f"GROUP BY 1, 2", params):
-        out.setdefault(k, dict(zip(FIELDS, (k, 0, 0, 0, 0, 0, 0))))[EVENT_FIELDS[kind]] = n
+        if kind in EVENT_FIELDS:  # a compaction is context, not an error
+            out.setdefault(k, dict(zip(FIELDS, (k, 0, 0, 0, 0, 0, 0))))[EVENT_FIELDS[kind]] = n
     found = sorted(out.values(), key=lambda d: (-d["errors"], -d["interrupts"], -d["calls"], d["key"]))[:limit]
     for d in found:
         d["error_rate"] = rate(d["errors"], d["calls"])
@@ -72,7 +73,8 @@ def totals(conn, where="", params=(), join=""):
     out = {"calls": calls, "errors": errors or 0, "repeats": repeats or 0, "interrupts": 0, "api_errors": 0, "retries": 0}
     for kind, n in conn.execute(f"SELECT r.kind, count(*) FROM turn_events r LEFT JOIN sessions s USING (session_id) {join} "
                                 f"{where} GROUP BY 1", params):
-        out[EVENT_FIELDS[kind]] = n
+        if kind in EVENT_FIELDS:
+            out[EVENT_FIELDS[kind]] = n
     out["error_rate"] = rate(out["errors"], out["calls"])
     return out
 

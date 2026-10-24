@@ -4,7 +4,7 @@ import html
 from datetime import datetime, timedelta, timezone
 from statistics import median
 
-from ....core import errors, skills, tz
+from ....core import cache, context, errors, skills, tz
 from ... import charts
 from ....core.calls import est_tokens, mcp_server
 from ....core.ingest import CARRIED
@@ -66,6 +66,99 @@ def _errors_section(conn, cond, params):
         "the skill or subagent made them",
         (charts.share_bar([(k.replace("_", " "), n) for k, n in kinds], "failed calls") if kinds else "") + "".join(tables),
         "errors", total["errors"] / total["calls"])
+
+
+HINTS = {
+    "ttl_expired_5m": "keep the session warm (the 5 minute cache expires when you pause) or use the 1 hour cache TTL",
+    "ttl_expired_1h": "the 1 hour cache expired too: long breaks always re-cache, so start a fresh session instead",
+    "prefix_changed": "keep MCP tool lists and the system prompt stable inside a session (tools added or removed re-cache everything after them)",
+}
+
+
+def _cache_section(conn, cond, params):
+    """Hit ratio and cache-write $ per session, skill, subagent type and model, with the likely misses and their causes."""
+    reqs, misses = cache.scan(conn, cond, params)
+    ingest = "Run <code>tokscope ingest</code> after a Claude Code session to fill it."
+    if not any(r["reads"] or r["writes"] for r in reqs):
+        return _section("Prompt cache", "No cache use recorded", "", "", "cache",
+                        empty=("No cache data yet", "Cache hit ratio and re-cache cost show here. " + ingest))
+    t = cache.totals(reqs, misses)
+    top = cache.causes(misses)
+    finding = (f"{cache.pct(t['hit_ratio'])} of prompt tokens came from the cache; {_usd(t['write_usd'])} spent writing it"
+               + (f"; {t['misses']:,} likely miss{'es' * (t['misses'] != 1)} re-cached {_tok(t['recache_tokens'])} "
+                  f"({_usd(t['recache_usd'])}), top cause {html.escape(top[0][0])}" if misses else "; no likely miss"))
+    tables = []
+    for by, head in (("session", "Session"), ("skill", "Skill"), ("agent", "Subagent type"), ("model", "Model")):
+        found = cache.rows(reqs, by, 10)
+        tables.append(f"<h3>{head}</h3>" + _table(
+            [head.lower(), "requests", "hit ratio", "cache-write", "re-cache (misses)", "misses"],
+            [((d["key"][:8] if by == "session" else d["key"]), d["requests"], cache.pct(d["hit_ratio"]),
+              (_usd(d["write_usd"]), "u"), (_usd(d["recache_usd"]), "u"), d["misses"]) for d in found], 1))
+    why = ""
+    if top:
+        why = ("<h3>Likely miss causes</h3>" + _table(
+            ["cause", "misses", "re-cached", "API-eq", "what to do"],
+            [(c, n, _tok(tk), (_usd(usd), "u"), (HINTS.get(c, ""), "lm")) for c, n, tk, usd in top], 1))
+    off = cache.official(conn, cond, params)
+    official = ""
+    if off:
+        official = (f"<h3>Miss causes ({cache.OFFICIAL})</h3><p class='note'>{off['misses']:,} misses in {off['sessions']} "
+                    f"session{'s' * (off['sessions'] != 1)}, {_tok(off['recache_tokens'])} re-cached tokens.</p>"
+                    + _table(["cause", "misses"], sorted(off["causes"].items(), key=lambda kv: (-kv[1], kv[0])), 1))
+    return _section(
+        "Prompt cache", finding,
+        "hit ratio = cache_read / (cache_read + cache writes + uncached input). cache-write = what writing the cache cost at list "
+        "price (1.25x input for 5 minutes, 2x for 1 hour). A likely miss is a request whose cache_read fell below half of the "
+        "request before it in the same thread while it wrote at least 2K tokens, with no /compact between; the cause comes from "
+        "the idle gap, so it is a heuristic, not what Claude Code reported",
+        why + official + "".join(tables), "cache", t["hit_ratio"])
+
+
+def _est(text):
+    """A table cell for an estimated number: marked ~ with the method as its tooltip."""
+    return (f'<span title="{html.escape(context.SHORT)}">~{text}</span>', "raw")
+
+
+def _fat(r, split=False):
+    cells = [r["key"]] + ([r["split"]] if split else [])
+    return tuple(cells) + (r["calls"], _est(_tok(r["median"])), _est(_tok(r["p95"])), _est(_tok(r["total"])),
+                           f"{r['share']:.1%}", _est(_usd(r["carry"])))
+
+
+def _context_section(conn, cond, params):
+    """Which results fill the context: fat tools and MCP servers by result tokens, their carry cost, and the windows."""
+    where, call_params = errors.for_calls(cond, params)
+    calls = context.load(conn, cond, params)
+    rows, compacts, sessions = context.pressure(conn, cond, params)
+    ingest = "Run <code>tokscope ingest</code> after a Claude Code session to fill it."
+    if not calls and not sessions:
+        return _section("Context", "No tool result recorded", "", "", "context",
+                        empty=("No context data yet", "The biggest tool and MCP results and the context window show here. " + ingest))
+    head = ["calls", "~median", "~p95", "~total", "share", "~carry"]
+    tables = []
+    for by, title in (("tool", "Tool"), ("server", "MCP server"), ("mcp_tool", "MCP tool")):
+        found = context.rank(calls, by)
+        if found:
+            tables.append(f"<h3>{title}</h3>" + _table([title.lower()] + head, [_fat(r) for r in found], -1))
+    for split, title in (("project", "Project"), ("skill", "Skill")):
+        found = sorted(context.rank(calls, "tool", split, 50) + context.rank(calls, "mcp_tool", split, 50),
+                       key=lambda r: -r["total"])[:12]
+        if found:
+            tables.append(f"<h3>Split by {title.lower()}</h3>" + _table(["tool", title.lower()] + head, [_fat(r, True) for r in found], -1))
+    if rows:
+        tables.append("<h3>Context pressure</h3>" + _table(
+            ["session", "project", "peak input", "window", "of window", "compactions"],
+            [((r["title"] or r["session"][:8]), r["project"] or "", _tok(r["peak"]), _tok(r["window"]), f"{r['share']:.0%}",
+              r["compacts"]) for r in rows], -1))
+    notes = context.findings(calls, sessions, compacts)
+    tool_t = sum(c["tokens"] for c in calls)
+    finding = (f"~{_tok(tool_t)} tokens of tool results across {len(calls):,} calls; "
+               f"{compacts:,} compaction{'s' * (compacts != 1)}")
+    return _section(
+        "Context", finding,
+        html.escape(context.METHOD) + ". Peak input = input + cache read + cache write of the fullest request; "
+        "the window is 200K, or 1M once a request passed 200K. Filtered like the rest of the page",
+        ("".join(f"<p class='finding'>{html.escape(n)}</p>" for n in notes)) + "".join(tables), "context")
 
 
 def _breakdowns(conn, cond, params):
@@ -208,5 +301,7 @@ def _breakdowns(conn, cond, params):
                  p_type if by_type else None,
                  empty=None if by_type else ("No subagent runs yet", "Each subagent type shows here once Claude Code starts one "
                                              "(the Agent tool). " + ingest)),
+        _context_section(conn, cond, params),
         _errors_section(conn, cond, params),
+        _cache_section(conn, cond, params),
     ])

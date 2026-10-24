@@ -113,6 +113,17 @@ class PrivacyTest(unittest.TestCase):
         self.assertIn("1.5K", kept)
         self.assertNotIn("1.5K", gone)
 
+    def test_a_filtered_copy_drops_tool_calls_and_events_of_other_projects(self):
+        conn = connect(self.db)
+        sid = conn.execute("SELECT r.session_id FROM requests r JOIN sessions s USING (session_id) WHERE s.project LIKE '%acme-corp%'").fetchone()[0]
+        conn.execute("INSERT INTO tool_calls (session_id, tool_use_id, name) VALUES (?, 'leak1', 'mcp__leak__tool')", (sid,))
+        conn.execute("INSERT INTO turn_events (session_id, kind) VALUES (?, 'x')", (sid,))
+        conn.commit()
+        conn.close()
+        copy = privacy.redacted_copy(self.db, "redacted", "WHERE s.project LIKE ?", ("%other-client%",))
+        for table in ("tool_calls", "turn_events"):
+            self.assertEqual(copy.execute(f"SELECT count(*) FROM {table} WHERE session_id = ?", (sid,)).fetchone()[0], 0)
+
     def test_an_alias_is_stable_on_one_machine_and_differs_on_another(self):
         a, b = privacy.Redactor("numbers", key=b"k1", phase_names=set()), privacy.Redactor("numbers", key=b"k1", phase_names=set())
         other = privacy.Redactor("numbers", key=b"k2", phase_names=set())
