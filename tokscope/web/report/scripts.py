@@ -291,4 +291,23 @@ JS_BENCH = """
 const leaky=document.getElementById('show-leaky');
 if(leaky){const sync=()=>document.querySelectorAll('.leaky').forEach(el=>el.hidden=!leaky.checked);leaky.addEventListener('change',sync);sync()}
 """
-JS = JS_CORE + JS_SESSIONS + JS_TOC + JS_TREND + JS_BENCH
+JS_SUMMARY = """
+// summary: group-by chips (the report shows one of four embedded tables; the dashboard chips are links), Copy and, in the report, the downloads
+document.querySelectorAll('.sumview').forEach(v=>{
+  const FIELDS=['key','requests','prompt_tokens','output_tokens','cost_usd','carried_cost_usd'],panes=[...v.querySelectorAll('.sum-pane')],
+    cur=()=>panes.find(p=>!p.hidden),rowsOf=()=>JSON.parse(cur().dataset.rows);
+  const cell=x=>/[",\\n\\r]/.test(x=String(x))?'"'+x.replace(/"/g,'""')+'"':x;
+  const asCsv=r=>[FIELDS.join(',')].concat(r.map(o=>FIELDS.map(k=>cell(o[k])).join(','))).join('\\n')+'\\n';
+  v.querySelectorAll('[data-pick]').forEach(b=>b.addEventListener('click',()=>{
+    panes.forEach(p=>p.hidden=p.dataset.by!==b.dataset.pick);
+    v.querySelectorAll('[data-pick]').forEach(x=>{const on=x===b;x.classList.toggle('on',on);x.setAttribute('aria-pressed',on)})}));
+  v.querySelectorAll('[data-dl]').forEach(a=>a.addEventListener('click',()=>{const f=a.dataset.dl,r=rowsOf();
+    a.href=URL.createObjectURL(new Blob([f==='csv'?asCsv(r):JSON.stringify(r,null,2)],{type:f==='csv'?'text/csv':'application/json'}));
+    a.download='tokscope-summary-'+cur().dataset.by+'.'+f;setTimeout(()=>URL.revokeObjectURL(a.href),1000)}));
+  v.querySelector('[data-copy]').addEventListener('click',async()=>{
+    const text=[FIELDS.join('\\t')].concat(rowsOf().map(o=>FIELDS.map(k=>o[k]).join('\\t'))).join('\\n');
+    try{await navigator.clipboard.writeText(text)}catch(_){const t=document.createElement('textarea');t.value=text;document.body.append(t);t.select();
+      try{document.execCommand('copy')}finally{t.remove()}}
+    toast('Copied')})});
+"""
+JS = JS_CORE + JS_SESSIONS + JS_TOC + JS_TREND + JS_BENCH + JS_SUMMARY

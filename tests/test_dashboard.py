@@ -13,7 +13,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
-from tokscope.core import skills
+from tokscope.core import skills, summary
 from tokscope.integrations import managed
 from tokscope.web import dashboard
 from tokscope.web.report import scripts as report_scripts
@@ -195,6 +195,37 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(json.loads(body)["tokens"], 3000)
         _, body = self.get("/api/summary?range=7&skill=other")
         self.assertEqual(json.loads(body)["tokens"], 0)
+
+    def test_rows_in_json_and_csv_follow_the_filters(self):
+        code, body = self.get("/api/summary?by=skill&format=json&range=all")
+        self.assertEqual(code, 200)
+        self.assertEqual(json.loads(body), [{"key": "xia2", "requests": 2, "prompt_tokens": 3000, "output_tokens": 0, "cost_usd": 2.0,
+                                             "carried_cost_usd": 0.0}])
+        _, body = self.get("/api/summary?by=skill&format=json&range=7")
+        self.assertEqual([r["requests"] for r in json.loads(body)], [1])  # the 50-day-old request is out
+        code, body = self.get("/api/summary?by=model&format=csv&range=all&skill=nothing")
+        self.assertEqual((code, body), (200, ",".join(summary.FIELDS) + "\n"))
+
+    def test_bad_values_are_refused_and_the_old_totals_stay(self):
+        for q in ("by=nope", "format=xml", "by=skill&limit=x"):
+            self.assertEqual(self.get("/api/summary?" + q)[0], 400, q)
+        self.assertEqual(json.loads(self.get("/api/summary?range=all")[1])["tokens"], 3000)
+
+    def test_other_hosts_are_refused(self):
+        self.assertEqual(self.get("/api/summary?by=skill&format=csv", host="evil.example:80")[0], 403)
+
+    def test_the_breakdowns_page_has_the_summary_with_links_for_the_filters(self):
+        _, body = self.get("/breakdowns?range=7&by=skill&model=claude-opus-5-5")
+        self.assertIn('id="summary"', body)
+        self.assertIn('href="/api/summary?range=7&amp;model=claude-opus-5-5&amp;by=skill&amp;format=csv"', body)
+        self.assertIn('href="/api/summary?range=7&amp;model=claude-opus-5-5&amp;by=skill&amp;format=json"', body)
+        self.assertIn('class="chip on" href="/breakdowns?range=7&amp;model=claude-opus-5-5&amp;by=skill#summary" aria-current=page>Skill', body)
+        self.assertIn("data-copy", body)
+        self.assertIn('data-by="skill"', body)
+        self.assertNotIn('data-by="phase"', body)
+
+    def test_an_unknown_group_by_falls_back_to_phase(self):
+        self.assertIn('data-by="phase"', self.get("/breakdowns?by=zzz")[1])
 
     def test_old_skills_links_land_on_the_library(self):
         class NoFollow(urllib.request.HTTPRedirectHandler):
