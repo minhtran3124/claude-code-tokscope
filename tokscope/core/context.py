@@ -66,11 +66,13 @@ def load(conn, where="", params=()):
                 f"SELECT session_id, agent_id, ts FROM turn_events WHERE kind = 'compact' AND session_id IN ({marks}) "
                 f"ORDER BY ts", chunk):
             stops.setdefault((sid, agent), []).append(ts or "")
-    prefix, times = {}, {}
+    prefix, times, rates, ov = {}, {}, {}, pricing.overrides()  # one rate per model, pricing.json read once
     for key, rs in reqs.items():  # running sum of the cache-read rate, so the requests after a call add up in O(log n)
         acc = [0.0]
         for _, model in rs:
-            acc.append(acc[-1] + (pricing.cache_read_rate(model) or 0))
+            if model not in rates:
+                rates[model] = pricing.cache_read_rate(model, ov) or 0
+            acc.append(acc[-1] + rates[model])
         prefix[key], times[key] = acc, [t for t, _ in rs]
     out = []
     for sid, agent, name, chars, model, project, skill, ts in rows:

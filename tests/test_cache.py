@@ -127,3 +127,17 @@ class CacheTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OverridesOnceTest(CacheTest):
+    def test_pricing_json_read_once_per_scan_and_load(self):
+        from unittest import mock
+        from tokscope.core import context, pricing
+        for i in range(5):
+            self.req(i * 10, 10, 1000, 100)
+        self.conn.execute("INSERT INTO tool_calls (session_id, name, result_chars, model, ts) VALUES ('s1','Read',400,?,?)",
+                          (MODEL, T0.isoformat()))
+        with mock.patch.object(pricing, "overrides", wraps=pricing.overrides) as m:
+            cache.scan(self.conn)
+            context.load(self.conn)
+        self.assertEqual(m.call_count, 2)

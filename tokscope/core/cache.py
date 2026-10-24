@@ -33,8 +33,8 @@ def pct(r):
     return "–" if r is None else f"{r:.0%}"
 
 
-def _write_usd(model, cw5, cw1, speed, geo):
-    return pricing.cost_usd(model, 0, 0, 0, cw5, cw1, speed, geo) or 0.0
+def _write_usd(model, cw5, cw1, speed, geo, ov):
+    return pricing.cost_usd(model, 0, 0, 0, cw5, cw1, speed, geo, ov=ov) or 0.0
 
 
 def compacted(conn, session_id, agent_id, start, end):
@@ -52,10 +52,10 @@ def scan(conn, where="", params=()):
         "COALESCE(r.cache_write_1h, 0), r.speed, r.inference_geo FROM requests r JOIN sessions s USING (session_id) "
         "LEFT JOIN subagents a ON a.session_id = r.session_id AND a.agent_id = r.agent_id "
         f"{where} ORDER BY r.session_id, COALESCE(r.agent_id, ''), r.ts", params).fetchall()
-    reqs, misses, prev = [], [], None
+    reqs, misses, prev, ov = [], [], None, pricing.overrides()  # read pricing.json once, not per request
     for sid, aid, ts, model, skill, agent, inp, cr, cw5, cw1, speed, geo in rows:
         d = {"session": sid, "ts": ts, "model": model or "?", "skill": skill, "agent": agent, "input": inp, "reads": cr,
-             "writes": cw5 + cw1, "write_usd": _write_usd(model, cw5, cw1, speed, geo), "miss": None}
+             "writes": cw5 + cw1, "write_usd": _write_usd(model, cw5, cw1, speed, geo, ov), "miss": None}
         if (prev and prev["thread"] == (sid, aid) and prev["reads"] > 0 and cr < prev["reads"] * DROP
                 and cw5 + cw1 >= MIN_WRITE and not compacted(conn, sid, aid, prev["ts"], ts)):
             try:
