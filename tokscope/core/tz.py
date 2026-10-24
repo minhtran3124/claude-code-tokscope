@@ -38,8 +38,9 @@ def now():
 
 
 def local_day(ts):
-    """'YYYY-MM-DD' of a stored UTC timestamp in the zone (None stays None). One answer per minute: a zone's offset
-    changes on a whole minute, so the seconds never change the day, and the SQL function calls this once per request."""
+    """'YYYY-MM-DD' of a stored UTC timestamp in the zone (None stays None). One answer per minute: since 1970 every
+    zone's offset is a whole number of minutes, so the seconds never change the day (older local-mean-time offsets have
+    seconds). The SQL function calls this once per request."""
     if not ts:
         return None
     return _day_of_minute(ts[:16])

@@ -64,7 +64,7 @@ async function start() {
   const guard = 'trap \'kill "$S" 2>/dev/null\' EXIT TERM INT HUP; "$@" & S=$!; while kill -0 "$PPID" 2>/dev/null && kill -0 "$S" 2>/dev/null; do sleep 1; done; kill "$S" 2>/dev/null; wait "$S"';
   server = spawn("sh", ["-c", guard, "sh", path.join(ROOT, "bin", "tokscope"), "serve", "--no-open", "--port", String(port)], { stdio: "inherit" });
   // the server is gone (it failed to bind, crashed or was killed): leave rather than show a dead page
-  server.once("exit", (code) => { server = null; app.exit(code || 1); });
+  server.once("exit", (code) => { server = null; if (!base && win) showFailure(`the server stopped (exit ${code})`); else app.exit(code || 1); });
   const url = `http://127.0.0.1:${port}/`;
   await waitFor(url);
   showDashboard(url);
@@ -78,16 +78,25 @@ function openExternal(u) {
   } catch (e) { /* not a URL: ignore */ }
 }
 
-// page and ink colours of the dashboard (--page and --ink in the light and dark themes)
-function loadingPage(dark) {
+// A page for the window before the dashboard answers: a spinner and a message, or (spin false) the reason it did not
+// start. The colours are --page, --ink and --mark of the dashboard's light and dark themes.
+function statusPage(dark, message, spin = true) {
   const bg = dark ? "#1d1a15" : "#f2efe7", fg = dark ? "#f2efe7" : "#231e16", mark = dark ? "#76a0e2" : "#2f5aa8";
+  const text = message.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
   const html = `<!doctype html><meta charset="utf-8"><title>tokscope</title><style>
 html,body{height:100%;margin:0;background:${bg};color:${fg};font:15px system-ui,sans-serif}
-body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:0 24px;text-align:center}
 i{width:26px;height:26px;border:3px solid ${mark};border-right-color:transparent;border-radius:50%;animation:s .8s linear infinite}
 @keyframes s{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){i{animation:none}}</style>
-<i></i><div>Starting tokscope…</div>`;
+${spin ? "<i></i>" : ""}<div>${text}</div>`;
   return "data:text/html;charset=utf-8," + encodeURIComponent(html);
+}
+
+// the server did not start: say so in the window instead of a spinner that never ends
+function showFailure(message) {
+  console.error(`tokscope: ${message}`);
+  if (win) win.loadURL(statusPage(nativeTheme.shouldUseDarkColors, `tokscope did not start: ${message}`, false));
+  else app.exit(1);
 }
 
 let base = null;  // the dashboard's address once it answers; nothing else may be shown in the window
@@ -103,7 +112,7 @@ function createWindow() {
     win.webContents.on(ev, (e, u) => { if (!base || !u.startsWith(base)) { e.preventDefault(); openExternal(u); } });
   }
   win.on("closed", () => { win = null; });
-  win.loadURL(loadingPage(dark));
+  win.loadURL(statusPage(dark, "Starting tokscope…"));
 }
 
 function showDashboard(url) {
@@ -116,7 +125,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
-  app.whenReady().then(start).catch((e) => { console.error(`tokscope: ${e.message}`); app.exit(1); });
+  app.whenReady().then(start).catch((e) => showFailure(e.message));
   app.on("window-all-closed", () => app.quit());
   // every way out stops the server: a normal quit, app.exit() on a failed start, and a signal (not SIGKILL)
   process.on("exit", () => { if (server) server.kill(); });
