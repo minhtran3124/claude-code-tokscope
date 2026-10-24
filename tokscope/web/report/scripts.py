@@ -296,7 +296,8 @@ JS_SUMMARY = """
 document.querySelectorAll('.sumview').forEach(v=>{
   const FIELDS=['key','requests','prompt_tokens','output_tokens','cost_usd','carried_cost_usd'],panes=[...v.querySelectorAll('.sum-pane')],
     cur=()=>panes.find(p=>!p.hidden),rowsOf=()=>JSON.parse(cur().dataset.rows);
-  const cell=x=>/[",\\n\\r]/.test(x=String(x))?'"'+x.replace(/"/g,'""')+'"':x;
+  const safe=x=>/^[=+\\-@\\t\\r]/.test(x=String(x))?"'"+x:x;
+  const cell=x=>/[",\\n\\r]/.test(x=safe(x))?'"'+x.replace(/"/g,'""')+'"':x;
   const asCsv=r=>[FIELDS.join(',')].concat(r.map(o=>FIELDS.map(k=>cell(o[k])).join(','))).join('\\n')+'\\n';
   v.querySelectorAll('[data-pick]').forEach(b=>b.addEventListener('click',()=>{
     panes.forEach(p=>p.hidden=p.dataset.by!==b.dataset.pick);
@@ -305,7 +306,7 @@ document.querySelectorAll('.sumview').forEach(v=>{
     a.href=URL.createObjectURL(new Blob([f==='csv'?asCsv(r):JSON.stringify(r,null,2)],{type:f==='csv'?'text/csv':'application/json'}));
     a.download='tokscope-summary-'+cur().dataset.by+'.'+f;setTimeout(()=>URL.revokeObjectURL(a.href),1000)}));
   v.querySelector('[data-copy]').addEventListener('click',async()=>{
-    const text=[FIELDS.join('\\t')].concat(rowsOf().map(o=>FIELDS.map(k=>o[k]).join('\\t'))).join('\\n');
+    const text=[FIELDS.join('\\t')].concat(rowsOf().map(o=>FIELDS.map(k=>safe(o[k])).join('\\t'))).join('\\n');
     try{await navigator.clipboard.writeText(text)}catch(_){const t=document.createElement('textarea');t.value=text;document.body.append(t);t.select();
       try{document.execCommand('copy')}finally{t.remove()}}
     toast('Copied')})});

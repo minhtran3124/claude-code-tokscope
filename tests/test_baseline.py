@@ -96,6 +96,35 @@ class BaselineTest(Fixture):
         self.assertEqual(s["median"], 500)
         self.assertIsNone(s["cost"])
 
+    def test_haiku_session_starts_are_priced_at_their_own_size_not_at_a_million_tokens(self):
+        model = "claude-haiku-5-5"                                # 5x above 100k tokens in one request
+        self.assertAlmostEqual(baseline.start_usd(model, 150_000), 15 * baseline.start_usd(model, 50_000))
+        s = baseline.stats([("s", "/p", "2026-10-01T00:00:00Z", model, 50_000)])
+        self.assertAlmostEqual(s["cost"], baseline.start_usd(model, 50_000))
+
+    def _insert(self, conn, sid, first_ts, request_ts):
+        conn.execute("INSERT INTO sessions (session_id, project, cwd, first_ts) VALUES (?, 'p', '/p', ?)", (sid, first_ts))
+        for i, ts in enumerate(request_ts):
+            conn.execute("INSERT INTO requests (session_id, request_key, ts, model, input, cache_read, cache_write_5m, "
+                         "cache_write_1h) VALUES (?, ?, ?, 'claude-opus-5-5', 1, 5000, 0, 0)", (sid, f"{sid}{i}", ts))
+
+    def test_a_session_whose_first_request_is_not_in_the_database_is_skipped(self):
+        conn = connect(self.db)
+        self._insert(conn, "own", "2026-10-01T10:00:00Z", ["2026-10-01T10:00:05Z"])
+        # a fork: its early requests were copied from an earlier session and kept only there (ingest._share_requests)
+        self._insert(conn, "fork", "2026-10-01T10:00:00Z", ["2026-10-01T10:30:00Z"])
+        self.assertEqual([r[0] for r in baseline.starts(conn)], ["own"])
+
+    def test_a_range_gives_the_same_sessions_in_a_filtered_copy_as_in_the_full_database(self):
+        conn = connect(self.db)
+        self._insert(conn, "old", "2026-10-01T00:00:00Z", ["2026-10-01T00:00:10Z", "2026-10-02T09:00:00Z"])
+        self._insert(conn, "new", "2026-10-02T08:00:00Z", ["2026-10-02T08:00:05Z"])
+        cond, params = "WHERE r.ts >= ?", ("2026-10-02",)
+        full = [r[0] for r in baseline.starts(conn, cond, params)]
+        conn.execute("DELETE FROM requests WHERE ts < '2026-10-02'")  # what privacy.redacted_copy does with the range
+        self.assertEqual([r[0] for r in baseline.starts(conn)], full)
+        self.assertEqual(full, ["new"])
+
 
 if __name__ == "__main__":
     unittest.main()

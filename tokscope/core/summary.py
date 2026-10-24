@@ -33,9 +33,15 @@ def to_json(found):
     return json.dumps(found, indent=2)
 
 
+def safe_cell(value):
+    """A text cell a spreadsheet reads as a formula (= + - @, tab, CR first) gets a leading quote. The key is a skill or
+    agent name from the transcript."""
+    return "'" + value if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r") else value
+
+
 def to_csv(found):
     out = io.StringIO()
     w = csv.DictWriter(out, FIELDS, lineterminator="\n")
     w.writeheader()
-    w.writerows(found)
+    w.writerows({k: safe_cell(v) for k, v in row.items()} for row in found)
     return out.getvalue()

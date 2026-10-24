@@ -242,8 +242,9 @@ def idle_cost(g, rows):
     if not unused:
         return None
     tokens = sum(e["def_tokens"] for e in unused)
-    rate = baseline.per_token_usd(g["base"]["model"]) if g.get("base") else None
-    return len(unused), tokens, None if rate is None else tokens * rate
+    base = g.get("base")
+    usd = baseline.start_usd(base["model"], base["median"]) if base else None  # priced at a typical start, not at 1M tokens
+    return len(unused), tokens, None if usd is None else tokens * usd / base["median"]
 
 
 def _health_key(name):

