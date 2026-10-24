@@ -73,7 +73,8 @@ def _budgets(args):
     try:
         return budgets.load()
     except budgets.BudgetError as e:
-        sys.exit(f"tokscope: budgets.json: {e}")
+        print(f"tokscope: budgets.json: {e}", file=sys.stderr)
+        sys.exit(2)
 
 
 def check(args):

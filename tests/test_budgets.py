@@ -138,9 +138,10 @@ class BudgetsTest(unittest.TestCase):
         self.write("{half")
         code, _, _ = self.run_cli(["check"])
         self.assertEqual(code, 2)  # argparse: --once is required
-        code, _, _ = self.run_cli(["check", "--once"])
-        self.assertIn("budgets.json", str(code))
-        self.assertIn("not valid JSON", str(code))
+        code, _, err = self.run_cli(["check", "--once"])
+        self.assertEqual(code, 2)
+        self.assertIn("budgets.json", err)
+        self.assertIn("not valid JSON", err)
 
     def test_statusline_warns_near_and_over_and_names_a_bad_file(self):
         self.assertNotIn("budgets", self.run_cli(["statusline"])[1])  # no file: plain
