@@ -497,6 +497,20 @@ class OverviewTest(unittest.TestCase):
             "cache_write_1h, cost_usd) VALUES ('s1',?,?,'claude-opus-5-5',1,?,0,0,0,0,0.1)",
             [(f"h{h}", (NOW - timedelta(hours=h, seconds=60)).strftime("%Y-%m-%dT%H:%M:%S.000Z"), tokens) for h in range(hours)])
 
+    def test_the_session_start_line_is_marked_as_an_estimate_and_follows_the_range(self):
+        self.add(2, tokens=3000)
+        self.add(40, tokens=1000)                                   # the session's first request, not the 2-day-old one
+        page = overview_page._session_start(self.conn, dashboard.Filters({"range": ["90"]}))
+        self.assertIn("Every new session starts at ~1.0K tokens (~$0.01)", page)
+        self.assertIn("Estimate.", page)
+        self.assertIn("median of 1 session", page)
+        self.assertIn("No sessions in this range.", overview_page._session_start(self.conn, dashboard.Filters({"range": ["7"]})))
+
+    def test_the_session_start_line_says_so_when_the_range_has_no_session(self):
+        page = overview_page._session_start(self.conn, dashboard.Filters({"range": ["7"]}))
+        self.assertIn("No sessions in this range.", page)
+        self.assertNotIn("Every new session", page)
+
     @staticmethod
     def ts(days_ago):
         """A minute older than the whole day, so a request never sits on the edge of a range."""

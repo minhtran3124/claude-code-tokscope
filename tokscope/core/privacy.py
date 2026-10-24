@@ -52,6 +52,7 @@ COLUMNS = {
                        "child_ids": KEEP},
     "tool_calls": {"session_id": KEEP, "tool_use_id": KEEP, "prompt_idx": KEEP, "agent_id": KEEP, "name": TOOL,
                    "result_chars": KEEP},
+    "mcp_defs": {"session_id": KEEP, "server": "name:mcp", "tools": KEEP, "chars": KEEP},
     "bench_runs": {"run_id": KEEP, "task": TASK, "variant": VARIANT, "run_idx": KEEP, "session_id": KEEP,
                    "started_at": KEEP, "duration_s": KEEP, "exit_code": KEEP, "is_error": KEEP, "reported_cost": KEEP,
                    "passed": KEEP, "result": ANSWER, "commit_sha": DROP, "cc_version": KEEP,

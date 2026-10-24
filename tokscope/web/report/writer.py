@@ -20,7 +20,7 @@ from .sections.breakdowns import _breakdowns
 from .sections.rows import summary_view
 from .sections.sessions import _sessions_json
 from .sections.skills import FEW_LOADS, _change_cards, _skill_versions
-from .sections.summary import _hero
+from .sections.summary import _hero, _session_start
 from .styles import CSS
 from .widgets import _daily_chart, _more, _tok, _usd
 
@@ -91,6 +91,7 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 {f'<p class="privacy" role="note"><b>{level}</b> {PRIVACY_NOTE[level]}</p>' if level != "full" else ""}
 <p class="sub">{(first or '')[:10]} → {(last or '')[:10]} · real sessions (benchmarks separate) · generated {generated}</p>
 {_hero(conn, cond, params)}
+{_session_start(conn, cond, params)}
 <div class="kpis">{kpi_html}</div>{_unpriced(conn, cond, params)}</div>
 
 <section class="card reveal" id="sessions"><h2>Sessions</h2>

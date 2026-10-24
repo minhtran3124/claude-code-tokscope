@@ -757,7 +757,7 @@ ol.ste .msg{font-size:12.5px;color:var(--ink2)}
 details.folders{margin-top:8px;font-size:13px}
 details.folders summary{cursor:pointer;color:var(--mark-ink)}
 table.mcp td{vertical-align:baseline}
-table.mcp :is(th,td):is(:nth-child(2),:nth-child(3),:nth-child(7)){text-align:left}
+table.mcp :is(th,td):is(:nth-child(2),:nth-child(3),:nth-child(8)){text-align:left}
 table.mcp td:nth-child(3){white-space:normal;overflow-wrap:anywhere}
 table.mcp td:nth-child(3) .note{display:block;margin:2px 0 0}
 table.mcp .st{white-space:normal;text-align:left}
@@ -864,7 +864,7 @@ select option{background:var(--surface);color:var(--ink)}
 .privacy b{color:var(--mark-ink);text-transform:uppercase;font-size:11px;margin-right:6px;margin:0}
 .filters select,.libtools select,#bench-form select,.optrow select,.optrow input,#reg-form input,#mcp-form select{font-family:var(--num-font);font-size:var(--ctl-size);font-weight:400}
 .filters a,.fresh,.kpi .dl .trend,.state,.st .pill,.badge,a.sk .meta,.libview .ste-n,.runline b,.range-dates,.cause,.vs .trend,.tag,.movers td:not(:first-child):not(.tagc),.movers th{font-family:var(--num-font)}
-table.mcp td:is(:nth-child(2),:nth-child(3),:nth-child(7)),table.bres td:last-child,table.bres td:first-child{font-family:var(--sans)}
+table.mcp td:is(:nth-child(2),:nth-child(3),:nth-child(8)),table.bres td:last-child,table.bres td:first-child{font-family:var(--sans)}
 table.mcp td.st{font-family:var(--num-font)}
 .latest>.note:first-child{font-family:var(--num-font);font-weight:var(--lab-w);font-size:var(--lab-size);text-transform:var(--lab-case);letter-spacing:var(--lab-track)}
 .latest>.note:first-child time{font-weight:400}
