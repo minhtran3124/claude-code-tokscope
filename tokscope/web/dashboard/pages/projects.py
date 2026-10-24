@@ -39,7 +39,7 @@ def _project_view(g):
                       f"{'' if Path(c).exists() else ' · <span class=note>gone</span>'}</li>" for c, n in sorted(g["folders"], key=lambda f: -f[1]))
     keys = sorted(k for k in g["keys"] if k)
     base = g.get("base")
-    start = (f'<dt>Session start</dt><dd>{_start_line(base)}<br>{start_detail(base)}</dd>' if base
+    start = (f'<dt>Session start</dt><dd>{_start_line(base)}</dd><dt>Start trend</dt><dd>{start_detail(base)}</dd>' if base
              else '<dt>Session start</dt><dd class="note">No sessions in this range.</dd>' if "base" in g else "")
     sessions_link = (f' · <a href="/sessions?range=all&amp;project={html.escape(keys[0])}">its sessions</a>' if len(keys) == 1 else "")
     head = ('<p><a href="/projects">← All projects</a></p>'
