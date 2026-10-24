@@ -207,6 +207,13 @@ class ChangeTest(ProjectsTest):
         with self.assertRaisesRegex(RuntimeError, "No MCP server found"):
             projects.remove(self.app, "nope", "local", self.cli)
 
+    def test_each_mcp_server_row_shows_its_p95_result_tokens_marked_as_an_estimate(self):
+        page = projects_page._project_view(self.app_group())
+        self.assertIn("≈p95 result", page)
+        self.assertEqual(self.app_group()["mcp"]["plugin_sentry_sentry"]["p95"], 1000)   # 4000 chars at 4 per token
+        self.assertIn('data-label="≈p95 result" title="~ estimate:', page)
+        self.assertIn(">~1.0K</td>", page)
+
     def test_the_page_offers_remove_only_where_claude_mcp_can_remove(self):
         page = projects_page._project_view(self.app_group())
         self.assertIn('data-mcp-remove="api" data-scope="local"', page)

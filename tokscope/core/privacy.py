@@ -52,7 +52,7 @@ COLUMNS = {
                        "child_ids": KEEP},
     "tool_calls": {"session_id": KEEP, "tool_use_id": KEEP, "prompt_idx": KEEP, "agent_id": KEEP, "name": TOOL,
                    "result_chars": KEEP, "is_error": KEEP, "err_class": KEEP, "repeat": KEEP, "skill": SKILL,
-                   "phase": PHASE, "ts": KEEP},
+                   "phase": PHASE, "ts": KEEP, "model": KEEP},
     "turn_events": {"session_id": KEEP, "ts": KEEP, "prompt_idx": KEEP, "agent_id": KEEP, "skill": SKILL, "phase": PHASE,
                     "kind": KEEP},
     "mcp_defs": {"session_id": KEEP, "server": "name:mcp", "tools": KEEP, "chars": KEEP},

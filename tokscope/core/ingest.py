@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS prompts (
 );
 CREATE TABLE IF NOT EXISTS tool_calls (
     session_id TEXT, tool_use_id TEXT, prompt_idx INTEGER, agent_id TEXT, name TEXT, result_chars INTEGER,
-    is_error INTEGER, err_class TEXT, repeat INTEGER, skill TEXT, phase TEXT, ts TEXT,
+    is_error INTEGER, err_class TEXT, repeat INTEGER, skill TEXT, phase TEXT, ts TEXT, model TEXT,
     PRIMARY KEY (session_id, tool_use_id)
 );
 CREATE TABLE IF NOT EXISTS turn_events (
@@ -104,7 +104,7 @@ CREATE INDEX IF NOT EXISTS idx_requests_ts ON requests (ts);
 """
 TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "turn_events", "headless_calls", "mcp_defs", "ingest_state", "sessions")
 # bump when the parser records something new, so unchanged transcripts are parsed again once
-PARSER_VERSION = 17
+PARSER_VERSION = 18
 TAIL_BYTES = 4096  # the bytes before a stored offset that must be unchanged for a file to count as appended to
 # what a resumed parse restores: the parser's state after the last complete line of every file
 STATE_KEYS = ("requests", "subagents", "skill_calls", "prompts", "tool_ctx", "tool_calls", "result_chars",
@@ -248,7 +248,7 @@ class SessionParser:
         self.tool_calls = {}  # tool_use_id -> (prompt_idx, agent_id, name)
         self.tool_err = {}  # tool_use_id -> error class, for the results that failed
         self.seen_calls = {}  # "prompt|agent|name|input hash" -> 1: the calls a later identical one repeats
-        self.events = []  # [ts, prompt_idx, agent_id, skill, phase, kind]: interrupt, api_error or retry
+        self.events = []  # [ts, prompt_idx, agent_id, skill, phase, kind]: interrupt, api_error, retry or compact
         self.result_chars = {}  # tool_use_id -> text size of the result that went into the context
         self.skill_texts = {}  # Skill tool_use_id -> the SKILL.md text it loaded, where a request blob kept it
         self.skill_args = {}  # Skill tool_use_id -> the args the call passed
@@ -403,6 +403,8 @@ class SessionParser:
         kind = rec.get("type")
         if kind == "system" and rec.get("subtype") == "api_error":
             self._event(rec, agent_id, state, "retry")
+        elif kind == "system" and rec.get("subtype") == "compact_boundary":  # /compact or auto-compact
+            self._event(rec, agent_id, state, "compact")
         elif kind == "assistant" and (rec.get("isApiErrorMessage") or rec.get("apiError")):
             self._event(rec, agent_id, state, "api_error")
         elif kind == "user" and _is_interrupt(rec):
@@ -503,7 +505,7 @@ class SessionParser:
             if block.get("id") not in self.tool_calls:  # a line repeated by a resumed or forked file is not a repeat call
                 key = f'{state["prompt_idx"]}|{agent_id}|{block.get("name")}|{_input_hash(block.get("input"))}'
                 self.tool_calls[block.get("id")] = (state["prompt_idx"], agent_id, block.get("name"), state["skill"],
-                                                    state["phase"], rec.get("timestamp"), int(key in self.seen_calls))
+                                                    state["phase"], rec.get("timestamp"), int(key in self.seen_calls), msg.get("model"))
                 self.seen_calls[key] = 1
             command = (block.get("input") or {}).get("command")
             if block.get("name") == "Bash" and isinstance(command, str) and is_headless(command):
@@ -562,7 +564,7 @@ def connect(db_path):
     conn.executescript(SCHEMA)
     have = {c[1] for c in conn.execute("PRAGMA table_info(tool_calls)")}
     for name, typ in (("result_chars", "INTEGER"), ("is_error", "INTEGER"), ("err_class", "TEXT"), ("repeat", "INTEGER"),
-                      ("skill", "TEXT"), ("phase", "TEXT"), ("ts", "TEXT")):  # refilled by the PARSER_VERSION bump
+                      ("skill", "TEXT"), ("phase", "TEXT"), ("ts", "TEXT"), ("model", "TEXT")):  # refilled by the PARSER_VERSION bump
         if name not in have:
             conn.execute(f"ALTER TABLE tool_calls ADD COLUMN {name} {typ}")
     if "tool_use_id" not in {c[1] for c in conn.execute("PRAGMA table_info(skill_calls)")}:
@@ -684,10 +686,10 @@ def store(conn, project, parser, signature):
             for a in parser.subagents
         ],
     )
-    conn.executemany("INSERT INTO tool_calls VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+    conn.executemany("INSERT INTO tool_calls VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                      [(sid, tid, i, agent, name, parser.result_chars.get(tid), int(tid in parser.tool_err),
-                       parser.tool_err.get(tid), dup, skill, phase, ts)
-                      for tid, (i, agent, name, skill, phase, ts, dup) in parser.tool_calls.items() if tid])
+                       parser.tool_err.get(tid), dup, skill, phase, ts, model)
+                      for tid, (i, agent, name, skill, phase, ts, dup, model) in parser.tool_calls.items() if tid])
     conn.executemany("INSERT INTO turn_events VALUES (?,?,?,?,?,?,?)",
                      [(sid, ts, i, agent, skill, phase, kind) for ts, i, agent, skill, phase, kind in parser.events])
     conn.executemany("INSERT INTO mcp_defs VALUES (?,?,?,?)",
