@@ -32,7 +32,10 @@ The dashboard answers only on `127.0.0.1` and refuses requests from other hosts 
 - **Library** (file contents at full level only): the skills that you wrote, with their files, the STE check and
   Optimize (below).
 - **Benchmarks**: benchmark runs and answers.
-- **Breakdowns**: tokens by MCP server, tool, skill, owner, phase and subagent type, each with its finding.
+- **Breakdowns**: tokens by MCP server, tool, skill, owner, phase and subagent type, each with its finding. Its **Summary** section
+  shows the `tokscope summary` table (group by phase, skill, agent or model) for the filter bar, with Download CSV, Download JSON
+  and Copy. The group-by is `?by=` in the URL. `GET /api/summary?by=&format=json|csv` gives the same rows with the same filters
+  (without `by` and `format` it keeps returning the totals). The HTML report has the same section; its downloads are built in the browser.
 - **Managed** (full level only): your Claude Managed Agents, read through the `ant` CLI (below).
 
 ### Projects: MCP servers
@@ -171,7 +174,7 @@ Built-in tool and agent names and phase names do not change.
 | --- | --- |
 | `tokscope ingest [--project TEXT] [--session ID]` | Reads new transcripts into the database (incremental) |
 | `tokscope session ID [--json]` | Ingests one session and shows its tokens |
-| `tokscope summary [--by phase\|skill\|agent\|model] [--since DATE] [--project TEXT] [--limit N]` | Shows a table in the terminal |
+| `tokscope summary [--by phase\|skill\|agent\|model] [--format table\|json\|csv] [--since DATE] [--project TEXT] [--limit N]` | Shows a table in the terminal; json and csv print only the rows (keys `key, requests, prompt_tokens, output_tokens, cost_usd, carried_cost_usd`), the notes go to stderr |
 | `tokscope report [--out FILE] [--privacy LEVEL] [--since DATE] [--project TEXT]` | Writes the HTML report |
 | `tokscope open [same options as report]` | Ingests, writes the report and opens it |
 | `tokscope serve [--port N] [--interval S] [--no-open] [--privacy LEVEL]` | Starts the live dashboard |

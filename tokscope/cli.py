@@ -7,9 +7,10 @@ from pathlib import Path
 
 from . import __version__, paths
 from .core.calls import turn_calls
-from .core.ingest import CARRIED, connect, ingest, ingest_session
+from .core.ingest import connect, ingest, ingest_session
 from .core import tz
 from .core.pricing import API_EQ_NOTE, unpriced, unpriced_text
+from .core.summary import SUMMARY_SQL, rows as summary_rows, to_csv as summary_csv, to_json as summary_json
 from .core.privacy import LEVELS
 
 ROOT = paths.home()
@@ -17,36 +18,30 @@ DB = paths.db()
 PHASES = paths.phases()
 REPORT = paths.report()
 
-SUMMARY_SQL = {
-    "phase": "COALESCE(phase, 'unscoped')",
-    "skill": "COALESCE(skill, '(none)')",
-    "agent": "COALESCE(agent_type, 'main')",
-    "model": "model",
-}
-
-
 def summary(args):
-    key = SUMMARY_SQL[args.by]
     where, params = _filters(args)
     conn = connect(DB)  # creates the tables on a fresh install
-    rows = conn.execute(
-        f"""SELECT {key} AS k, count(*), sum(input + cache_read + cache_write_5m + cache_write_1h), sum(output),
-                   sum(cost_usd), sum(CASE WHEN {CARRIED} THEN cost_usd ELSE 0 END)
-            FROM requests r JOIN sessions s USING (session_id) {where}
-            GROUP BY k ORDER BY sum(cost_usd) DESC LIMIT ?""",
-        (*params, args.limit),
-    ).fetchall()
-    total = sum(r[4] or 0 for r in rows) or 1
-    # a phase's carried part comes from later prompts with no skill (see ingest.CARRIED)
-    carried = args.by == "phase"
-    print(f"{args.by:<40} {'requests':>9} {'prompt tok':>13} {'output tok':>11} {'API-eq $':>10} {'share':>6}"
-          + (f" {'carried':>8}" if carried else ""))
-    for k, n, prompt, out, cost, cr in rows:
-        print(f"{str(k)[:40]:<40} {n:>9,} {prompt or 0:>13,} {out or 0:>11,} {cost or 0:>10.2f} {(cost or 0) / total:>6.1%}"
-              + (f" {(cr or 0) / (cost or 1):>8.0%}" if carried else ""))
-    print(API_EQ_NOTE)
+    found = summary_rows(conn, args.by, where, params, args.limit)
+    fmt = getattr(args, "format", "table")
+    if fmt == "json":
+        print(summary_json(found))
+    elif fmt == "csv":
+        print(summary_csv(found), end="")
+    else:
+        total = sum(r["cost_usd"] for r in found) or 1
+        # a phase's carried part comes from later prompts with no skill (see ingest.CARRIED)
+        carried = args.by == "phase"
+        print(f"{args.by:<40} {'requests':>9} {'prompt tok':>13} {'output tok':>11} {'API-eq $':>10} {'share':>6}"
+              + (f" {'carried':>8}" if carried else ""))
+        for r in found:
+            cost = r["cost_usd"]
+            print(f"{r['key'][:40]:<40} {r['requests']:>9,} {r['prompt_tokens']:>13,} {r['output_tokens']:>11,} {cost:>10.2f} {cost / total:>6.1%}"
+                  + (f" {r['carried_cost_usd'] / (cost or 1):>8.0%}" if carried else ""))
+    # the notes are not data: with json or csv, stdout holds only the rows
+    note_out = sys.stdout if fmt == "table" else sys.stderr
+    print(API_EQ_NOTE, file=note_out)
     if note := unpriced_text(unpriced(conn, where, params)):
-        print(note)
+        print(note, file=note_out)
 
 
 def record_skill_versions(lines):
@@ -263,6 +258,7 @@ def main():
     pk.add_argument("name", nargs="?", help=argparse.SUPPRESS)
     ps = sub.add_parser("summary", help="print a cost table")
     ps.add_argument("--by", choices=SUMMARY_SQL, default="phase")
+    ps.add_argument("--format", choices=("table", "json", "csv"), default="table", help="json or csv print only the rows")
     pr = sub.add_parser("report", help="write the HTML report")
     po = sub.add_parser("open", help="ingest new transcripts, rebuild the HTML report and open it in the browser")
     for q in (pr, po):

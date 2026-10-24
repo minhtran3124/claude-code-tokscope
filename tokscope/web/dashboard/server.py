@@ -12,7 +12,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlparse
 
-from ...core import privacy
+from ...core import privacy, summary
 from ...experiments import optimize
 from ...features import library, projects
 from ...features import live as livemod
@@ -25,6 +25,20 @@ from .common import Filters, PAGES
 from .pages.library import JOB_ID
 from .pages.overview import _days, _totals
 from .shell import render, skills_moved
+
+
+def summary_rows_response(conn, qs):
+    """(code, body, content type) for /api/summary?by=&format=: the CLI's rows for the filter bar's filters."""
+    one = lambda k, default: (qs.get(k) or [default])[0].strip()  # noqa: E731
+    by, fmt = one("by", "phase"), one("format", "json")
+    if by not in summary.SUMMARY_SQL or fmt not in ("json", "csv"):
+        return 400, json.dumps({"error": "by is phase, skill, agent or model; format is json or csv"}), "application/json"
+    try:
+        limit = min(max(int(one("limit", str(summary.DEFAULT_LIMIT))), 1), 1000)
+    except ValueError:
+        return 400, json.dumps({"error": "limit is a number"}), "application/json"
+    found = summary.rows(conn, by, *Filters(qs).cond(), limit)
+    return (200, summary.to_csv(found), "text/csv; charset=utf-8") if fmt == "csv" else (200, summary.to_json(found), "application/json")
 
 
 def api(conn, name, qs, stamp):
@@ -235,6 +249,8 @@ def handler(db, live, port, level, token=None):
                                   "application/json")
             conn = privacy.redacted_copy(db, level) if level != "full" else connect(db)
             try:
+                if name == "api/summary" and ("by" in qs or "format" in qs):  # without them, the totals api() gives
+                    return self._send(*summary_rows_response(conn, qs))
                 if name.startswith("api/"):
                     try:
                         return self._send(200, json.dumps(api(conn, name[4:], qs, live.stamp)), "application/json")

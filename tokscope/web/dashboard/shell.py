@@ -14,7 +14,7 @@ from ..theme.classic import CLASSIC_CSS, CLASSIC_DASH_CSS, SKIN_APPLY
 from ..theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS, LAYOUT_TOKEN_CSS, LAYOUT_TOKEN_DASH_CSS
 from ..theme.brand import MARK, favicon_link
 from ...features.changes import BENCH_PROJECT
-from ..report.scripts import JS_BENCH, JS_CORE, JS_SESSIONS, JS_TREND
+from ..report.scripts import JS_BENCH, JS_CORE, JS_SESSIONS, JS_SUMMARY, JS_TREND
 from ..report.styles import CSS
 from .common import Filters, PAGES, RANGES, _q
 from .pages.benchmarks import page_benchmarks
@@ -116,11 +116,11 @@ def render(conn, name, qs, stamp, level="full", token=""):
             "library": lambda: page_library(conn, f, qs, level),
             "projects": lambda: page_projects(conn, f, qs, level),
             "benchmarks": lambda: page_benchmarks(conn, f),
-            "breakdowns": lambda: page_breakdowns(conn, f),
+            "breakdowns": lambda: page_breakdowns(conn, f, qs),
             "managed": lambda: page_managed(qs, level)}[name]()
     if (qs.get("partial") or [""])[0]:
         return body
-    scripts = (JS_CORE + (JS_SESSIONS if name == "sessions" else "") + JS_TREND + (JS_BENCH if name == "benchmarks" else "")
+    scripts = (JS_CORE + (JS_SESSIONS if name == "sessions" else "") + JS_TREND + (JS_BENCH if name == "benchmarks" else "") + (JS_SUMMARY if name == "breakdowns" else "")
                + (LIB_JS if name in ("library", "projects", "managed") else "") + (MANAGED_JS if name == "managed" else "") + DASH_JS)
     # on the Library, ?skill= is a skill's id, not the filter bar's skill name: other pages must not get it
     navf = Filters({**qs, "skill": [""]}) if name == "library" else f
