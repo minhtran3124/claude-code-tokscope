@@ -95,6 +95,7 @@ let coverShown = false;
 // the dashboard's own theme choice (localStorage tokscope-theme), read after each load so the cover matches it; null is
 // Auto, which follows the system. The first start has no choice yet and uses the system's.
 let themeDark = null;
+let loadFailed = false;  // the last main-frame load of the dashboard failed: its error page is not the dashboard
 
 function useDark() {
   return themeDark === null ? nativeTheme.shouldUseDarkColors : themeDark;
@@ -110,9 +111,10 @@ function showCover(message, spin = true) {
   const dark = useDark();
   if (!cover) {
     cover = new WebContentsView();
-    cover.setBackgroundColor(dark ? "#1d1a15" : "#f2efe7");  // the colour before the page paints
     cover.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    cover.webContents.on("will-navigate", (e) => e.preventDefault());  // the page has no links; keep it that way
   }
+  cover.setBackgroundColor(dark ? "#1d1a15" : "#f2efe7");  // the colour before the page paints, in the current theme
   if (!coverShown) { win.contentView.addChildView(cover); coverShown = true; }  // added last: it is on top
   cover.setBounds(coverBounds());
   cover.webContents.loadURL(statusPage(dark, message, spin)).catch(() => {});
@@ -133,38 +135,52 @@ function createWindow() {
     win.webContents.on(ev, (e, u) => { if (!base || !u.startsWith(base)) { e.preventDefault(); openExternal(u); } });
   }
   // the dashboard has painted: take the loading page away
+  // a failed load is followed by Chromium's error page and maybe a did-finish-load for it: keep the failure message then
+  win.webContents.on("did-start-navigation", (e, u, inPlace, isMain) => { if (isMain) loadFailed = false; });
   win.webContents.on("did-finish-load", async () => {
-    if (!base || !win.webContents.getURL().startsWith(base)) return;
+    if (!base || loadFailed || !win.webContents.getURL().startsWith(base)) return;
     hideCover();
     const choice = await win.webContents.executeJavaScript("localStorage.getItem('tokscope-theme')").catch(() => null);
     themeDark = choice === "dark" ? true : choice === "light" ? false : null;
   });
   win.webContents.on("did-fail-load", (e, code, desc, u, isMain) => {
-    if (isMain && code !== -3 && base && u.startsWith(base)) showFailure(`the dashboard did not load (${desc})`);  // -3 is an aborted load
+    if (isMain && code !== -3 && base && u.startsWith(base)) {  // -3 is an aborted load
+      loadFailed = true;
+      showFailure(`the dashboard did not load (${desc})`);
+    }
   });
   win.on("resize", () => { if (coverShown) cover.setBounds(coverBounds()); });
-  win.on("closed", () => { win = null; cover = null; coverShown = false; });
+  win.on("closed", () => {
+    if (cover) cover.webContents.close();
+    win = null; cover = null; coverShown = false;
+  });
   showCover("Starting tokscope");
 }
 
 // Reload (F5, Ctrl+R, Ctrl+Shift+R) covers the window with the loading page while the dashboard renders again.
 function reloadDashboard() {
   if (!win || !base) return;
+  const here = win.webContents.getURL();
   showCover("Reloading tokscope");
-  win.webContents.loadURL(base).catch(() => {});  // a failure arrives as did-fail-load
+  win.webContents.loadURL(here.startsWith(base) ? here : base).catch(() => {});  // a failure arrives as did-fail-load
 }
 
 // The default menu's Reload would reload the dashboard with no loading page, so the menu gets our own Reload items
 // (on Linux the menu sees Ctrl+R before the page does, so a key handler on the page would never run).
 function appMenu() {
+  const mac = process.platform === "darwin" ? [{ role: "appMenu" }] : [];
   return Menu.buildFromTemplate([
+    ...mac,
+    { role: "fileMenu" },
+    { role: "editMenu" },
     { label: "View", submenu: [
       { label: "Reload", accelerator: "CmdOrCtrl+R", click: reloadDashboard },
       { label: "Reload page", accelerator: "F5", click: reloadDashboard },
       { label: "Force reload", accelerator: "CmdOrCtrl+Shift+R", click: reloadDashboard },
       { role: "toggleDevTools" }, { type: "separator" }, { role: "resetZoom" }, { role: "zoomIn" }, { role: "zoomOut" },
+      { type: "separator" }, { role: "togglefullscreen" },
     ] },
-    { role: "editMenu" },
+    { role: "windowMenu" },
   ]);
 }
 
