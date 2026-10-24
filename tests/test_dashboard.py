@@ -92,6 +92,10 @@ class ServerTest(unittest.TestCase):
         self.addCleanup(self.server.server_close)
         self.addCleanup(self.server.shutdown)
 
+    def test_the_version_poll_has_the_keys_the_desktop_app_checks(self):
+        # desktop/main.js isTokscope() takes an answer with "stamp" and "live" for a tokscope dashboard
+        self.assertTrue({"stamp", "live"} <= set(json.loads(self.get("/api/version")[1])))
+
     def test_a_failed_ingest_shows_in_the_version_poll_and_the_page_script(self):
         self.live.error = "database is locked"
         self.assertEqual(json.loads(self.get("/api/version")[1])["error"], "database is locked")

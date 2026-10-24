@@ -25,9 +25,10 @@ function freePort() {
 function waitFor(url, tries = 600) {
   return new Promise((resolve, reject) => {
     const attempt = (n) => {
-      const req = http.get(new URL("api/version", url), (res) => { res.resume(); resolve(); });  // not the Overview: it can take over 2 s
+      const again = () => (n <= 0 ? reject(new Error("the tokscope server did not start")) : setTimeout(() => attempt(n - 1), 100));
+      const req = http.get(new URL("api/version", url), (res) => { res.resume(); if (res.statusCode === 200) resolve(); else again(); });  // not the Overview: it can take over 2 s
       req.setTimeout(2000, () => req.destroy());
-      req.on("error", () => (n <= 0 ? reject(new Error("the tokscope server did not start")) : setTimeout(() => attempt(n - 1), 100)));
+      req.on("error", again);
     };
     attempt(tries);
   });
@@ -45,7 +46,7 @@ function isTokscope(url) {
       res.setEncoding("utf8");
       res.on("data", (c) => { if (body.length < 65536) body += c; });
       res.on("end", () => {
-        try { const j = JSON.parse(body); resolve(res.statusCode === 200 && "stamp" in j && "live" in j); } catch (e) { resolve(false); }
+        try { const j = JSON.parse(body); resolve(res.statusCode === 200 && !!j && typeof j === "object" && "stamp" in j && "live" in j); } catch (e) { resolve(false); }
       });
     });
     req.setTimeout(2000, () => req.destroy());
