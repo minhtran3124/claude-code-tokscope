@@ -450,18 +450,18 @@ def _load_text_hash(parser, call):
 
 def _share_requests(conn, parser):
     """A fork copies earlier requests into a new transcript (issue #46); keep each with one session, the one that
-    sorts first by (first_ts, last_ts, id), so it does not depend on ingest order."""
+    sorts first by (first_ts, id): both are fixed once written, so a later resume cannot move the owner."""
     sid, m = parser.session_id, parser.meta
-    mine = (m["first_ts"] or "", m["last_ts"] or "", sid)
+    mine = (m["first_ts"] or "", sid)
     keys = list(parser.requests)
     for i in range(0, len(keys), 500):
         chunk = keys[i:i + 500]
         marks = ",".join("?" * len(chunk))
-        for key, other, first, last in conn.execute(
-                f"SELECT r.request_key, r.session_id, s.first_ts, s.last_ts FROM requests r "
+        for key, other, first in conn.execute(
+                f"SELECT r.request_key, r.session_id, s.first_ts FROM requests r "
                 f"JOIN sessions s USING (session_id) WHERE r.session_id != ? AND r.request_key IN ({marks})",
                 (sid, *chunk)).fetchall():
-            if (first or "", last or "", other) <= mine:
+            if (first or "", other) <= mine:
                 parser.requests.pop(key, None)
             else:
                 conn.execute("DELETE FROM requests WHERE session_id = ? AND request_key = ?", (other, key))

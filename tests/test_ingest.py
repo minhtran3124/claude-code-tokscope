@@ -81,7 +81,9 @@ class IngestTest(Fixture):
 
         base = [human("hi"), assistant("r1", out=40), human("again"), assistant("r2")]
         write("a-orig", base)
+        # the original is resumed after the fork, so its last_ts is the later one
         write("b-fork", base + [human("more", ts="2026-10-01T00:05:00Z"), assistant("r3")])
+        write("a-orig", base + [human("later", ts="2026-10-01T00:09:00Z")])
         for order in ("a-orig", "b-fork"):  # the same result whichever file is parsed first
             self.db.unlink(missing_ok=True)
             self.run_ingest()
