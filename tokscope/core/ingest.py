@@ -17,8 +17,7 @@ import re
 import sqlite3
 from pathlib import Path
 
-from . import tz
-from .pricing import cost_usd, refresh_costs
+from .pricing import cost_usd
 from .skills import canonical_name, loaded_text_hash
 
 PROJECTS_DIR = Path.home() / ".claude" / "projects"
@@ -46,7 +45,6 @@ CREATE TABLE IF NOT EXISTS requests (
     prompt_idx INTEGER, skill TEXT, phase TEXT,
     input INTEGER, output INTEGER, thinking INTEGER, cache_read INTEGER,
     cache_write_5m INTEGER, cache_write_1h INTEGER, cost_usd REAL,
-    web_search_requests INTEGER, web_fetch_requests INTEGER, speed TEXT, inference_geo TEXT,
     PRIMARY KEY (session_id, request_key)
 );
 CREATE TABLE IF NOT EXISTS subagents (
@@ -72,7 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_requests_ts ON requests (ts);
 """
 TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "headless_calls", "sessions")
 # bump when the parser records something new, so unchanged transcripts are parsed again once
-PARSER_VERSION = 13
+PARSER_VERSION = 11
 ARGS_RE = re.compile(r"<command-args>(.*?)</command-args>", re.S)
 PROMPT_CHARS = 160
 # a Bash command that starts a headless Claude Code session
@@ -187,10 +185,6 @@ def _usage_fields(usage):
         "cache_read": usage.get("cache_read_input_tokens") or 0,
         "cache_write_5m": cw5 or 0,
         "cache_write_1h": cw1 or 0,
-        "web_search_requests": (usage.get("server_tool_use") or {}).get("web_search_requests") or 0,
-        "web_fetch_requests": (usage.get("server_tool_use") or {}).get("web_fetch_requests") or 0,
-        "speed": usage.get("speed"),
-        "inference_geo": usage.get("inference_geo"),
     }
 
 
@@ -354,7 +348,7 @@ class SessionParser:
                 }
             else:
                 for name, value in fields.items():
-                    row[name] = max(row[name], value) if isinstance(value, int) else value or row[name]
+                    row[name] = max(row[name], value)
         for block in msg.get("content") or []:
             if not isinstance(block, dict) or block.get("type") != "tool_use":
                 continue
@@ -382,7 +376,7 @@ def session_signature(main_path):
 
 
 def connect(db_path):
-    conn = tz.register(sqlite3.connect(db_path))
+    conn = sqlite3.connect(db_path)
     conn.executescript(SCHEMA)
     if "result_chars" not in {c[1] for c in conn.execute("PRAGMA table_info(tool_calls)")}:
         conn.execute("ALTER TABLE tool_calls ADD COLUMN result_chars INTEGER")  # refilled by the PARSER_VERSION bump
@@ -390,12 +384,6 @@ def connect(db_path):
         conn.execute("ALTER TABLE skill_calls ADD COLUMN tool_use_id TEXT")  # joins a load to its version mark
     if "text_hash" not in {c[1] for c in conn.execute("PRAGMA table_info(skill_calls)")}:
         conn.execute("ALTER TABLE skill_calls ADD COLUMN text_hash TEXT")  # the SKILL.md text that load put in the context
-    have = {c[1] for c in conn.execute("PRAGMA table_info(requests)")}
-    for name, typ in (("web_search_requests", "INTEGER"), ("web_fetch_requests", "INTEGER"), ("speed", "TEXT"),
-                      ("inference_geo", "TEXT")):  # refilled by the PARSER_VERSION bump
-        if name not in have:
-            conn.execute(f"ALTER TABLE requests ADD COLUMN {name} {typ}")
-    refresh_costs(conn)
     columns = {c[1] for c in conn.execute("PRAGMA table_info(sessions)")}
     for name in ("entrypoint", "parent_session_id"):  # entrypoint is refilled by the PARSER_VERSION bump
         if name not in columns:
@@ -463,14 +451,12 @@ def store(conn, project, parser, signature):
                      [(sid, tid, c["cwds"], c["start_ts"], c["end_ts"], c["child_ids"])
                       for tid, c in parser.headless.items() if tid])
     conn.executemany(
-        "INSERT INTO requests VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO requests VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [
             (sid, r["request_key"], r["ts"], r["model"], r["agent_id"], r["agent_type"], r["prompt_idx"], r["skill"],
              r["phase"], r["input"], r["output"], r["thinking"], r["cache_read"], r["cache_write_5m"],
              r["cache_write_1h"],
-             cost_usd(r["model"], r["input"], r["output"], r["cache_read"], r["cache_write_5m"], r["cache_write_1h"],
-                      r["speed"], r["inference_geo"], r["web_search_requests"]),
-             r["web_search_requests"], r["web_fetch_requests"], r["speed"], r["inference_geo"])
+             cost_usd(r["model"], r["input"], r["output"], r["cache_read"], r["cache_write_5m"], r["cache_write_1h"]))
             for r in parser.requests.values()
         ],
     )
@@ -510,9 +496,6 @@ def ingest_session(db_path, phases_path, session_id, projects_dir=PROJECTS_DIR):
 
 
 def ingest(db_path, phases_path, projects_dir=PROJECTS_DIR, project_filter=None, log=print):
-    if not Path(projects_dir).is_dir():
-        log(f"ingest: no transcripts in {projects_dir} yet")
-        return 0, 0
     phases = load_phases(phases_path)
     conn = connect(db_path)
     known = dict(conn.execute("SELECT session_id, signature FROM sessions"))

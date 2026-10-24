@@ -2,7 +2,6 @@
 
 import html
 
-from ...core import tz
 from .. import charts
 
 
@@ -98,7 +97,7 @@ def _daily_chart(days, changes):
     if len(pts) > 1:
         out.append(f'<polyline class="ma" pathLength="1" points="{" ".join(pts)}"/>')
     for cid, at, note, *_ in changes:
-        i = index.get(tz.local_day(at))
+        i = index.get(at[:10])
         if i is None:
             continue
         x = pad_l + i * step + bw / 2

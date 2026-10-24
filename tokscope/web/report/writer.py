@@ -5,14 +5,14 @@ import json
 from datetime import datetime, timezone
 
 from ... import paths
-from ...core import privacy, tz
+from ...core import privacy
 from ..theme import fonts
 from ..theme.classic import CLASSIC_CSS, SKIN_APPLY, SKIN_BUTTON
 from ..theme.layout import LAYOUT_CSS, LAYOUT_TOKEN_CSS
 from ..theme.brand import MARK, favicon_link
 from ...features.changes import BENCH_PROJECT, list_changes
 from ...core.ingest import connect
-from ...core.pricing import API_EQ_NOTE, unpriced, unpriced_text
+from ...core.pricing import API_EQ_NOTE
 from .common import TOKENS
 from .scripts import JS, SORT_SEG
 from .sections.benchmarks import _benchmarks
@@ -30,11 +30,6 @@ PRIVACY_NOTE = {
     "numbers": "Numbers-only report: all text is removed, and skill, agent, tool, MCP server and task names are replaced "
                "by stable aliases (the same name gets the same alias in every report from this machine). Numbers are unchanged.",
 }
-
-
-def _unpriced(conn, cond, params):
-    note = unpriced_text(unpriced(conn, cond, params))
-    return f'<p class="note unpriced" role="note">{html.escape(note)}</p>' if note else ""
 
 
 def write_report(db_path, out_path, where="", params=(), tasks_dir=None, level="full"):
@@ -62,7 +57,7 @@ def write_report(db_path, out_path, where="", params=(), tasks_dir=None, level="
 
     changes = list_changes(conn)
     n_changed, versions_html = _skill_versions(conn, level)
-    days = conn.execute(f"SELECT localday(r.ts) d, sum({TOKENS}), sum(cost_usd) FROM requests r JOIN sessions s "
+    days = conn.execute(f"SELECT substr(r.ts,1,10) d, sum({TOKENS}), sum(cost_usd) FROM requests r JOIN sessions s "
                         f"USING (session_id) {cond} GROUP BY d ORDER BY d", params).fetchall()
     bench_head, bench_detail = _benchmarks(conn, tasks_dir)
     data = json.dumps(_sessions_json(conn, cond, params), separators=(",", ":")).replace("</", "<\\/")
@@ -89,7 +84,7 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 {f'<p class="privacy" role="note"><b>{level}</b> {PRIVACY_NOTE[level]}</p>' if level != "full" else ""}
 <p class="sub">{(first or '')[:10]} → {(last or '')[:10]} · real sessions (benchmarks separate) · generated {generated}</p>
 {_hero(conn, cond, params)}
-<div class="kpis">{kpi_html}</div>{_unpriced(conn, cond, params)}</div>
+<div class="kpis">{kpi_html}</div></div>
 
 <section class="card reveal" id="sessions"><h2>Sessions</h2>
 <p class="note"><span class="key"><i></i>main thread</span><span class="key"><i class="a"></i>subagents</span>
@@ -110,7 +105,7 @@ Sessions do different work, so a comparison describes them; for a controlled bef
 {bench_head}
 {_more("Benchmark details", "per-variant spread, main vs subagent tokens, every answer", bench_detail)}</section>
 
-{_more("Daily trend", f"tokens per day in {tz.label()}; the mustard line is the 7-day average; a dashed line marks a config change", _daily_chart(days, changes), "trend")}
+{_more("Daily trend", "tokens per day; the mustard line is the 7-day average; a dashed line marks a config change", _daily_chart(days, changes), "trend")}
 {_more("Config changes", f"{len(changes)} recorded; before/after medians per run", _change_cards(conn, changes), "changes")}
 {_more("Skill versions", f"{n_changed} skill{'' if n_changed == 1 else 's'} changed. A version is a hash of the skill's folder; each row is the median tokens of one "
        f"prompt's requests while that version was loaded. Few loads = fewer than {FEW_LOADS}: watch, do not judge. "

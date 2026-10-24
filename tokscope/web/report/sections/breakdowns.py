@@ -4,7 +4,7 @@ import html
 from datetime import datetime, timedelta, timezone
 from statistics import median
 
-from ....core import skills, tz
+from ....core import skills
 from ... import charts
 from ....core.calls import est_tokens, mcp_server
 from ....core.ingest import CARRIED
@@ -27,12 +27,12 @@ def _weekly_phases(conn, cond, params, today=None):
     """Tokens per phase per calendar week (Monday start), oldest first; the current week is labelled as partial."""
     weeks = {}
     for day, phase, t in conn.execute(
-            f"SELECT localday(r.ts), COALESCE(phase,'unscoped'), sum({TOKENS}) FROM requests r JOIN sessions s "
+            f"SELECT substr(r.ts,1,10), COALESCE(phase,'unscoped'), sum({TOKENS}) FROM requests r JOIN sessions s "
             f"USING (session_id) {cond} GROUP BY 1, 2", params):
         d = datetime.fromisoformat(day).date()
         by = weeks.setdefault(d - timedelta(days=d.weekday()), {})
         by[phase] = by.get(phase, 0) + (t or 0)
-    today = today or tz.now().date()
+    today = today or datetime.now(timezone.utc).date()
     return [(f"{w:%b %d}" + (" so far" if w > today - timedelta(days=7) else ""), weeks[w]) for w in sorted(weeks)]
 
 

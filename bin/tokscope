@@ -1,4 +1,3 @@
 #!/bin/sh
-# resolve a symlink (e.g. ~/.local/bin/tokscope) back to the repo, but stay in the caller's folder so relative paths work
-export PYTHONPATH="$(dirname "$(readlink -f "$0")")/..${PYTHONPATH:+:$PYTHONPATH}"
-exec python3 -m tokscope.cli "$@"
+# resolve a symlink (e.g. ~/.local/bin/tokscope) back to the repo before cd-ing to its root
+cd "$(dirname "$(readlink -f "$0")")/.." && exec python3 -m tokscope.cli "$@"

@@ -1,11 +1,5 @@
 # Decisions
 
-## 2026-10-24 · Resumed and forked sessions are not deduplicated across files (issue #46)
-
-| Decision | Why | Rejected |
-| --- | --- | --- |
-| Requests stay keyed per session `(session_id, request_key)`. No cross-file dedup. | Not confirmed on real data: in 333 transcripts under `~/.claude/projects` (16338 request keys, read-only scan), no `requestId`, `message.id` or `uuid` appears in more than one file, and no line carries a `sessionId` other than its file's name. So resume writes to the same file and nothing is copied. A fork or rewind that copies history was not among the local files, so it is unchecked: rerun the scan if one shows up. | A global `(message.id, requestId)` key or `copied_from` column (no copies to remove; would hide a real request under another session). |
-
 ## 2026-10-22 · Desktop app is an optional Electron window
 
 | Decision | Why | Rejected |
