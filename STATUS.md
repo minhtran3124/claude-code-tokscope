@@ -18,6 +18,7 @@ Review and merge the final PR to main; then close #89 and #90.
 - GitHub Actions jobs do not start: account payment or spending limit (Settings > Billing).
 
 ## Recent
+- 2026-10-24: #97 `tokscope serve --projects-dir PATH` (a UAT server with a throwaway home no longer ingests every transcript: 40 sample files gave 40 sessions and a 1.9 MB database, against 44 MB); `uat.md` builds a sample and notes the `python -m` cwd and port-kill pitfalls from PR 94/96; PR open.
 - 2026-10-24: merged #95; first open showed a white window and the Overview took 2.8 s: `tz.local_day` now caches per minute (the SQL function ran strptime 144k times; Overview 2.8 s to 0.9 s on a 64 MB database), the desktop window opens at once with a loading page and the paper colour, and the dashboard shows a top bar and dims the page while the next page loads; PR open.
 - 2026-10-24: merged #94 (Time zone setting), service restarted, desktop app reinstalled; desktop window did not open because the Overview takes about 2.7 s on this database and `desktop/main.js` probed it with a 2 s timeout (then started a second server and retried forever); it now probes `/api/version`; PR open.
 - 2026-10-24: times follow a Time zone setting (Local default, UTC; sidebar control, saved in localStorage `tokscope-tz`): session rows, day groups, session detail, Latest session, skill change notes, optimize start and report stamp use `<time data-ts>` rewritten by `tzSync`; 384 tests pass; not yet checked in a browser.

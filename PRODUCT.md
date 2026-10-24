@@ -197,7 +197,7 @@ Built-in tool and agent names and phase names do not change.
 | `tokscope summary [--by phase\|skill\|agent\|model] [--format table\|json\|csv] [--since DATE] [--project TEXT] [--limit N]` | Shows a table in the terminal; json and csv print only the rows (keys `key, requests, prompt_tokens, output_tokens, cost_usd, carried_cost_usd`), the notes go to stderr |
 | `tokscope report [--out FILE] [--privacy LEVEL] [--since DATE] [--project TEXT]` | Writes the HTML report |
 | `tokscope open [same options as report]` | Ingests, writes the report and opens it |
-| `tokscope serve [--port N] [--interval S] [--no-open] [--privacy LEVEL]` | Starts the live dashboard |
+| `tokscope serve [--port N] [--interval S] [--no-open] [--privacy LEVEL] [--projects-dir PATH]` | Starts the live dashboard |
 | `tokscope skills [SKILL]` | Lists skill versions |
 | `tokscope skills import [SKILL]` | Recovers older skill versions from transcripts |
 | `tokscope change [NOTE] [--agent A] [--skill S] [--at TIME] [--days N]` | Records or lists config changes |

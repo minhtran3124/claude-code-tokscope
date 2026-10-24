@@ -2,6 +2,7 @@ import re
 import json
 import os
 import re
+import sys
 import tempfile
 import threading
 import time
@@ -790,3 +791,15 @@ class OverviewTest(unittest.TestCase):
         self.assertEqual((first["projects"], first["library"]), (2, 3))     # the Projects page's folded groups, benchmark rows left out
         self.assertEqual(lib.call_count, 1)                                 # the second render reads the cache
         self.assertEqual(set(shell._nav_counts(self.conn, "numbers")), {"sessions"})
+
+
+class ServeProjectsDirTest(unittest.TestCase):
+    def serve_args(self, *argv):
+        from tokscope import cli
+        with mock.patch.object(sys, "argv", ["tokscope", "serve", "--no-open", *argv]), mock.patch.object(dashboard, "serve") as serve:
+            cli.main()
+        return serve.call_args
+
+    def test_serve_reads_the_transcripts_folder_it_is_given_and_the_default_ones_otherwise(self):
+        self.assertEqual(self.serve_args("--projects-dir", "/sample", "--privacy", "redacted").kwargs["projects_dir"], "/sample")
+        self.assertIsNone(self.serve_args().kwargs["projects_dir"])  # None: ingest picks ~/.claude/projects and the others
