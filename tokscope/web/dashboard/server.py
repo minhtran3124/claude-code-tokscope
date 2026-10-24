@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, quote, urlparse
 from ...core import privacy
 from ...experiments import optimize
 from ...features import library, projects
+from ...features import live as livemod
 from ...integrations import managed, registry
 from ..theme import fonts
 from ..theme.brand import FAVICON
@@ -228,7 +229,10 @@ def handler(db, live, port, level, token=None):
                 return self._redirect("/managed" + (f"?agent={quote(pick, safe='')}" if pick else ""))
             if name == "api/version":
                 # pages poll this every 2 s: answer before the database (a redacted copy is a full backup)
-                return self._send(200, json.dumps({"stamp": live.stamp}), "application/json")
+                return self._send(200, json.dumps({"stamp": live.stamp, "live": livemod.signature(livemod.running())}), "application/json")
+            if name == "api/live":  # which sessions are open and busy right now (files in ~/.claude/sessions, not the database)
+                return self._send(200, json.dumps({s["id"]: {"status": s["status"], "entry": s["entry"]} for s in livemod.running()}),
+                                  "application/json")
             conn = privacy.redacted_copy(db, level) if level != "full" else connect(db)
             try:
                 if name.startswith("api/"):

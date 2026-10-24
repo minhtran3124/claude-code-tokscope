@@ -5,7 +5,7 @@ import html
 from datetime import date, datetime, timedelta, timezone
 
 from ....core import skills
-from ....features import library
+from ....features import library, live
 from ... import charts
 from ....features.changes import list_changes
 from ....core.pricing import API_EQ_NOTE
@@ -425,12 +425,27 @@ def _daily_svg(days, changes, versions, w, h, pad_l, labels, cls):
     return "".join(out)
 
 
+def _running():
+    """Sessions open right now: the count, how many are working, a pulsing dot while any is (files, not the database)."""
+    open_ = live.running()
+    busy = sum(s["status"] == "busy" for s in open_)
+    if not open_:
+        return '<p class="runnow none"><span class="dot off"></span>No Claude Code session is open</p>'
+    by = {}
+    for s in open_:
+        by[s["entry"]] = by.get(s["entry"], 0) + 1
+    where = " · ".join(f"{n} in {e}" for e, n in sorted(by.items()))
+    return (f'<p class="runnow"><span class="dot live{" busy-now" if busy else ""}"></span><b data-count="{len(open_)}" data-kind="int" '
+            f'data-key="running">{len(open_)}</b> session{"s" if len(open_) != 1 else ""} running'
+            f'<span class="note">{busy} working · {len(open_) - busy} waiting for you · {html.escape(where)}</span></p>')
+
+
 def page_overview(conn, f):
     cmp = _window(conn, f)
     rows = _day_rows(conn, f)
     versions = _version_marks(conn, f, rows[0][0], rows[-1][0]) if rows else []
     return "".join([
-        f'<section class="card answer live-card"><h2><span class="dot"></span>Today</h2><div data-region="today">{_today(conn, f)}</div></section>',
+        f'<section class="card answer live-card"><h2><span class="dot"></span>Today</h2><div data-region="running">{_running()}</div><div data-region="today">{_today(conn, f)}</div></section>',
         f'<div data-region="kpis">{_kpis(conn, f)}</div>',
         f'<section class="card"><h2>Biggest movers</h2><p class="note">{f.label()}, tokens per day against the window before</p>'
         f'<div data-region="changed">{_movers(conn, f, cmp)}<h3>New skill versions</h3>{_new_versions(conn, f)}</div></section>',
