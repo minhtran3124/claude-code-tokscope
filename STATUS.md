@@ -9,7 +9,7 @@ updated_by: claude   # claude | manual
 # claude-code-tokscope — Status
 
 ## Summary
-On main at v0.2.0: dashboard redesign (#23), Managed page with Pause/Unpause and agent config view, and the desktop app are merged. The latest work split report.py and dashboard.py into packages (#73, #74).
+On main at v0.2.0: dashboard redesign (#23), Managed page with Pause/Unpause and agent config view, and the desktop app are merged. The latest work added running sessions (#75): Overview counts the open sessions with a pulsing dot, Sessions rows show where each runs; before that, report.py and dashboard.py were split into packages (#73, #74).
 
 ## Next step
 Try Pause / Unpause once on a real deployment; then close #23 after a look at the dashboard at 1440 and 375 px.
