@@ -17,6 +17,7 @@ import re
 import sqlite3
 from pathlib import Path
 
+from . import tz
 from .pricing import cost_usd
 from .skills import canonical_name, loaded_text_hash
 
@@ -376,7 +377,7 @@ def session_signature(main_path):
 
 
 def connect(db_path):
-    conn = sqlite3.connect(db_path)
+    conn = tz.register(sqlite3.connect(db_path))
     conn.executescript(SCHEMA)
     if "result_chars" not in {c[1] for c in conn.execute("PRAGMA table_info(tool_calls)")}:
         conn.execute("ALTER TABLE tool_calls ADD COLUMN result_chars INTEGER")  # refilled by the PARSER_VERSION bump

@@ -16,6 +16,7 @@ import re
 import sqlite3
 
 from .. import paths
+from . import tz
 from .calls import mcp_server
 
 LEVELS = ("full", "redacted", "numbers")
@@ -156,7 +157,7 @@ class Redactor:
 def redacted_copy(db_path, level, where="", params=(), redactor=None):
     """An in-memory copy of the database, filtered by the report's WHERE clause on the real values, then redacted."""
     src = sqlite3.connect(db_path)
-    conn = sqlite3.connect(":memory:")
+    conn = tz.register(sqlite3.connect(":memory:"))
     src.backup(conn)
     src.close()
     if where:

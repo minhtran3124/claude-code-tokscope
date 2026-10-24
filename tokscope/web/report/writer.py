@@ -5,7 +5,7 @@ import json
 from datetime import datetime, timezone
 
 from ... import paths
-from ...core import privacy
+from ...core import privacy, tz
 from ..theme import fonts
 from ..theme.classic import CLASSIC_CSS, SKIN_APPLY, SKIN_BUTTON
 from ..theme.layout import LAYOUT_CSS, LAYOUT_TOKEN_CSS
@@ -57,7 +57,7 @@ def write_report(db_path, out_path, where="", params=(), tasks_dir=None, level="
 
     changes = list_changes(conn)
     n_changed, versions_html = _skill_versions(conn, level)
-    days = conn.execute(f"SELECT substr(r.ts,1,10) d, sum({TOKENS}), sum(cost_usd) FROM requests r JOIN sessions s "
+    days = conn.execute(f"SELECT localday(r.ts) d, sum({TOKENS}), sum(cost_usd) FROM requests r JOIN sessions s "
                         f"USING (session_id) {cond} GROUP BY d ORDER BY d", params).fetchall()
     bench_head, bench_detail = _benchmarks(conn, tasks_dir)
     data = json.dumps(_sessions_json(conn, cond, params), separators=(",", ":")).replace("</", "<\\/")
@@ -105,7 +105,7 @@ Sessions do different work, so a comparison describes them; for a controlled bef
 {bench_head}
 {_more("Benchmark details", "per-variant spread, main vs subagent tokens, every answer", bench_detail)}</section>
 
-{_more("Daily trend", "tokens per day; the mustard line is the 7-day average; a dashed line marks a config change", _daily_chart(days, changes), "trend")}
+{_more("Daily trend", f"tokens per day in {tz.label()}; the mustard line is the 7-day average; a dashed line marks a config change", _daily_chart(days, changes), "trend")}
 {_more("Config changes", f"{len(changes)} recorded; before/after medians per run", _change_cards(conn, changes), "changes")}
 {_more("Skill versions", f"{n_changed} skill{'' if n_changed == 1 else 's'} changed. A version is a hash of the skill's folder; each row is the median tokens of one "
        f"prompt's requests while that version was loaded. Few loads = fewer than {FEW_LOADS}: watch, do not judge. "

@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import quote, urlencode
 
 from ... import paths
+from ...core import tz
 from ...features import library, projects
 from ..theme import fonts
 from ..theme.classic import CLASSIC_CSS, CLASSIC_DASH_CSS, SKIN_APPLY
@@ -96,7 +97,7 @@ def _range_dates(f):
     """The exact days the applied range covers, in local time, shown after Apply."""
     if not f.days:
         return '<span class="range-dates note">all time</span>'
-    first, last = (f.now - timedelta(days=f.days)).astimezone(), f.now.astimezone()
+    first, last = (f.now - timedelta(days=f.days)).astimezone(tz.zone()), f.now.astimezone(tz.zone())
     return f'<span class="range-dates note">{first:%d %b %Y} – {last:%d %b %Y}</span>'
 
 
