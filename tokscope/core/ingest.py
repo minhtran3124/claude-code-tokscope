@@ -72,7 +72,7 @@ CREATE INDEX IF NOT EXISTS idx_requests_ts ON requests (ts);
 """
 TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "headless_calls", "sessions")
 # bump when the parser records something new, so unchanged transcripts are parsed again once
-PARSER_VERSION = 13
+PARSER_VERSION = 14
 ARGS_RE = re.compile(r"<command-args>(.*?)</command-args>", re.S)
 PROMPT_CHARS = 160
 # a Bash command that starts a headless Claude Code session
@@ -448,10 +448,30 @@ def _load_text_hash(parser, call):
     return loaded_text_hash(parser.skill_texts[tid], parser.skill_args.get(tid)) if tid in parser.skill_texts else None
 
 
+def _share_requests(conn, parser):
+    """A fork copies earlier requests into a new transcript (issue #46); keep each with one session, the one that
+    sorts first by (first_ts, id): both are fixed once written, so a later resume cannot move the owner."""
+    sid, m = parser.session_id, parser.meta
+    mine = (m["first_ts"] or "", sid)
+    keys = list(parser.requests)
+    for i in range(0, len(keys), 500):
+        chunk = keys[i:i + 500]
+        marks = ",".join("?" * len(chunk))
+        for key, other, first in conn.execute(
+                f"SELECT r.request_key, r.session_id, s.first_ts FROM requests r "
+                f"JOIN sessions s USING (session_id) WHERE r.session_id != ? AND r.request_key IN ({marks})",
+                (sid, *chunk)).fetchall():
+            if (first or "", other) <= mine:
+                parser.requests.pop(key, None)
+            else:
+                conn.execute("DELETE FROM requests WHERE session_id = ? AND request_key = ?", (other, key))
+
+
 def store(conn, project, parser, signature):
     sid = parser.session_id
     for table in TABLES:
         conn.execute(f"DELETE FROM {table} WHERE session_id = ?", (sid,))
+    _share_requests(conn, parser)
     m = parser.meta
     conn.execute(
         "INSERT INTO sessions (session_id, project, cwd, title, version, first_ts, last_ts, prompts, signature, entrypoint) "
