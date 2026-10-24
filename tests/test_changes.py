@@ -47,6 +47,42 @@ class ChangeTest(unittest.TestCase):
         self.assertEqual(r["after"]["models"], ["claude-opus-5-5"])
         self.assertIn("-80%", impact_text(self.conn, change))
 
+    def calls(self, session, agent_id, agent_type, day, failed, total, skill=None, interrupts=0):
+        self.conn.execute("INSERT OR IGNORE INTO subagents (session_id, agent_id, agent_type) VALUES (?,?,?)",
+                          (session, agent_id, agent_type))
+        for i in range(total):
+            self.conn.execute("INSERT INTO tool_calls (session_id, tool_use_id, agent_id, name, is_error, repeat, skill, ts) "
+                              "VALUES (?,?,?,'Bash',?,0,?,?)",
+                              (session, f"{agent_id}-{day}-{i}", agent_id, int(i < failed), skill, ts(day)))
+        for _ in range(interrupts):
+            self.conn.execute("INSERT INTO turn_events (session_id, ts, agent_id, skill, kind) VALUES (?,?,?,?,'interrupt')",
+                              (session, ts(day), agent_id, skill))
+
+    def test_the_error_rate_is_counted_on_both_sides_next_to_tokens(self):
+        self.run_agent("real", "a1", -2, 1000)
+        self.run_agent("real", "a2", 2, 1000)
+        self.calls("real", "a1", "reviewer", -2, 1, 10)
+        self.calls("real", "a2", "reviewer", 2, 4, 10, interrupts=1)
+        self.calls("real", "x", "coding", 2, 10, 10)  # another agent type
+        self.calls("bench", "b", "reviewer", 2, 10, 10)  # an experiment
+        add_change(self.conn, "reviewer: new prompt", agent_type="reviewer", at=AT.isoformat())
+        change = list_changes(self.conn)[0]
+
+        r = impact(self.conn, change, days=14)
+
+        self.assertEqual((r["before"]["errors"]["errors"], r["before"]["errors"]["calls"]), (1, 10))
+        self.assertEqual((r["after"]["errors"]["errors"], r["after"]["errors"]["calls"], r["after"]["errors"]["interrupts"]),
+                         (4, 10, 1))
+        self.assertIn("errors 4/10 calls (40.0%)", impact_text(self.conn, change))
+        self.assertIn("error rate 10.0% -> 40.0%", impact_text(self.conn, change))
+
+    def test_a_skill_change_counts_the_calls_made_while_that_skill_ran(self):
+        self.calls("real", "m", None, 1, 2, 5, skill="review")
+        self.calls("real", "m2", None, 1, 5, 5, skill="other")
+        add_change(self.conn, "review rewrite", skill="review", at=AT.isoformat())
+        r = impact(self.conn, list_changes(self.conn)[0], days=14)
+        self.assertEqual((r["after"]["errors"]["errors"], r["after"]["errors"]["calls"]), (2, 5))
+
     def test_benchmark_sessions_and_other_agents_are_left_out(self):
         self.run_agent("real", "a1", 1, 500)
         self.run_agent("bench", "b1", 1, 99999)  # experiment, not real work

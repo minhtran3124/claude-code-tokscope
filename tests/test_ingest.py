@@ -22,9 +22,11 @@ def human(text, ts="2026-10-01T00:00:00Z"):
     return {"type": "user", "turnOrigin": "human", "timestamp": ts, "message": {"role": "user", "content": text}}
 
 
-def result(tool_use_id, content):
-    return {"type": "user", "toolUseResult": {}, "message": {"role": "user", "content": [
-        {"type": "tool_result", "tool_use_id": tool_use_id, "content": content}]}}
+def result(tool_use_id, content, is_error=False):
+    block = {"type": "tool_result", "tool_use_id": tool_use_id, "content": content}
+    if is_error:
+        block["is_error"] = True
+    return {"type": "user", "toolUseResult": {}, "message": {"role": "user", "content": [block]}}
 
 
 def notification(text):
@@ -68,6 +70,67 @@ class Fixture(unittest.TestCase):
 
     def rows(self, sql):
         return sqlite3.connect(self.db).execute(sql).fetchall()
+
+
+class ErrorTest(Fixture):
+    def test_failed_calls_are_classified_and_a_repeat_needs_the_same_input(self):
+        edit = {"file_path": "a.py", "old_string": "x", "new_string": "y"}
+        self.write_main([
+            human("go"),
+            assistant("r1", tools=[("t1", "Edit", edit), ("t2", "Bash", {"command": "false"}), ("t3", "mcp__srv__get", {}),
+                                   ("t4", "Read", {"file_path": "a.py"}), ("t5", "Edit", edit)]),
+            result("t1", "<tool_use_error>String to replace not found in file.</tool_use_error>", True),
+            result("t2", "Exit code 1\nboom", True),
+            result("t3", "Error: 500", True),
+            result("t4", "fine"),
+            assistant("r2", tools=[("t6", "Read", {"file_path": "a.py"}), ("t7", "Read", {"file_path": "b.py"}),
+                                   ("t8", "Bash", {"command": "cat /root/x"}), ("t9", "Bash", {"command": "sleep 9"})]),
+            result("t6", "fine"), result("t7", "File does not exist.", True),
+            result("t8", "cat: /root/x: Permission denied", True), result("t9", "Command timed out after 2m", True),
+            human("again"),
+            assistant("r3", tools=[("t10", "Read", {"file_path": "a.py"})]),
+        ])
+        self.run_ingest()
+        got = {t: tuple(r) for t, *r in self.rows("SELECT tool_use_id, is_error, err_class, repeat FROM tool_calls")}
+        self.assertEqual(got["t1"], (1, "edit_mismatch", 0))
+        self.assertEqual(got["t2"], (1, "exit_code", 0))
+        self.assertEqual(got["t3"], (1, "mcp", 0))
+        self.assertEqual(got["t4"], (0, None, 0))
+        self.assertEqual(got["t5"][2], 1)  # the same Edit again
+        self.assertEqual(got["t6"][2], 1)  # the same Read again in the prompt
+        self.assertEqual(got["t7"], (1, "not_found", 0))  # a different input is not a repeat
+        self.assertEqual(got["t8"], (1, "permission", 0))
+        self.assertEqual(got["t9"], (1, "timeout", 0))
+        self.assertEqual(got["t10"], (0, None, 0))  # a new prompt starts over
+
+    def test_interrupts_api_errors_and_retries_are_events_of_the_prompt_and_skill(self):
+        err = assistant("e1", model="<synthetic>")
+        err["isApiErrorMessage"] = True
+        retry = {"type": "system", "subtype": "api_error", "timestamp": "2026-10-01T00:00:02Z", "retryAttempt": 1}
+        self.write_main([human("<command-message>uat</command-message>\n<command-name>/uat</command-name>"), assistant("r1"), retry, err, human("[Request interrupted by user]"), human("next")])
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT prompt_idx, skill, kind FROM turn_events ORDER BY rowid"),
+                         [(1, "uat", "retry"), (1, "uat", "api_error"), (1, "uat", "interrupt")])
+        self.assertEqual(self.rows("SELECT prompts FROM sessions"), [(2,)])
+
+    def test_resuming_a_session_keeps_the_repeat_flags_of_a_full_parse(self):
+        main = self.project / f"{SID}.jsonl"
+        call = [("t1", "Read", {"file_path": "a"})]
+        self.write_main([human("go"), assistant("r1", tools=call), result("t1", "ok")])
+        self.run_ingest()
+        with open(main, "a") as f:
+            f.write(json.dumps(assistant("r2", tools=[("t2", "Read", {"file_path": "a"})])) + "\n")
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT tool_use_id, repeat FROM tool_calls ORDER BY tool_use_id"), [("t1", 0), ("t2", 1)])
+
+    def test_a_database_from_before_the_error_columns_gains_them(self):
+        old = sqlite3.connect(self.db)
+        old.execute("CREATE TABLE tool_calls (session_id TEXT, tool_use_id TEXT, prompt_idx INTEGER, agent_id TEXT, "
+                    "name TEXT, result_chars INTEGER, PRIMARY KEY (session_id, tool_use_id))")
+        old.commit()
+        old.close()
+        columns = {c[1] for c in connect(self.db).execute("PRAGMA table_info(tool_calls)")}
+        self.assertTrue({"is_error", "err_class", "repeat", "skill", "phase", "ts"} <= columns)
 
 
 class SharedConnectionTest(Fixture):

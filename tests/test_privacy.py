@@ -55,8 +55,8 @@ class PrivacyTest(unittest.TestCase):
         conn.execute("INSERT INTO prompts VALUES ('s-real-0001', 1, ?, ?)", (ts(1), c["prompt"] + " " + c["email"]))
         conn.execute("INSERT INTO subagents (session_id, agent_id, agent_type, description, prompt_idx) VALUES "
                      "('s-real-0001', 'a1', ?, ?, 1)", (NAMES["agent"], c["desc"]))
-        conn.execute("INSERT INTO tool_calls VALUES ('s-real-0001', 't1', 1, NULL, ?, 400)", (NAMES["tool"],))
-        conn.execute("INSERT INTO tool_calls VALUES ('s-real-0001', 't2', 1, NULL, 'Read', 800)")
+        conn.execute("INSERT INTO tool_calls (session_id, tool_use_id, prompt_idx, agent_id, name, result_chars) VALUES ('s-real-0001', 't1', 1, NULL, ?, 400)", (NAMES["tool"],))
+        conn.execute("INSERT INTO tool_calls (session_id, tool_use_id, prompt_idx, agent_id, name, result_chars) VALUES ('s-real-0001', 't2', 1, NULL, 'Read', 800)")
         conn.execute("INSERT INTO skill_calls (session_id, ts, skill, phase, source, agent_id, prompt_idx) "
                      "VALUES ('s-real-0001', ?, ?, ?, 'user', NULL, 1)",
                      (ts(1), NAMES["skill"], "other:" + NAMES["skill"]))

@@ -4,6 +4,8 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from statistics import median
 
+from ..core import errors
+
 CHANGES_SCHEMA = """
 CREATE TABLE IF NOT EXISTS changes (
     id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, note TEXT NOT NULL,
@@ -73,11 +75,22 @@ def impact(conn, change, days=14):
     # the before-window matches the elapsed after-window, so a 2-day-old change compares 2 days to 2 days
     before_start = at - (span if span > timedelta(0) else timedelta(days=days))
     iso = lambda d: d.isoformat()  # noqa: E731
+    who, value = ("agent", change[3]) if change[3] else ("skill", change[4])
+
+    def side(start, end):
+        return {**_summary(_units(conn, change, iso(start), iso(end))),
+                "errors": errors.window(conn, who, value, iso(start), iso(end), BENCH_PROJECT)}
     return {
-        "before": _summary(_units(conn, change, iso(before_start), iso(at))),
-        "after": _summary(_units(conn, change, iso(at), iso(after_end))),
+        "before": side(before_start, at),
+        "after": side(at, after_end),
         "window_days": round(max(span.total_seconds(), 0) / 86400, 1),
     }
+
+
+def errors_text(e):
+    """`errors 3/40 calls (7.5%), 2 repeats, 1 interrupt` for the totals errors.window gives."""
+    return (f"errors {e['errors']}/{e['calls']} calls ({errors.pct(e['errors'], e['calls'])}), {e['repeats']} repeats, "
+            f"{e['interrupts']} interrupts, {e['api_errors']} API errors")
 
 
 def impact_text(conn, change, days=14):
@@ -92,7 +105,10 @@ def impact_text(conn, change, days=14):
             continue
         lines.append(f"  {side:<6}  n={s['n']:<4} tokens median {s['tokens_median']:>12,.0f}  output {s['output_median']:>8,.0f}  "
                      f"(${s['usd_median']:.3f} API-eq)  {','.join(s['models'])}")
+        lines.append(f"  {'':<6}  {errors_text(s['errors'])}")
     b, a = r["before"], r["after"]
     if b["n"] and a["n"] and b["tokens_median"]:
-        lines.append(f"  change  tokens/{unit} {a['tokens_median'] / b['tokens_median'] - 1:+.0%}")
+        lines.append(f"  change  tokens/{unit} {a['tokens_median'] / b['tokens_median'] - 1:+.0%}"
+                     + (f"  error rate {errors.pct(b['errors']['errors'], b['errors']['calls'])} -> "
+                        f"{errors.pct(a['errors']['errors'], a['errors']['calls'])}" if b["errors"]["calls"] and a["errors"]["calls"] else ""))
     return "\n".join(lines)
