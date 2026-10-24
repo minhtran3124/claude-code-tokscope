@@ -21,6 +21,15 @@ RATES = {
     "claude-sonnet-4-6": (3.0, 15.0, 0.30),
     "claude-haiku-5-5": (0.10, 0.50, 0.01),
     "claude-haiku-4-5": (1.0, 5.0, 0.10),
+    "claude-mythos-5-1": (10.0, 50.0, 0.25),
+    "claude-mythos-5": (10.0, 50.0, 1.0),
+    "claude-opus-4-5": (5.0, 25.0, 0.50),
+    "claude-opus-4-1": (15.0, 75.0, 1.50),
+    "claude-opus-4": (15.0, 75.0, 1.50),
+    "claude-sonnet-4-5": (3.0, 15.0, 0.30),
+    "claude-sonnet-4": (3.0, 15.0, 0.30),
+    "claude-haiku-3-5": (0.80, 4.0, 0.08),
+    "claude-3-5-haiku": (0.80, 4.0, 0.08),
 }
 # Haiku 5.5 bills prompts above 100K tokens at 5x
 LONG_PROMPT = {"claude-haiku-5-5": (100_000, 5.0)}
@@ -31,8 +40,8 @@ def normalize(model):
     # dated snapshots (claude-haiku-4-5-20251001) share the undated rate
     if model in RATES:
         return model
-    base = model.rsplit("-", 1)[0]
-    return base if base in RATES and model.rsplit("-", 1)[1].isdigit() else model
+    base, _, stamp = model.rpartition("-")
+    return base if base in RATES and len(stamp) == 8 and stamp.isdigit() else model  # a snapshot date, not a minor version
 
 
 def cost_usd(model, inp, out, cache_read, cw5m, cw1h):
@@ -48,3 +57,19 @@ def cost_usd(model, inp, out, cache_read, cw5m, cw1h):
     return (
         inp * r_in + out * r_out + cache_read * r_read + cw5m * r_in * WRITE_5M + cw1h * r_in * WRITE_1H
     ) / 1_000_000
+
+
+def unpriced(conn, cond="", params=()):
+    """[(model, requests)] in the range whose cost is NULL; cond is a WHERE clause over requests r and sessions s."""
+    cond = f"{cond} AND" if cond else "WHERE"
+    return conn.execute(
+        f"SELECT r.model, count(*) FROM requests r JOIN sessions s USING (session_id) {cond} r.cost_usd IS NULL "
+        f"GROUP BY r.model ORDER BY 2 DESC", tuple(params)).fetchall()
+
+
+def unpriced_text(rows):
+    """One line naming the unpriced requests and models, or '' when every request is priced."""
+    if not rows:
+        return ""
+    return (f"unpriced: {sum(n for _, n in rows):,} requests ({', '.join(str(m) for m, _ in rows)}) "
+            "have no list price and count as $0, so API-eq is too low")
