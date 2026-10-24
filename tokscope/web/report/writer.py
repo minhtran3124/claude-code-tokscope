@@ -12,7 +12,7 @@ from ..theme.layout import LAYOUT_CSS, LAYOUT_TOKEN_CSS
 from ..theme.brand import MARK, favicon_link
 from ...features.changes import BENCH_PROJECT, list_changes
 from ...core.ingest import connect
-from ...core.pricing import API_EQ_NOTE
+from ...core.pricing import API_EQ_NOTE, unpriced, unpriced_text
 from .common import TOKENS
 from .scripts import JS, SORT_SEG
 from .sections.benchmarks import _benchmarks
@@ -30,6 +30,11 @@ PRIVACY_NOTE = {
     "numbers": "Numbers-only report: all text is removed, and skill, agent, tool, MCP server and task names are replaced "
                "by stable aliases (the same name gets the same alias in every report from this machine). Numbers are unchanged.",
 }
+
+
+def _unpriced(conn, cond, params):
+    note = unpriced_text(unpriced(conn, cond, params))
+    return f'<p class="note unpriced" role="note">{html.escape(note)}</p>' if note else ""
 
 
 def write_report(db_path, out_path, where="", params=(), tasks_dir=None, level="full"):
@@ -84,7 +89,7 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 {f'<p class="privacy" role="note"><b>{level}</b> {PRIVACY_NOTE[level]}</p>' if level != "full" else ""}
 <p class="sub">{(first or '')[:10]} → {(last or '')[:10]} · real sessions (benchmarks separate) · generated {generated}</p>
 {_hero(conn, cond, params)}
-<div class="kpis">{kpi_html}</div></div>
+<div class="kpis">{kpi_html}</div>{_unpriced(conn, cond, params)}</div>
 
 <section class="card reveal" id="sessions"><h2>Sessions</h2>
 <p class="note"><span class="key"><i></i>main thread</span><span class="key"><i class="a"></i>subagents</span>

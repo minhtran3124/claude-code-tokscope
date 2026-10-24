@@ -68,6 +68,12 @@ class Fixture(unittest.TestCase):
 
 
 class IngestTest(Fixture):
+    def test_a_resumed_session_repeating_earlier_requests_in_its_file_counts_them_once(self):
+        # issue #46: resume appends to the same file, so replayed lines share the session and key
+        self.write_main([human("hi"), assistant("r1", out=40), human("again"), assistant("r2"), assistant("r1", out=40)])
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT count(*), sum(output) FROM requests"), [(2, 50)])
+
     def test_streamed_lines_of_one_request_count_once(self):
         # Claude Code writes one line per content block, each repeating the request's usage
         self.write_main([human("hi"), assistant("r1", out=5), assistant("r1", out=40), assistant("r1", out=40)])
@@ -211,6 +217,14 @@ class IngestTest(Fixture):
         self.write_main([human("x"), assistant("r1"), assistant("r2", out=99)])
         self.assertEqual(self.run_ingest(), (1, 0))
         self.assertEqual(self.rows("SELECT count(*) FROM requests"), [(2,)])
+
+
+class MissingDirTest(Fixture):
+    def test_missing_projects_dir(self):
+        logs = []
+        self.assertEqual(ingest(self.db, PHASES, projects_dir=self.tmp / "nope", log=logs.append), (0, 0))
+        self.assertEqual(len(logs), 1)
+        self.assertIn("no transcripts", logs[0])
 
 
 class SessionCommandTest(Fixture):

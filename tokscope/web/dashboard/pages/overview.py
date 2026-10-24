@@ -8,7 +8,7 @@ from ....core import skills, tz
 from ....features import library, live
 from ... import charts
 from ....features.changes import list_changes
-from ....core.pricing import API_EQ_NOTE
+from ....core.pricing import API_EQ_NOTE, unpriced, unpriced_text
 from ...report.common import TOKENS
 from ...report.widgets import _table, _tok, _usd
 from ..common import Filters, _iso, _q
@@ -115,6 +115,8 @@ def _kpis(conn, f):
     n = int(cmp["before"]) if cmp else 0
     note = (f'<p class="note strip-note">Change = average per day in this range against the {n} day{"" if n == 1 else "s"} before it. '
             f'From cache compares its share of all tokens, not a per-day average.</p>' if cmp else "")
+    warn = unpriced_text(unpriced(conn, cond, params))
+    note += f'<p class="note unpriced" role="note">{html.escape(warn)}</p>' if warn else ""
     return f'<div class="kpis strip">{"".join(out)}</div>{note}'
 
 

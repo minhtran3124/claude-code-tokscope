@@ -9,7 +9,7 @@ from . import __version__, paths
 from .core.calls import turn_calls
 from .core.ingest import CARRIED, PROJECTS_DIR, connect, ingest, ingest_session
 from .core import tz
-from .core.pricing import API_EQ_NOTE
+from .core.pricing import API_EQ_NOTE, unpriced, unpriced_text
 from .core.privacy import LEVELS
 
 ROOT = paths.home()
@@ -45,6 +45,8 @@ def summary(args):
         print(f"{str(k)[:40]:<40} {n:>9,} {prompt or 0:>13,} {out or 0:>11,} {cost or 0:>10.2f} {(cost or 0) / total:>6.1%}"
               + (f" {(cr or 0) / (cost or 1):>8.0%}" if carried else ""))
     print(API_EQ_NOTE)
+    if note := unpriced_text(unpriced(conn, where, params)):
+        print(note)
 
 
 def record_skill_versions(lines):
@@ -96,6 +98,7 @@ def session_text(conn, session_id):
         return f"tokscope: no API requests recorded for session {session_id} yet."
     title, n_req, n_agents, total, out = head
     total = total or 0
+    note = unpriced_text(unpriced(conn, "WHERE r.session_id = ?", (session_id,)))
     lines = [
         f"tokscope · {title or session_id[:8]} · ${total:,.2f} API-eq · {n_req} requests · "
         f"{n_agents} subagent runs · {out or 0:,} output tokens"
@@ -118,7 +121,7 @@ def session_text(conn, session_id):
         # a skill row names the version this session loaded (see `tokscope skills <name>`)
         name = lambda k: f"{k} {versions[k][:6]}" if label == "skill" and k in versions else str(k)  # noqa: E731
         lines += [f"  {name(k)[:38]:<38} {n:>5} req  ${c or 0:>8,.2f}  {(c or 0) / (total or 1):>4.0%}" for k, n, c in rows]
-    return "\n".join(lines)
+    return "\n".join(lines + [f"\n{note}"] * bool(note))
 
 
 def session_json(conn, session_id):
