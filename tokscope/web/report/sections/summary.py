@@ -3,9 +3,10 @@
 import html
 from datetime import datetime, timedelta, timezone
 
+from ....core import baseline
 from ....core.pricing import API_EQ_NOTE, COSTS_DOC
 from ..common import TOKENS
-from ..widgets import _tok, _usd
+from ..widgets import _start_line, _tok, _usd
 
 
 def _week_compare(conn, cond, params, now):
@@ -42,3 +43,12 @@ def _hero(conn, cond, params):
             f'<p>{trend}.</p>{f"<p>{sentence[:1].upper() + sentence[1:]}.</p>" if sentence else ""}'
             f'<p class="usd">{_usd(usd)} API-eq. {html.escape(API_EQ_NOTE.removeprefix("API-eq = "))[:1].upper()}{html.escape(API_EQ_NOTE.removeprefix("API-eq = "))[1:]} '
             f'<a href="{COSTS_DOC}" target="_blank" rel="noopener">How Claude Code usage is limited</a></p></section>')
+
+
+def _session_start(conn, cond, params):
+    """One line under the hero: what a new session already carries before the first prompt; empty without sessions."""
+    base = baseline.stats(baseline.starts(conn, cond, params))
+    if not base:
+        return ""
+    return (f'<p class="note">{_start_line(base)}: median of {base["n"]:,} session{"s" * (base["n"] != 1)}, '
+            f'p90 ~{_tok(base["p90"])}. System prompt, tools, MCP servers, skills and CLAUDE.md, paid again by every new session.</p>')

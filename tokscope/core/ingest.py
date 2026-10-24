@@ -40,7 +40,8 @@ BUILTIN_COMMANDS = {
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
     session_id TEXT PRIMARY KEY, project TEXT, cwd TEXT, title TEXT, version TEXT,
-    first_ts TEXT, last_ts TEXT, prompts INTEGER, signature TEXT, entrypoint TEXT, parent_session_id TEXT
+    first_ts TEXT, last_ts TEXT, prompts INTEGER, signature TEXT, entrypoint TEXT, parent_session_id TEXT,
+    first_req_ts TEXT
 );
 CREATE TABLE IF NOT EXISTS requests (
     session_id TEXT, request_key TEXT, ts TEXT, model TEXT, agent_id TEXT, agent_type TEXT,
@@ -69,16 +70,19 @@ CREATE TABLE IF NOT EXISTS headless_calls (
     session_id TEXT, tool_use_id TEXT, cwds TEXT, start_ts TEXT, end_ts TEXT, child_ids TEXT,
     PRIMARY KEY (session_id, tool_use_id)
 );
+CREATE TABLE IF NOT EXISTS mcp_defs (
+    session_id TEXT, server TEXT, tools INTEGER, chars INTEGER, PRIMARY KEY (session_id, server)
+);
 CREATE TABLE IF NOT EXISTS ingest_state (session_id TEXT PRIMARY KEY, state TEXT);
 CREATE INDEX IF NOT EXISTS idx_requests_ts ON requests (ts);
 """
-TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "headless_calls", "ingest_state", "sessions")
+TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "headless_calls", "mcp_defs", "ingest_state", "sessions")
 # bump when the parser records something new, so unchanged transcripts are parsed again once
-PARSER_VERSION = 14
+PARSER_VERSION = 16
 TAIL_BYTES = 4096  # the bytes before a stored offset that must be unchanged for a file to count as appended to
 # what a resumed parse restores: the parser's state after the last complete line of every file
 STATE_KEYS = ("requests", "subagents", "skill_calls", "prompts", "tool_ctx", "tool_calls", "result_chars",
-              "skill_texts", "skill_args", "headless", "meta", "files")
+              "skill_texts", "skill_args", "headless", "mcp_defs", "meta", "files")
 ARGS_RE = re.compile(r"<command-args>(.*?)</command-args>", re.S)
 PROMPT_CHARS = 160
 # a Bash command that starts a headless Claude Code session
@@ -215,6 +219,7 @@ class SessionParser:
         self.skill_texts = {}  # Skill tool_use_id -> the SKILL.md text it loaded, where a request blob kept it
         self.skill_args = {}  # Skill tool_use_id -> the args the call passed
         self.headless = {}  # Bash tool_use_id that ran `claude -p` -> {cwd, start_ts, end_ts, child_ids}
+        self.mcp_defs = None  # server -> [tools, chars] of the MCP tool definitions in the first main-thread shape; None: no shape yet
         self.meta = {"title": None, "version": None, "cwd": None, "first_ts": None, "last_ts": None, "prompts": 0,
                      "entrypoint": None}
         self.files = {}  # file name ("" = main) -> {ino, off, tail, state, unresolved}: where the next parse resumes
@@ -306,6 +311,9 @@ class SessionParser:
                 if '"api-request-blob"' in line[:40] and SKILL_TEXT in line:
                     self._on_skill_blob(line)
                     continue
+                if is_main and self.mcp_defs is None and line.startswith('{"type":"api-request-shape"'):
+                    self._on_shape(line)
+                    continue
                 if line.startswith('{"type":"api-request') or line.startswith('{"type":"attachment"'):
                     continue
                 try:
@@ -323,6 +331,23 @@ class SessionParser:
                     self._on_command_skill_text(rec)
                     if is_main:
                         self._on_user(rec, state)
+
+    def _on_shape(self, line):
+        """The MCP tools the session sent in its first request, by server. A tool with defer_loading is not in the prefix
+        (only its name is), so it adds nothing. Size is the JSON of the definition, a rough stand-in for its tokens."""
+        try:
+            tools = json.loads(line)["shape"]["tools"]
+        except (ValueError, KeyError, TypeError):
+            return
+        defs = {}
+        for tool in tools if isinstance(tools, list) else []:
+            name = tool.get("name") if isinstance(tool, dict) else None
+            if not isinstance(name, str) or not name.startswith("mcp__") or name.count("__") < 2 or tool.get("defer_loading"):
+                continue
+            d = defs.setdefault(name.split("__")[1], [0, 0])
+            d[0] += 1
+            d[1] += len(json.dumps(tool, ensure_ascii=False))
+        self.mcp_defs = defs
 
     def _track_meta(self, rec):
         if rec.get("type") == "ai-title" and rec.get("aiTitle"):
@@ -493,7 +518,7 @@ def connect(db_path):
             conn.execute(f"ALTER TABLE requests ADD COLUMN {name} {typ}")
     refresh_costs(conn)
     columns = {c[1] for c in conn.execute("PRAGMA table_info(sessions)")}
-    for name in ("entrypoint", "parent_session_id"):  # entrypoint is refilled by the PARSER_VERSION bump
+    for name in ("entrypoint", "parent_session_id", "first_req_ts"):  # refilled by the PARSER_VERSION bump (not parent_session_id)
         if name not in columns:
             conn.execute(f"ALTER TABLE sessions ADD COLUMN {name} TEXT")
     return conn
@@ -567,13 +592,15 @@ def store(conn, project, parser, signature):
     sid = parser.session_id
     for table in TABLES:
         conn.execute(f"DELETE FROM {table} WHERE session_id = ?", (sid,))
+    # the first main-thread request as the transcript has it, before a fork's copies move to the session that owns them
+    first_req = min((r["ts"] for r in parser.requests.values() if not r["agent_id"] and r["ts"]), default=None)
     _share_requests(conn, parser)
     m = parser.meta
     conn.execute(
-        "INSERT INTO sessions (session_id, project, cwd, title, version, first_ts, last_ts, prompts, signature, entrypoint) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO sessions (session_id, project, cwd, title, version, first_ts, last_ts, prompts, signature, entrypoint, "
+        "first_req_ts) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (sid, project, m["cwd"], m["title"], m["version"], m["first_ts"], m["last_ts"], m["prompts"], signature,
-         m["entrypoint"]),
+         m["entrypoint"], first_req),
     )
     conn.execute("INSERT INTO ingest_state VALUES (?,?)", (sid, parser.dump()))
     conn.executemany("INSERT INTO headless_calls VALUES (?,?,?,?,?,?)",
@@ -602,6 +629,8 @@ def store(conn, project, parser, signature):
     conn.executemany("INSERT INTO tool_calls VALUES (?,?,?,?,?,?)",
                      [(sid, tid, i, agent, name, parser.result_chars.get(tid))
                       for tid, (i, agent, name) in parser.tool_calls.items() if tid])
+    conn.executemany("INSERT INTO mcp_defs VALUES (?,?,?,?)",
+                     [(sid, server, n, chars) for server, (n, chars) in (parser.mcp_defs or {}).items()])
     conn.executemany("INSERT INTO prompts VALUES (?,?,?,?)", [(sid, i, ts, text) for i, ts, text in parser.prompts])
     conn.executemany(
         "INSERT INTO skill_calls (session_id, ts, skill, phase, source, agent_id, prompt_idx, tool_use_id, text_hash) "

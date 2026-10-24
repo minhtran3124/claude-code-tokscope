@@ -23,6 +23,7 @@ import time
 from pathlib import Path
 
 from .. import paths
+from ..core import baseline
 from ..core.calls import CHARS_PER_TOKEN
 
 TOKENS = "(r.input + r.cache_read + r.cache_write_5m + r.cache_write_1h + r.output)"
@@ -196,7 +197,7 @@ def discover(conn, bench_project="%tokscope%-bench-%"):
         g = groups.setdefault(str(root) if root else "", {
             "id": pid(root) if root else "temp", "root": root, "name": root.name if root else "Temporary folders",
             "path": _tilde(root) if root else _tempdir(), "folders": [], "keys": set(), "sessions": 0, "tokens": 0,
-            "recent": 0, "usd": 0.0, "first": first, "last": last, "mcp": {}})
+            "recent": 0, "usd": 0.0, "first": first, "last": last, "mcp": {}, "defs": {}})
         g["folders"].append((cwd, sessions))
         g["keys"].update((keys or "").split(","))
         g["sessions"] += sessions
@@ -214,8 +215,36 @@ def discover(conn, bench_project="%tokscope%-bench-%"):
         u["calls"] += calls
         u["tokens"] += round((chars or 0) / CHARS_PER_TOKEN)
         u["last"] = max(u["last"], last or "")
+    for cwd, server, tools, chars in conn.execute(  # oldest first, so a server's newest definition wins
+            "SELECT s.cwd, d.server, d.tools, d.chars FROM mcp_defs d JOIN sessions s USING (session_id) "
+            "WHERE s.project NOT LIKE ? ORDER BY s.last_ts", (bench_project,)):
+        if cwd in by_cwd:
+            by_cwd[cwd]["defs"][server] = (tools, chars)
     out = sorted((g for k, g in groups.items() if k), key=lambda g: -g["tokens"])
     return out + [groups[""]] if "" in groups else out
+
+
+def add_baselines(conn, found, days=None, now=None, bench_project="%tokscope%-bench-%"):
+    """Set g["base"] on each project of `found`: the baseline stats (core.baseline.stats) of the sessions whose first
+    request falls in the last `days` days (None: all time), or None without any."""
+    rows = baseline.starts(conn, "WHERE s.project NOT LIKE ?", (bench_project,))
+    since = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime((now or time.time()) - days * 86400)) if days else ""
+    for g in found:
+        cwds = {c for c, _ in g["folders"]}
+        mine = [r for r in rows if r[1] in cwds]
+        g["base"] = baseline.stats([r for r in mine if (r[2] or "") >= since], None, mine)
+
+
+def idle_cost(g, rows):
+    """(servers, tokens, usd) the project's never-used servers add to every session start; None when no unused server
+    has a measured definition. usd is None without a baseline model to price it."""
+    unused = [e for e in rows if e["flag"] == "never used here" and e.get("def_tokens")]
+    if not unused:
+        return None
+    tokens = sum(e["def_tokens"] for e in unused)
+    base = g.get("base")
+    usd = baseline.start_usd(base["model"], base["median"]) if base else None  # priced at a typical start, not at 1M tokens
+    return len(unused), tokens, None if usd is None else tokens * usd / base["median"]
 
 
 def _health_key(name):
@@ -252,7 +281,9 @@ def servers(g, status=None):
     since = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - 30 * 86400))
     for e in rows:
         u = g["mcp"].get(e["key"], {}) if not e["shadowed"] else {}
+        d = g.get("defs", {}).get(e["key"]) if not e["shadowed"] else None
         e.update(calls=u.get("calls", 0), tokens=u.get("tokens", 0), last=u.get("last", ""),
+                 def_tokens=round(d[1] / CHARS_PER_TOKEN) if d else None,
                  status=None if e["shadowed"] else by_key.get(e["key"]))
         off = e["disabled"] or (e["status"] or "").startswith(("⊘", "✘ Rejected"))
         e["flag"] = ("" if off or e["shadowed"] else "never used here" if not e["calls"]

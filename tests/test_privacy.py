@@ -66,6 +66,7 @@ class PrivacyTest(unittest.TestCase):
         conn.execute("INSERT INTO replay_turns (run_id, turn, prompt, result) VALUES ('rp', 0, ?, ?)", (c["replay"], c["answer"]))
         conn.execute("INSERT INTO changes (at, note, skill) VALUES (?, ?, ?)", (ts(2), c["note"], NAMES["skill"]))
         conn.commit()
+        conn.close()  # checkpoints the WAL now; left open, whichever connection closed last would rewrite the file mid-test
         self.tasks = self.dir / "tasks"
         self.tasks.mkdir()
         (self.tasks / "acme-task.json").write_text(json.dumps({"about": c["about"], "grader": {"all": ["billing"]}}))

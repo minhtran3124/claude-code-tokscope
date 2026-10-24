@@ -17,9 +17,10 @@ from .common import TOKENS
 from .scripts import JS, SORT_SEG
 from .sections.benchmarks import _benchmarks
 from .sections.breakdowns import _breakdowns
+from .sections.rows import summary_view
 from .sections.sessions import _sessions_json
 from .sections.skills import FEW_LOADS, _change_cards, _skill_versions
-from .sections.summary import _hero
+from .sections.summary import _hero, _session_start
 from .styles import CSS
 from .widgets import _daily_chart, _more, _tok, _usd
 
@@ -79,6 +80,7 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 <a href="#trend">Daily trend</a>
 <a href="#changes">Config changes<span class="cnt">{len(changes)}</span></a>
 <a href="#skill-versions">Skill versions<span class="cnt">{n_changed}</span></a>
+<a href="#summary">Summary</a>
 <a href="#breakdowns">Breakdowns</a>
 <div class="sub-toc"><a href="#by-week">Week over week</a><a href="#by-mcp">By MCP server</a><a href="#by-tool">By tool</a><a href="#by-phase">By phase</a>
 <a href="#by-owner">By owner</a><a href="#by-skill">By skill</a><a href="#agent-types">Subagent types</a></div>
@@ -89,6 +91,7 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 {f'<p class="privacy" role="note"><b>{level}</b> {PRIVACY_NOTE[level]}</p>' if level != "full" else ""}
 <p class="sub">{(first or '')[:10]} → {(last or '')[:10]} · real sessions (benchmarks separate) · generated {generated}</p>
 {_hero(conn, cond, params)}
+{_session_start(conn, cond, params)}
 <div class="kpis">{kpi_html}</div>{_unpriced(conn, cond, params)}</div>
 
 <section class="card reveal" id="sessions"><h2>Sessions</h2>
@@ -115,6 +118,7 @@ Sessions do different work, so a comparison describes them; for a controlled bef
 {_more("Skill versions", f"{n_changed} skill{'' if n_changed == 1 else 's'} changed. A version is a hash of the skill's folder; each row is the median tokens of one "
        f"prompt's requests while that version was loaded. Few loads = fewer than {FEW_LOADS}: watch, do not judge. "
        f"For a fair comparison, run a benchmark or a replay", versions_html, "skill-versions")}
+{summary_view(conn, cond, params)}
 <div id="breakdowns">{_breakdowns(conn, cond, params)}</div>
 </main></div><div id="tip"></div><div id="toast" role="status" aria-live="polite"></div>
 <dialog class="keys" id="keys"><h3 style="margin:0">Keyboard shortcuts</h3><dl>

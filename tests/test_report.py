@@ -27,6 +27,17 @@ class WeekTest(unittest.TestCase):
             (session, f"k{self.n}", (NOW - timedelta(days=days_ago)).isoformat(), "m", agent, agent and "reviewer",
              skill, phase, tokens))
 
+    def test_the_report_states_the_session_start_as_an_estimate_and_skips_benchmarks_and_empty_data(self):
+        from tokscope.web.report.sections.summary import _session_start
+        self.assertEqual(_session_start(self.conn, COND, PARAMS), "")
+        self.req(1, 4000, "a")
+        self.req(0, 90000, "a", agent="x1")                      # a subagent request is not a session start
+        self.req(1, 99999, "a", session="bench")
+        line = _session_start(self.conn, COND, PARAMS)
+        self.assertIn("Every new session starts at ~4.0K tokens", line)
+        self.assertIn("Estimate.", line)
+        self.assertIn("median of 1 session", line)
+
     def test_skills_rank_by_the_last_7_days_and_carry_the_7_before(self):
         self.req(1, 100, "a")
         self.req(9, 400, "a")    # last week: a fell from 400 to 100

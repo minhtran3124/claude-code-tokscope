@@ -19,7 +19,8 @@ show no prompts, titles, paths or project names. The Managed screenshot uses dem
 
 ![The dashboard Sessions page](docs/screenshots/dashboard-sessions.png)
 
-**Breakdowns**: tokens by MCP server, tool, phase, owner, skill and subagent type, each with its finding.
+**Breakdowns**: tokens by MCP server, tool, phase, owner, skill and subagent type, each with its finding. Its **Summary** section is the
+`tokscope summary` table for the filter bar, with Download CSV, Download JSON and Copy (also `GET /api/summary?by=skill&format=csv`).
 
 ![The dashboard Breakdowns page](docs/screenshots/dashboard-breakdowns.png)
 
@@ -60,6 +61,7 @@ Without the script: `pipx install .` (or `uv tool install .`), then add the full
 ```sh
 tokscope ingest              # read your transcripts into the database (see below for other folders)
 tokscope summary --by phase  # a table in the terminal (--by skill | agent | model)
+tokscope summary --by skill --format csv > skills.csv   # or --format json: only the rows on stdout
 tokscope open                # write the HTML report and open it
 tokscope serve               # the live dashboard on http://127.0.0.1:8765
 ```

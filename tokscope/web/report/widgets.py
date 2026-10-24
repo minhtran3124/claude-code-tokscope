@@ -3,6 +3,7 @@
 import html
 
 from ...core import tz
+from ...core.baseline import METHOD
 from .. import charts
 
 
@@ -121,3 +122,9 @@ def _vs(before, after):
         return "–"
     pct = after / before - 1
     return f"{'▲' if pct > 0 else '▼'} {abs(pct):.0%}"
+
+
+def _start_line(base):
+    """"Every new session starts at ~X tokens (~$Y)" with the method as its tooltip; `base` is core.baseline.stats."""
+    cost = f" (~{_usd(base['cost'])})" if base["cost"] is not None else ""
+    return f'<span title="{html.escape(METHOD)}">Every new session starts at ~{_tok(base["median"])} tokens{cost}</span>'

@@ -33,7 +33,7 @@ TITLE, PROJECT, CWD = "title", "project", "cwd"
 COLUMNS = {
     "sessions": {"session_id": KEEP, "project": PROJECT, "cwd": CWD, "title": TITLE, "version": KEEP,
                  "first_ts": KEEP, "last_ts": KEEP, "prompts": KEEP, "signature": DROP, "entrypoint": KEEP,
-                 "parent_session_id": KEEP},
+                 "parent_session_id": KEEP, "first_req_ts": KEEP},
     "requests": {"session_id": KEEP, "request_key": KEEP, "ts": KEEP, "model": KEEP, "agent_id": KEEP, "agent_type": AGENT,
                  "prompt_idx": KEEP, "skill": SKILL, "phase": PHASE, "input": KEEP, "output": KEEP, "thinking": KEEP,
                  "cache_read": KEEP, "cache_write_5m": KEEP, "cache_write_1h": KEEP, "cost_usd": KEEP,
@@ -52,6 +52,7 @@ COLUMNS = {
                        "child_ids": KEEP},
     "tool_calls": {"session_id": KEEP, "tool_use_id": KEEP, "prompt_idx": KEEP, "agent_id": KEEP, "name": TOOL,
                    "result_chars": KEEP},
+    "mcp_defs": {"session_id": KEEP, "server": "name:mcp", "tools": KEEP, "chars": KEEP},
     "bench_runs": {"run_id": KEEP, "task": TASK, "variant": VARIANT, "run_idx": KEEP, "session_id": KEEP,
                    "started_at": KEEP, "duration_s": KEEP, "exit_code": KEEP, "is_error": KEEP, "reported_cost": KEEP,
                    "passed": KEEP, "result": ANSWER, "commit_sha": DROP, "cc_version": KEEP,
