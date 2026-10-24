@@ -116,6 +116,19 @@ class SkillsTest(unittest.TestCase):
         self.assertEqual((rows[v1]["loads"], rows[v1]["exact"], rows[v1]["tokens_median"], rows[v1]["label"]), (1, 1, 100, "1.2.0"))
         self.assertEqual((rows[None]["loads"], rows[None]["tokens_median"]), (1, 900))
 
+    def test_a_versions_error_rate_counts_failed_calls_and_interrupts_of_its_loads(self):
+        self.load("2026-10-01T00:00:00Z", 1, tokens=900)
+        self.load("2026-10-10T00:00:00Z", 2, "t2", tokens=100)
+        v1 = skills.record_load(self.conn, "s1", "t2", "review", str(self.repo / "src"), "2026-10-10T00:00:00Z")
+        calls = [("a", 1, 0, 0), ("b", 1, 1, 0), ("c", 2, 1, 0), ("d", 2, 0, 0), ("e", 2, 0, 1), ("f", 2, 0, 0)]
+        self.conn.executemany("INSERT INTO tool_calls (session_id, tool_use_id, prompt_idx, skill, is_error, repeat) "
+                              "VALUES ('s1', ?, ?, 'review', ?, ?)", calls)
+        self.conn.execute("INSERT INTO turn_events (session_id, prompt_idx, skill, kind) VALUES ('s1', 2, 'review', 'interrupt')")
+        rows = {r["version"]: r for r in skills.versions(self.conn, "review")}
+        self.assertEqual((rows[v1]["calls"], rows[v1]["errors"], rows[v1]["repeats"], rows[v1]["interrupts"]), (4, 1, 1, 1))
+        self.assertEqual(rows[v1]["error_rate"], 0.25)
+        self.assertEqual((rows[None]["calls"], rows[None]["errors"]), (2, 1))
+
     def test_a_skill_mark_from_the_mod_records_the_version_through_the_cli(self):
         db = self.tmp / "data-home" / "data" / "tokscope.db"
         db.parent.mkdir(parents=True)
