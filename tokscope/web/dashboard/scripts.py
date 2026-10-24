@@ -178,7 +178,8 @@ DASH_JS = """
     if(!a||typeof a.href!=='string'||e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||(a.target&&a.target!=='_self')||a.hasAttribute('download'))return;
     const u=new URL(a.href,location.href);
     if(u.origin===location.origin&&u.pathname+u.search!==location.pathname+location.search&&!u.pathname.startsWith('/api/'))on()});
-  document.addEventListener('submit',e=>{if(e.target.matches('form.filters'))on()})})();
+  document.addEventListener('submit',e=>{if(e.target.matches('form.filters'))on()});
+  window.tokscopeNavLoad=on})();
 // Apply keeps only the filters set, so the URL reads like the view (range=30 is the default)
 document.querySelectorAll('form.filters').forEach(fm=>fm.addEventListener('submit',e=>{e.preventDefault();const q=new URLSearchParams();
   fm.querySelectorAll('select').forEach(x=>{if(x.value&&!(x.name==='range'&&x.value==='30'))q.set(x.name,x.value)});
@@ -230,7 +231,7 @@ async function refresh(){document.documentElement.classList.add('settled');const
     const old={};r.querySelectorAll('[data-key]').forEach(el=>old[el.dataset.key]=+el.dataset.count);
     r.innerHTML=next.innerHTML;bindTips(r);r.querySelectorAll('[data-key]').forEach(el=>{if(el.dataset.key in old)deltaChip(el,old[el.dataset.key])})})}
 function offerReload(){if(document.getElementById('newdata'))return;const b=document.createElement('button');b.id='newdata';b.className='primary';
-  b.textContent='New data · reload';b.addEventListener('click',()=>location.reload());document.body.append(b)}
+  b.textContent='New data · reload';b.addEventListener('click',()=>{window.tokscopeNavLoad&&tokscopeNavLoad();location.reload()});document.body.append(b)}
 // sessions page: tag the rows of sessions that are open (running = working, open = waiting for you), every poll
 async function syncLive(){if(page!=='sessions')return;window.LIVE=await (await fetch('/api/live')).json();window.paintLive()}
 let liveSig=null;syncLive().catch(()=>{});

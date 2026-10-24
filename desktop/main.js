@@ -1,5 +1,5 @@
 // A window around `tokscope serve`: start the server on a free port, show it, stop it on quit.
-const { app, BrowserWindow, nativeTheme, shell } = require("electron");
+const { app, BrowserWindow, Menu, WebContentsView, nativeTheme, shell } = require("electron");
 const { statusPage } = require("./loading");
 const { spawn } = require("child_process");
 const net = require("net");
@@ -82,11 +82,45 @@ function openExternal(u) {
 // the server did not start: say so in the window instead of a spinner that never ends
 function showFailure(message) {
   console.error(`tokscope: ${message}`);
-  if (win) win.loadURL(statusPage(nativeTheme.shouldUseDarkColors, `tokscope did not start: ${message}`, false));
+  if (win) showCover(`tokscope did not start: ${message}`, false);
   else app.exit(1);
 }
 
 let base = null;  // the dashboard's address once it answers; nothing else may be shown in the window
+
+// The loading page is a view over the dashboard, not the dashboard's own page: the dashboard's first paint is blank, so
+// the cover stays until the dashboard reports that it has loaded (start and every reload).
+let cover = null;  // WebContentsView with the loading page
+let coverShown = false;
+// the dashboard's own theme choice (localStorage tokscope-theme), read after each load so the cover matches it; null is
+// Auto, which follows the system. The first start has no choice yet and uses the system's.
+let themeDark = null;
+
+function useDark() {
+  return themeDark === null ? nativeTheme.shouldUseDarkColors : themeDark;
+}
+
+function coverBounds() {
+  const [width, height] = win.getContentSize();
+  return { x: 0, y: 0, width, height };
+}
+
+function showCover(message, spin = true) {
+  if (!win) return;
+  const dark = useDark();
+  if (!cover) {
+    cover = new WebContentsView();
+    cover.setBackgroundColor(dark ? "#1d1a15" : "#f2efe7");  // the colour before the page paints
+    cover.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  }
+  if (!coverShown) { win.contentView.addChildView(cover); coverShown = true; }  // added last: it is on top
+  cover.setBounds(coverBounds());
+  cover.webContents.loadURL(statusPage(dark, message, spin)).catch(() => {});
+}
+
+function hideCover() {
+  if (win && coverShown) { win.contentView.removeChildView(cover); coverShown = false; }
+}
 
 function createWindow() {
   const dark = nativeTheme.shouldUseDarkColors;
@@ -98,24 +132,53 @@ function createWindow() {
   for (const ev of ["will-navigate", "will-redirect"]) {
     win.webContents.on(ev, (e, u) => { if (!base || !u.startsWith(base)) { e.preventDefault(); openExternal(u); } });
   }
-  win.on("closed", () => { win = null; });
-  win.loadURL(statusPage(dark, "Starting tokscope")).catch(() => {});  // aborted when the dashboard load replaces it
+  // the dashboard has painted: take the loading page away
+  win.webContents.on("did-finish-load", async () => {
+    if (!base || !win.webContents.getURL().startsWith(base)) return;
+    hideCover();
+    const choice = await win.webContents.executeJavaScript("localStorage.getItem('tokscope-theme')").catch(() => null);
+    themeDark = choice === "dark" ? true : choice === "light" ? false : null;
+  });
   win.webContents.on("did-fail-load", (e, code, desc, u, isMain) => {
     if (isMain && code !== -3 && base && u.startsWith(base)) showFailure(`the dashboard did not load (${desc})`);  // -3 is an aborted load
   });
+  win.on("resize", () => { if (coverShown) cover.setBounds(coverBounds()); });
+  win.on("closed", () => { win = null; cover = null; coverShown = false; });
+  showCover("Starting tokscope");
+}
+
+// Reload (F5, Ctrl+R, Ctrl+Shift+R) covers the window with the loading page while the dashboard renders again.
+function reloadDashboard() {
+  if (!win || !base) return;
+  showCover("Reloading tokscope");
+  win.webContents.loadURL(base).catch(() => {});  // a failure arrives as did-fail-load
+}
+
+// The default menu's Reload would reload the dashboard with no loading page, so the menu gets our own Reload items
+// (on Linux the menu sees Ctrl+R before the page does, so a key handler on the page would never run).
+function appMenu() {
+  return Menu.buildFromTemplate([
+    { label: "View", submenu: [
+      { label: "Reload", accelerator: "CmdOrCtrl+R", click: reloadDashboard },
+      { label: "Reload page", accelerator: "F5", click: reloadDashboard },
+      { label: "Force reload", accelerator: "CmdOrCtrl+Shift+R", click: reloadDashboard },
+      { role: "toggleDevTools" }, { type: "separator" }, { role: "resetZoom" }, { role: "zoomIn" }, { role: "zoomOut" },
+    ] },
+    { role: "editMenu" },
+  ]);
 }
 
 function showDashboard(url) {
   if (!win) return;  // the window was closed while the server started
   base = url;
-  win.loadURL(url).catch(() => {});  // a failure arrives as did-fail-load
+  win.webContents.loadURL(url).catch(() => {});  // a failure arrives as did-fail-load; the cover goes when it has loaded
 }
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
-  app.whenReady().then(start).catch((e) => showFailure(e.message));
+  app.whenReady().then(() => { Menu.setApplicationMenu(appMenu()); return start(); }).catch((e) => showFailure(e.message));
   app.on("window-all-closed", () => app.quit());
   // every way out stops the server: a normal quit, app.exit() on a failed start, and a signal (not SIGKILL)
   process.on("exit", () => { if (server) server.kill(); });
