@@ -17,11 +17,11 @@ import re
 import sqlite3
 from pathlib import Path
 
+from .. import paths
 from . import tz
 from .pricing import cost_usd, refresh_costs
 from .skills import canonical_name, loaded_text_hash
 
-PROJECTS_DIR = Path.home() / ".claude" / "projects"
 # a phase inherited from an earlier prompt: no skill ran in this request's prompt (follow-ups like "ok, continue")
 CARRIED = "(r.skill IS NULL AND r.phase IS NOT NULL)"
 COMMAND_RE = re.compile(r"<command-name>/?([^<\s]+)</command-name>")
@@ -523,9 +523,14 @@ def store(conn, project, parser, signature):
     )
 
 
-def ingest_session(db_path, phases_path, session_id, projects_dir=PROJECTS_DIR):
+def find_transcripts(session_id, projects_dir=None):
+    """Main transcripts of a session in the given folder(s) (None: the default ones), first folder first."""
+    return [m for d in paths.projects_dirs(projects_dir) for m in sorted(d.glob(f"*/{session_id}.jsonl"))]
+
+
+def ingest_session(db_path, phases_path, session_id, projects_dir=None):
     """Re-parse one session wherever its transcript lives; returns False when no transcript is found."""
-    matches = sorted(Path(projects_dir).glob(f"*/{session_id}.jsonl"))
+    matches = find_transcripts(session_id, projects_dir)
     if not matches:
         return False
     main_path = matches[0]
@@ -538,18 +543,25 @@ def ingest_session(db_path, phases_path, session_id, projects_dir=PROJECTS_DIR):
     return True
 
 
-def ingest(db_path, phases_path, projects_dir=PROJECTS_DIR, project_filter=None, log=print):
-    if not Path(projects_dir).is_dir():
-        log(f"ingest: no transcripts in {projects_dir} yet")
+def ingest(db_path, phases_path, projects_dir=None, project_filter=None, log=print):
+    """projects_dir: one folder, a list, or None for the default ones. A session id found twice is read once."""
+    dirs = [d for d in paths.projects_dirs(projects_dir) if d.is_dir()]
+    if not dirs:
+        log(f"ingest: no transcripts in {', '.join(map(str, paths.projects_dirs(projects_dir)))} yet")
         return 0, 0
+    log("ingest: reading " + ", ".join(map(str, dirs)))
     phases = load_phases(phases_path)
     conn = connect(db_path)
     known = dict(conn.execute("SELECT session_id, signature FROM sessions"))
     parsed = skipped = 0
-    for project_dir in sorted(Path(projects_dir).iterdir()):
+    seen = set()
+    for project_dir in (p for d in dirs for p in sorted(d.iterdir())):
         if not project_dir.is_dir() or (project_filter and project_filter not in project_dir.name):
             continue
         for main_path in sorted(project_dir.glob("*.jsonl")):
+            if main_path.stem in seen:
+                continue
+            seen.add(main_path.stem)
             signature = session_signature(main_path)
             if known.get(main_path.stem) == signature:
                 skipped += 1

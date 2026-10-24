@@ -19,6 +19,19 @@ def home():
     return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "tokscope"
 
 
+def projects_dirs(extra=None):
+    """Transcript folders: --projects-dir, else each $CLAUDE_CONFIG_DIR entry (comma-separated) + /projects, else
+    every existing ~/.config/claude/projects and ~/.claude/projects. Duplicates dropped, order kept."""
+    if extra:
+        found = [Path(p).expanduser() for p in ([extra] if isinstance(extra, (str, Path)) else extra)]
+    elif env := os.environ.get("CLAUDE_CONFIG_DIR"):
+        found = [Path(d.strip()).expanduser() / "projects" for d in env.split(",") if d.strip()]
+    else:
+        found = [d for d in (Path.home() / ".config" / "claude" / "projects", Path.home() / ".claude" / "projects")
+                 if d.is_dir()] or [Path.home() / ".claude" / "projects"]
+    return list(dict.fromkeys(found))
+
+
 def db():
     path = home() / "data" / "tokscope.db"
     path.parent.mkdir(parents=True, exist_ok=True)  # a fresh install has no data folder yet
