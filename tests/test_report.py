@@ -181,5 +181,13 @@ class ChartTest(unittest.TestCase):
         self.assertNotIn("<script>", svg)
 
 
+class TimeZoneSettingTest(unittest.TestCase):
+    def test_the_scripts_show_times_in_the_browser_zone_with_a_utc_switch(self):
+        from tokscope.web.report.scripts import JS
+        self.assertIn("tokscope-tz", JS)
+        self.assertIn("data-set-tz", JS)
+        self.assertNotIn("s.start.slice(0,10)", JS)  # days come from dayOf, which follows the setting
+
+
 if __name__ == "__main__":
     unittest.main()

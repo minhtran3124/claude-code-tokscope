@@ -67,7 +67,8 @@ def write_report(db_path, out_path, where="", params=(), tasks_dir=None, level="
                         f"USING (session_id) {cond} GROUP BY d ORDER BY d", params).fetchall()
     bench_head, bench_detail = _benchmarks(conn, tasks_dir)
     data = json.dumps(_sessions_json(conn, cond, params), separators=(",", ":")).replace("</", "<\\/")
-    generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now_utc = datetime.now(timezone.utc)
+    generated = f'<time data-ts="{now_utc:%Y-%m-%dT%H:%M:%SZ}" data-fmt="dt">{now_utc:%Y-%m-%d %H:%M} UTC</time>'
 
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>tokscope report{"" if level == "full" else f" ({level})"}</title>{favicon_link()}<script>document.documentElement.classList.add('js');
@@ -85,6 +86,7 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 <div class="sub-toc"><a href="#by-week">Week over week</a><a href="#by-mcp">By MCP server</a><a href="#by-tool">By tool</a><a href="#by-phase">By phase</a>
 <a href="#by-owner">By owner</a><a href="#by-skill">By skill</a><a href="#agent-types">Subagent types</a></div>
 </nav><div class="side-foot"><button type="button" class="chip" id="theme">Theme</button>
+<span class="segctl" role="group" aria-label="Time zone"><button type="button" class="chip" data-set-tz="local" aria-pressed="false" title="Show times in this browser's time zone">Local</button><button type="button" class="chip" data-set-tz="utc" aria-pressed="false">UTC</button></span>
 <button type="button" class="chip" id="keys-btn" aria-label="Keyboard shortcuts"><kbd>?</kbd></button>{SKIN_BUTTON}</div></aside><main>
 <div id="overview">
 <h1>Claude Code token usage</h1>

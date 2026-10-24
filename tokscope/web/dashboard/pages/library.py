@@ -131,7 +131,7 @@ def _jobs_list(k):
     jobs = optimize.jobs_for(k["folder"])
     if not jobs:
         return ""
-    rows = "".join(f'<li><a href="/library?skill={k["id"]}&amp;job={j["job"]}">{html.escape(j["started"][:16].replace("T", " "))}</a> '
+    rows = "".join(f'<li><a href="/library?skill={k["id"]}&amp;job={j["job"]}"><time data-ts="{html.escape(j["started"])}" data-fmt="dt">{html.escape(j["started"][:16].replace("T", " "))} UTC</time></a> '
                    f'<span class="state {j["state"]}">{j["state"]}</span> {html.escape(", ".join(j["guides"]))}'
                    f'{" · " + _usd(j["cost"]) if j.get("cost") is not None else ""}</li>' for j in jobs[:10])
     return f'<h3 class="sub3">Earlier runs</h3><ul class="plain jobs">{rows}</ul>'
@@ -327,7 +327,7 @@ def _job_view(k, job, linter, conn=None):
              f'<tbody>{"".join(rows)}</tbody></table>') if rows else ""
     decide = ""
     if data["state"] == "applied":
-        outcome = (f'<div class="outcome ok"><b>✓ Approved and applied {html.escape(data["applied"][:16].replace("T", " "))}</b>'
+        outcome = (f'<div class="outcome ok"><b>✓ Approved and applied <time data-ts="{html.escape(data["applied"])}" data-fmt="dt">{html.escape(data["applied"][:16].replace("T", " "))} UTC</time></b>'
                    f'<span>Version <code>{data["old_version"]}</code> → <code>{data["new_version"]}</code>. The old version is kept: '
                    'the comparison below and the benchmark still work.</span></div>')
         acts = ""
@@ -418,7 +418,7 @@ def _library_skill(k, qs, used, conn, linter=None, found=(), back="/library"):
     going = [j for j in optimize.jobs_for(k["folder"]) if j["state"] == "running"]
     if going:  # a run you started and left: one click back to its progress
         opt = (f'<a class="outcome run" href="/library?skill={k["id"]}&amp;job={going[0]["job"]}"><b><span class="spin"></span>'
-               f'An optimize run is going</b><span>Started {html.escape(going[0]["started"][11:16])} UTC · see its progress</span></a>') + opt
+               f'An optimize run is going</b><span>Started <time data-ts="{html.escape(going[0]["started"])}" data-fmt="hm">{html.escape(going[0]["started"][11:16])} UTC</time> · see its progress</span></a>') + opt
     # a skill with one version and every load tracked has nothing to compare
     versions = (f'<section class="card" id="versions"><h2 class="sec">Versions</h2>{_skill_versions(conn, "full", skill=k["dir"])[1]}</section>'
                 if len(skills.versions(conn, k["dir"])) > 1 else "")

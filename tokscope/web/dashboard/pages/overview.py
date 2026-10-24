@@ -274,7 +274,7 @@ def _today(conn, f):
         versions = skills.session_skill_versions(conn, sid)
         skill = turn[2] if turn else None
         tag = f' <code class="ver">{html.escape(versions[skill][:6])}</code>' if skill in versions else ""
-        body += (f'<div class="latest"><span class="note">Latest session · <time data-ts="{ts}">{ts[11:16]} UTC</time></span>'
+        body += (f'<div class="latest"><span class="note">Latest session · <time data-ts="{html.escape(ts)}" data-fmt="hm">{html.escape(ts[11:16])} UTC</time></span>'
                  f'<a href="{f.link("sessions", q=sid[:8])}"><b>{html.escape(title or sid[:8])}</b></a>'
                  f'<span>{_tok(tk)} tokens · {prompts} prompts</span>'
                  + (f'<span class="note">#{turn[0]} {html.escape((turn[1] or "")[:110])}{" · " + html.escape(skill) + tag if skill else ""}'

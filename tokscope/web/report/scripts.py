@@ -56,6 +56,23 @@ document.querySelectorAll('[data-set-skin]').forEach(b=>{b.addEventListener('cli
 const io='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{rootMargin:'0px 0px -6% 0px'}):null;
 document.querySelectorAll('.reveal,main>details.more,#breakdowns>details').forEach(el=>{el.classList.add('reveal');io?io.observe(el):el.classList.add('in')});
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// Times: stored in UTC, shown in the browser's zone unless the Time zone setting is UTC (localStorage `tokscope-tz`).
+// <time data-ts data-fmt="hm|dt|range" [data-end]> is rewritten by tzSync when the setting changes or a region is swapped in
+let TZ='local';try{if(localStorage.getItem('tokscope-tz')==='utc')TZ='utc'}catch(_){}
+const tzp=ts=>{const d=new Date(/(Z|[+-][0-9][0-9]:?[0-9][0-9])$/.test(ts)?ts:ts+'Z');
+  if(TZ==='utc'||isNaN(d))return{day:ts.slice(0,10),hm:ts.slice(11,16)};
+  const p=n=>String(n).padStart(2,'0');
+  return{day:`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`,hm:`${p(d.getHours())}:${p(d.getMinutes())}`}};
+// the abbreviation depends on the date (PST or PDT), so it is taken at the timestamp shown
+const tzName=ts=>TZ==='utc'?'UTC':((new Intl.DateTimeFormat('en',{timeZoneName:'short'}).formatToParts(ts?new Date(/(Z|[+-][0-9][0-9]:?[0-9][0-9])$/.test(ts)?ts:ts+'Z'):new Date()).find(x=>x.type==='timeZoneName')||{}).value||'local');
+function tzText(ts,fmt,end){if(!ts)return'';const a=tzp(ts),z=tzName(ts);
+  return fmt==='hm'?`${a.hm} ${z}`:fmt==='range'?`${a.day} ${a.hm} → ${end?tzp(end).hm:''} ${z}`:`${a.day} ${a.hm} ${z}`}
+function tzSync(r){(r||document).querySelectorAll('time[data-ts]').forEach(el=>{el.textContent=tzText(el.dataset.ts,el.dataset.fmt,el.dataset.end)})}
+function setTz(mode){TZ=mode==='utc'?'utc':'local';try{TZ==='utc'?localStorage.setItem('tokscope-tz','utc'):localStorage.removeItem('tokscope-tz')}catch(_){}
+  document.querySelectorAll('[data-set-tz]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.setTz===TZ));
+  tzSync();if(window.onTz)window.onTz()}
+document.querySelectorAll('[data-set-tz]').forEach(b=>{b.addEventListener('click',()=>setTz(b.dataset.setTz));b.setAttribute('aria-pressed',b.dataset.setTz===TZ)});
+tzSync();
 // keyboard: t theme, s design (Classic or Ink), g top, ? this list; pages add their own keys
 const keysDlg=document.getElementById('keys');
 addEventListener('keydown',e=>{const typing=/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
@@ -98,7 +115,7 @@ const MAXT=Math.max(...S.map(s=>s.tokens),1);
 function split(main,ag){const t=Math.max(main+ag,1),len=Math.max(3,100*(main+ag)/MAXT);
   return `<span class=track><span class=split style="width:${len.toFixed(1)}%" title="main ${fmt(main)} · subagents ${fmt(ag)}"><u style="width:${(100*main/t).toFixed(1)}%"></u>${ag?`<u class=a style="width:${(100*ag/t).toFixed(1)}%"></u>`:''}</span></span>`}
 // time of day when the list is by day; date and time when it is ranked
-const when=s=>sortKey==='recent'?s.start.slice(11,16):s.start.slice(5,16).replace('T',' ');
+const when=s=>{if(!s.start)return'';const p=tzp(s.start);return sortKey==='recent'?p.hm:p.day.slice(5)+' '+p.hm};
 // the dashboard fills LIVE from /api/live (open sessions: {id:{status,entry}}); the static report has none
 const liveTag=id=>{const l=(window.LIVE||{})[id];return l?`<span class="live ${l.status==='busy'?'working':'open'}" title="${l.status==='busy'?'working now':'open, waiting for you'} · ${esc(l.entry)}"><i></i><span class=lbl>${l.status==='busy'?'running':'open'}</span><span class=where> · ${esc(l.entry)}</span></span>`:''};
 window.paintLive=()=>document.querySelectorAll('#session-list .srow').forEach(d=>{const t=d.querySelector('.t'),old=t.querySelector('.live'),
@@ -141,7 +158,7 @@ function detail(s){
   const turns=s.turns.map((t,k)=>`<tr><td data-label="#">${t.i??'–'}</td><td class=l data-label="prompt">${esc(t.text||(t.i===0?'(session start)':''))}</td>
     <td class=lm data-label="skill">${esc(t.skill||'')}${t.version?` <code class=ver title="${t.version[1]?'exact: hashed at the Skill call':'inferred from the kept text or the date'} · tokscope skills ${esc(t.skill)}">${esc(t.version[0].slice(0,6))}</code>`:''}</td><td data-label="tokens">${bar(t.tokens,top,t.agents_tokens,Math.min(k,12))}</td><td data-label="output">${fmt(t.output)}</td>
     <td data-label="req">${t.requests}</td><td class="lm calls" data-label="calls">${callCell(t)}</td><td class=u data-label="API-eq">${usd(t.usd)}</td></tr>${runsRow(t.runs)}`).join('');
-  return `${ids(s)}<p class=note>${esc(s.start.replace("T"," ").slice(0,16))} → ${esc(s.end.replace("T"," ").slice(11,16))} UTC · ${esc(s.project)} ·
+  return `${ids(s)}<p class=note><time data-ts="${esc(s.start)}" data-end="${esc(s.end)}" data-fmt=range>${esc(tzText(s.start,'range',s.end))}</time> · ${esc(s.project)} ·
     main thread <span data-count="${s.main}">${fmt(s.main)}</span> · subagents <span data-count="${s.agents}">${fmt(s.agents)}</span> (${s.runs} runs) · output <span data-count="${s.output}">${fmt(s.output)}</span> · <span class=usd>${usd(s.usd)} API-eq</span></p>
     <div class=scroll><table><tr><th>#</th><th style="text-align:left">prompt</th><th style="text-align:left">skill</th><th>tokens</th><th>output</th><th title="model requests">req</th><th style="text-align:left">calls</th><th>API-eq</th></tr>${turns}</table></div>
     <p class=note>calls: subagent tokens are measured; MCP and tool tokens marked ~ are estimated from the size of the result each call put into the context.</p>`}
@@ -165,13 +182,15 @@ function moreBtn(e){let el=nodes.get('more:'+e.more.id);
 // a session and everything it started, for the day header (a collapsed "+N more" still counts)
 function tally(s,seen=new Set()){if(seen.has(s.id))return[0,0];seen.add(s.id);let n=1,t=s.tokens;
   (kids.get(s.id)||[]).forEach(k=>{const[a,b]=tally(k,seen);n+=a;t+=b});return[n,t]}
-// days are UTC days, like the time column (s.start is a UTC timestamp)
+// days follow the time column: the day of s.start in the chosen zone (d is 'YYYY-MM-DD'); the date is only a label, so it is formatted in UTC
+const dayOf=s=>s.start?tzp(s.start).day:'';
 const dayName=d=>!d?'No date':new Date(d+'T00:00:00Z').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
 // a group ranks by its root session's own numbers: a parent's totals do not include the sessions it started (DECISIONS.md, 'Headless child sessions keep their own totals')
 const SORTS={recent:['Newest first',(a,b)=>b[0].s.start.localeCompare(a[0].s.start)],tokens:['Most tokens first',(a,b)=>b[0].s.tokens-a[0].s.tokens],
   agents:['Most subagent tokens first',(a,b)=>b[0].s.agents-a[0].s.agents]};
 function headEl(){const h=document.createElement('div');h.className='shead';
-  h.innerHTML='<span></span><span class=d title="UTC">time</span><span class=t>session</span><span class=sk>top skill</span><span class="r n">prompts</span><span class="r n" title="subagent runs started in the session">subagents</span><span class=r>tokens</span><span class=track title="length is tokens against the largest session in the list">split</span><span></span>';return h}
+  h.innerHTML=`<span></span><span class=d title="${esc(tzName())}">time</span><span class=t>session</span><span class=sk>top skill</span><span class="r n">prompts</span><span class="r n" title="subagent runs started in the session">subagents</span><span class=r>tokens</span><span class=track title="length is tokens against the largest session in the list">split</span><span></span>`;return h}
+window.onTz=()=>render();
 function dayEl(label,n,tk){const h=document.createElement('div');h.className='dayhd';
   h.innerHTML=`<b>${esc(label)}</b><span>${n} session${n===1?'':'s'} · ${fmt(tk)} tokens</span>`;return h}
 function render(){
@@ -194,8 +213,8 @@ function render(){
   // by day: a header for each day (all its sessions and tokens, also those past "Show more"), newest first. Ranked: one header, and the date moves into the time column.
   const els=[];
   if(page.length){els.push(headEl());
-    if(sortKey==='recent'){let cur=null;page.forEach(g=>{const day=g[0].s.start.slice(0,10);
-      if(day!==cur){cur=day;let n=0,tk=0;rows.forEach(r=>{if(r[0].s.start.slice(0,10)===day){const[a,b]=tally(r[0].s);n+=a;tk+=b}});els.push(dayEl(dayName(day),n,tk))}
+    if(sortKey==='recent'){let cur=null;page.forEach(g=>{const day=dayOf(g[0].s);
+      if(day!==cur){cur=day;let n=0,tk=0;rows.forEach(r=>{if(dayOf(r[0].s)===day){const[a,b]=tally(r[0].s);n+=a;tk+=b}});els.push(dayEl(dayName(day),n,tk))}
       g.forEach(e=>els.push(rowFor(e)))})}
     else{let n=0,tk=0;rows.forEach(r=>{const[a,b]=tally(r[0].s);n+=a;tk+=b});els.push(dayEl(SORTS[sortKey][0],n,tk));page.forEach(g=>g.forEach(e=>els.push(rowFor(e))))}}
   list.replaceChildren(...els);
@@ -230,7 +249,7 @@ function renderCompare(){
   const line=(label,vals,low)=>{const nums=vals.map(v=>typeof v==='number'?v:null).filter(v=>v!=null),best=low&&nums.length?Math.min(...nums):null;
     return `<tr><td>${label}</td>${vals.map(v=>`<td>${typeof v==='number'?(v===best?'<b>'+fmt(v)+'</b>':fmt(v)):esc(v)}</td>`).join('')}</tr>`};
   let h=`<tr><th></th>${sel.map(s=>`<th title="${esc(s.title)}">${esc((s.title||'').slice(0,26))}<br><span class=usd>${esc(s.id.slice(0,8))}</span></th>`).join('')}</tr>`;
-  h+=line('started',sel.map(s=>s.start.slice(0,10)));h+=line('prompts',sel.map(s=>s.prompts));
+  h+=line('started',sel.map(dayOf));h+=line('prompts',sel.map(s=>s.prompts));
   h+=line('tokens',sel.map(s=>s.tokens),1);h+=line('tokens per prompt',sel.map(s=>s.tokens/Math.max(s.prompts,1)),1);
   h+=line('output tokens',sel.map(s=>s.output),1);h+=line('subagent runs',sel.map(s=>s.runs));
   h+=`<tr><td class=u>API-eq</td>${sel.map(s=>`<td class=u>${usd(s.usd)}</td>`).join('')}</tr>`;

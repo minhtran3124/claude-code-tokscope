@@ -107,7 +107,9 @@ SIDE_CONTROLS = (
     + "".join(f'<button type="button" class="chip" data-set-theme="{m}" aria-pressed="false">{m.capitalize()}</button>' for m in ("light", "dark", "auto"))
     + '</div></div><div class="ctl"><span class="ctl-l" id="skin-l">Design</span><div class="segctl" role="group" aria-labelledby="skin-l">'
     + "".join(f'<button type="button" class="chip" data-set-skin="{m}" aria-pressed="false">{m.capitalize()}</button>' for m in ("ink", "classic"))
-    + '</div></div><button type="button" class="chip" id="keys-btn" aria-label="Keyboard shortcuts"><kbd>?</kbd></button></div>')
+    + '</div></div>'
+    + '<div class="ctl"><span class="ctl-l" id="tz-l">Time zone</span><div class="segctl" role="group" aria-labelledby="tz-l"><button type="button" class="chip" data-set-tz="local" aria-pressed="false" title="Show times in this browser\'s time zone">Local</button><button type="button" class="chip" data-set-tz="utc" aria-pressed="false">UTC</button></div></div>'
+    + '<button type="button" class="chip" id="keys-btn" aria-label="Keyboard shortcuts"><kbd>?</kbd></button></div>')
 
 
 def render(conn, name, qs, stamp, level="full", token=""):
