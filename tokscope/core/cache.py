@@ -2,7 +2,7 @@
 from the transcripts, and the official miss causes when statusline snapshots exist.
 
 A miss is a request whose cache_read fell below half of the previous request's in the same thread (the main thread, or one
-subagent) while it wrote at least MIN_WRITE tokens, with no /compact prompt in between. Its cause is the idle gap:
+subagent) while it wrote at least MIN_WRITE tokens, with no compaction (a compact turn_event, from /compact or auto-compact) in between. Its cause is the idle gap:
 over 1 h = ttl_expired_1h, over 5 min = ttl_expired_5m, shorter = prefix_changed (the tool list or system prompt changed;
 the transcript cannot say which). Rows are read as `r` and sessions as `s`, so the filters of cli._filters apply."""
 
@@ -37,10 +37,10 @@ def _write_usd(model, cw5, cw1, speed, geo):
     return pricing.cost_usd(model, 0, 0, 0, cw5, cw1, speed, geo) or 0.0
 
 
-def compacted(conn, session_id, start, end):
-    """True when a /compact prompt of the session sits between two requests."""
-    return conn.execute("SELECT 1 FROM prompts WHERE session_id = ? AND ts > ? AND ts <= ? AND text LIKE '%/compact%' LIMIT 1",
-                        (session_id, start, end)).fetchone() is not None
+def compacted(conn, session_id, agent_id, start, end):
+    """True when a compaction (turn_events kind 'compact') of the thread sits between two requests."""
+    return conn.execute("SELECT 1 FROM turn_events WHERE session_id = ? AND COALESCE(agent_id, '') = ? AND kind = 'compact' "
+                        "AND ts > ? AND ts <= ? LIMIT 1", (session_id, agent_id, start, end)).fetchone() is not None
 
 
 def scan(conn, where="", params=()):
@@ -57,7 +57,7 @@ def scan(conn, where="", params=()):
         d = {"session": sid, "ts": ts, "model": model or "?", "skill": skill, "agent": agent, "input": inp, "reads": cr,
              "writes": cw5 + cw1, "write_usd": _write_usd(model, cw5, cw1, speed, geo), "miss": None}
         if (prev and prev["thread"] == (sid, aid) and prev["reads"] > 0 and cr < prev["reads"] * DROP
-                and cw5 + cw1 >= MIN_WRITE and not compacted(conn, sid, prev["ts"], ts)):
+                and cw5 + cw1 >= MIN_WRITE and not compacted(conn, sid, aid, prev["ts"], ts)):
             try:
                 gap = (_time(ts) - _time(prev["ts"])).total_seconds()
             except ValueError:

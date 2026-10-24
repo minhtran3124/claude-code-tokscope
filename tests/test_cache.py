@@ -68,7 +68,8 @@ class CacheTest(unittest.TestCase):
     def test_a_compact_between_two_requests_is_not_a_miss_and_a_small_write_is_not_either(self):
         self.req(0, 0, 0, cw5=5000)
         self.req(10, 0, 5000, cw5=0)
-        self.conn.execute("INSERT INTO prompts VALUES ('s1', 0, ?, '/compact')", ((T0 + timedelta(seconds=15)).isoformat(),))
+        self.conn.execute("INSERT INTO turn_events VALUES ('s1', ?, 0, NULL, NULL, NULL, 'compact')",  # what ingest writes
+                          ((T0 + timedelta(seconds=15)).isoformat(),))
         self.req(20, 0, 0, cw5=5000)
         self.req(30, 0, 5000)
         self.req(40, 0, 0, cw5=100)   # below MIN_WRITE
