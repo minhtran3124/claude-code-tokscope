@@ -116,14 +116,15 @@ def rank(calls, by="tool", split=None, limit=15):
     return sorted(rows, key=lambda r: (-r["total"], r["key"], r["split"] or ""))[:limit]
 
 
-def server_p95(conn, bench_project):
-    """{(cwd, server): p95 result tokens} over every MCP call made from a project folder."""
+def server_p95(conn, bench_project, group=None):
+    """{(cwd, server): p95 result tokens} over every MCP call made from a project folder. `group` maps a cwd to a
+    key (e.g. its project) so the percentile is taken over all the calls of that key: {(key, server): p95}."""
     seen = {}
     for cwd, name, chars, model in conn.execute(
             "SELECT s.cwd, t.name, t.result_chars, t.model FROM tool_calls t JOIN sessions s USING (session_id) "
             "WHERE t.name LIKE 'mcp__%' AND t.result_chars > 0 AND s.project NOT LIKE ?", (bench_project,)):
         if name.count("__") >= 2:
-            seen.setdefault((cwd, name.split("__")[1]), []).append(chars / chars_per_token(model))
+            seen.setdefault((group.get(cwd, cwd) if group else cwd, name.split("__")[1]), []).append(chars / chars_per_token(model))
     return {k: _pct(0.95, sorted(v)) for k, v in seen.items()}
 
 

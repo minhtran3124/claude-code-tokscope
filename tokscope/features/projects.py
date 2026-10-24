@@ -216,9 +216,10 @@ def discover(conn, bench_project="%tokscope%-bench-%"):
         u["calls"] += calls
         u["tokens"] += round((chars or 0) / CHARS_PER_TOKEN)
         u["last"] = max(u["last"], last or "")
-    for (cwd, server), p95 in context.server_p95(conn, bench_project).items():
-        if cwd in by_cwd and server in by_cwd[cwd]["mcp"]:
-            by_cwd[cwd]["mcp"][server]["p95"] = p95
+    for (key, server), p95 in context.server_p95(conn, bench_project, {c: id(g) for c, g in by_cwd.items()}).items():
+        g = next((g for g in groups.values() if id(g) == key), None)   # one p95 over all the project's folders
+        if g and server in g["mcp"]:
+            g["mcp"][server]["p95"] = p95
     for cwd, server, tools, chars in conn.execute(  # oldest first, so a server's newest definition wins
             "SELECT s.cwd, d.server, d.tools, d.chars FROM mcp_defs d JOIN sessions s USING (session_id) "
             "WHERE s.project NOT LIKE ? ORDER BY s.last_ts", (bench_project,)):
