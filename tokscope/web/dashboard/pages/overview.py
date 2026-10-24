@@ -4,7 +4,7 @@ import copy
 import html
 from datetime import date, datetime, timedelta, timezone
 
-from ....core import baseline, budgets, cache, skills, tz
+from ....core import baseline, budgets, skills, tz
 from ....features import library, live
 from ... import charts
 from ....features.changes import list_changes
@@ -485,20 +485,6 @@ def _budgets(conn):
             f'<ul class="plain">{"".join(_budget_row(i) for i in result["items"])}</ul>{note}</section>')
 
 
-def _cache_finding(conn, f):
-    """One line when the last 7 days re-cached the prompt: the dollars and the top likely cause. Nothing without a miss."""
-    cond, params = f.cond()
-    since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-    reqs, misses = cache.scan(conn, f"{cond} AND r.ts >= ?" if cond else "WHERE r.ts >= ?", (*params, since))
-    if not misses:
-        return ""
-    t = cache.totals(reqs, misses)
-    return (f'<section class="card cache-finding"><h2>Prompt cache</h2><p class="note">{_usd(t["recache_usd"])} of re-cache in the '
-            f'last 7 days ({t["misses"]:,} likely miss{"es" * (t["misses"] != 1)}, {_tok(t["recache_tokens"])} tokens), '
-            f'top cause: {html.escape(t["top_cause"])}; hit ratio {cache.pct(t["hit_ratio"])}. '
-            f'<a href="{f.link("breakdowns")}#cache">Prompt cache</a> has the hints.</p></section>')
-
-
 def page_overview(conn, f):
     cmp = _window(conn, f)
     rows = _day_rows(conn, f)
@@ -507,7 +493,6 @@ def page_overview(conn, f):
         f'<section class="card answer live-card"><h2><span class="dot"></span>Today</h2><div data-region="running">{_running()}</div><div data-region="today">{_today(conn, f)}</div></section>',
         f'<div data-region="budgets">{_budgets(conn)}</div>',
         f'<div data-region="kpis">{_kpis(conn, f)}</div>',
-        f'<div data-region="cache">{_cache_finding(conn, f)}</div>',
         _session_start(conn, f),
         f'<section class="card"><h2>Biggest movers</h2><p class="note">{f.label()}, tokens per day against the window before</p>'
         f'<div data-region="changed">{_movers(conn, f, cmp)}<h3>New skill versions</h3>{_new_versions(conn, f)}</div></section>',

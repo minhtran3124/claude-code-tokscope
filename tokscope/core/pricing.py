@@ -144,9 +144,3 @@ def unpriced_text(rows):
         return ""
     return (f"unpriced: {sum(n for _, n in rows):,} requests ({', '.join(str(m) for m, _ in rows)}) "
             "have no list price and count as $0, so API-eq is too low")
-
-
-def cache_read_rate(model, ov=None):
-    """USD per token a request pays to re-read cached context, or None when the model has no known rate."""
-    rates = _model_rates(normalize(model or ""), overrides() if ov is None else ov)
-    return None if rates is None else rates[2] / 1_000_000

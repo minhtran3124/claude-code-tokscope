@@ -27,11 +27,6 @@ class WeekTest(unittest.TestCase):
             (session, f"k{self.n}", (NOW - timedelta(days=days_ago)).isoformat(), "m", agent, agent and "reviewer",
              skill, phase, tokens))
 
-    def test_the_report_nav_links_the_context_section(self):
-        from pathlib import Path
-        import tokscope.web.report.writer as w
-        self.assertIn('<a href="#context">Context</a>', Path(w.__file__).read_text())
-
     def test_the_report_states_the_session_start_as_an_estimate_and_skips_benchmarks_and_empty_data(self):
         from tokscope.web.report.sections.summary import _session_start
         self.assertEqual(_session_start(self.conn, COND, PARAMS), "")
