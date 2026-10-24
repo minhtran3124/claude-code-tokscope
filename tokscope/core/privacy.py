@@ -16,6 +16,7 @@ import re
 import sqlite3
 
 from .. import paths
+from . import tz
 from .calls import mcp_server
 
 LEVELS = ("full", "redacted", "numbers")
@@ -34,7 +35,9 @@ COLUMNS = {
                  "parent_session_id": KEEP},
     "requests": {"session_id": KEEP, "request_key": KEEP, "ts": KEEP, "model": KEEP, "agent_id": KEEP, "agent_type": AGENT,
                  "prompt_idx": KEEP, "skill": SKILL, "phase": PHASE, "input": KEEP, "output": KEEP, "thinking": KEEP,
-                 "cache_read": KEEP, "cache_write_5m": KEEP, "cache_write_1h": KEEP, "cost_usd": KEEP},
+                 "cache_read": KEEP, "cache_write_5m": KEEP, "cache_write_1h": KEEP, "cost_usd": KEEP,
+                 "web_search_requests": KEEP, "web_fetch_requests": KEEP, "speed": KEEP, "inference_geo": KEEP},
+    "meta": {"k": KEEP, "v": KEEP},
     "subagents": {"session_id": KEEP, "agent_id": KEEP, "agent_type": AGENT, "description": DESC, "tool_use_id": KEEP,
                   "spawn_depth": KEEP, "parent_agent_id": KEEP, "prompt_idx": KEEP, "skill": SKILL, "phase": PHASE},
     "skill_calls": {"session_id": KEEP, "ts": KEEP, "skill": SKILL, "phase": PHASE, "source": KEEP, "agent_id": KEEP,
@@ -156,7 +159,7 @@ class Redactor:
 def redacted_copy(db_path, level, where="", params=(), redactor=None):
     """An in-memory copy of the database, filtered by the report's WHERE clause on the real values, then redacted."""
     src = sqlite3.connect(db_path)
-    conn = sqlite3.connect(":memory:")
+    conn = tz.register(sqlite3.connect(":memory:"))
     src.backup(conn)
     src.close()
     if where:

@@ -133,7 +133,11 @@ Things to know:
   versions, the reports, the benchmarks and `privacy.key`. Git ignores all of it.
 - **Reports hold private text.** The default report and the `full` dashboard show your prompts, titles and paths.
   Before you share a report, make it with `tokscope report --privacy redacted` (or `numbers`).
-- **Dollars are estimates**: tokens at API list prices ("API-eq"), not what a plan charges.
+- **Dollars are estimates**: tokens at API list prices ("API-eq"), not what a plan charges. Fast mode (2x on Opus 5.5, 5
+  and 4.8), US-only inference (1.1x on 4.6+ models) and web searches ($10 per 1,000) are priced from the transcript.
+- **Price overrides**: `<data home>/pricing.json` replaces rates; totals follow on the next run, no re-ingest. Example:
+  `{"web_search_per_1000": 10, "claude-opus-5-5": {"input": 4, "output": 20, "cache_read": 0.2, "fast": 2, "us": 1.1}}`
+  (USD per million tokens; every key is optional for a known model, a new model needs input, output and cache_read).
 - **Local only**: the dashboard answers only on `127.0.0.1` and accepts changes only from pages it served.
 - **Benchmarks and replays cost money or plan usage**: they start new `claude -p` sessions. Set `--runs` and `--budget`.
 - **Transcripts expire** after Claude Code's `cleanupPeriodDays`. Set it high (for example 365) to keep history.
