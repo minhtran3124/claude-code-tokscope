@@ -1,5 +1,6 @@
 // A window around `tokscope serve`: start the server on a free port, show it, stop it on quit.
 const { app, BrowserWindow, nativeTheme, shell } = require("electron");
+const { statusPage } = require("./loading");
 const { spawn } = require("child_process");
 const net = require("net");
 const http = require("http");
@@ -78,20 +79,6 @@ function openExternal(u) {
   } catch (e) { /* not a URL: ignore */ }
 }
 
-// A page for the window before the dashboard answers: a spinner and a message, or (spin false) the reason it did not
-// start. The colours are --page, --ink and --mark of the dashboard's light and dark themes.
-function statusPage(dark, message, spin = true) {
-  const bg = dark ? "#1d1a15" : "#f2efe7", fg = dark ? "#f2efe7" : "#231e16", mark = dark ? "#76a0e2" : "#2f5aa8";
-  const text = message.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-  const html = `<!doctype html><meta charset="utf-8"><title>tokscope</title><style>
-html,body{height:100%;margin:0;background:${bg};color:${fg};font:15px system-ui,sans-serif}
-body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:0 24px;text-align:center}
-i{width:26px;height:26px;border:3px solid ${mark};border-right-color:transparent;border-radius:50%;animation:s .8s linear infinite}
-@keyframes s{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){i{animation:none}}</style>
-${spin ? "<i></i>" : ""}<div>${text}</div>`;
-  return "data:text/html;charset=utf-8," + encodeURIComponent(html);
-}
-
 // the server did not start: say so in the window instead of a spinner that never ends
 function showFailure(message) {
   console.error(`tokscope: ${message}`);
@@ -112,7 +99,7 @@ function createWindow() {
     win.webContents.on(ev, (e, u) => { if (!base || !u.startsWith(base)) { e.preventDefault(); openExternal(u); } });
   }
   win.on("closed", () => { win = null; });
-  win.loadURL(statusPage(dark, "Starting tokscope…")).catch(() => {});  // aborted when the dashboard load replaces it
+  win.loadURL(statusPage(dark, "Starting tokscope")).catch(() => {});  // aborted when the dashboard load replaces it
   win.webContents.on("did-fail-load", (e, code, desc, u, isMain) => {
     if (isMain && code !== -3 && base && u.startsWith(base)) showFailure(`the dashboard did not load (${desc})`);  // -3 is an aborted load
   });
