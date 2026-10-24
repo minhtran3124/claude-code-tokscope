@@ -142,6 +142,15 @@ class PrivacyTest(unittest.TestCase):
         self.assertEqual(copy.execute("SELECT count(*) FROM sessions WHERE new_text IS NOT NULL").fetchone()[0], 0)
         self.assertEqual(copy.execute("SELECT count(*) FROM notes").fetchone()[0], 0)
 
+    def test_a_copy_has_rows_still_in_the_wal(self):
+        conn = connect(self.db)
+        conn.execute("INSERT INTO sessions (session_id) VALUES ('latest-wal-row')")
+        conn.commit()  # not checkpointed: the row is in the -wal file while conn is open
+        copy = privacy.redacted_copy(self.db, "numbers")
+        self.assertEqual(copy.execute("SELECT count(*) FROM sessions").fetchone()[0],
+                         conn.execute("SELECT count(*) FROM sessions").fetchone()[0])
+        conn.close()
+
     def test_the_database_on_disk_is_never_changed(self):
         before = self.db.read_bytes()
         self.report("numbers")

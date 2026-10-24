@@ -381,8 +381,17 @@ def session_signature(main_path):
     return f"v{PARSER_VERSION}:{len(parts)}:{sum(s.st_size for s in parts)}:{max(s.st_mtime_ns for s in parts)}"
 
 
+def open_db(db_path):
+    """The one way to open the database file: several processes write it, so WAL and a 10 s wait on a lock."""
+    conn = tz.register(sqlite3.connect(db_path, timeout=10))
+    conn.execute("PRAGMA busy_timeout=10000")
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    return conn
+
+
 def connect(db_path):
-    conn = tz.register(sqlite3.connect(db_path))
+    conn = open_db(db_path)
     conn.executescript(SCHEMA)
     if "result_chars" not in {c[1] for c in conn.execute("PRAGMA table_info(tool_calls)")}:
         conn.execute("ALTER TABLE tool_calls ADD COLUMN result_chars INTEGER")  # refilled by the PARSER_VERSION bump

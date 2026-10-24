@@ -2,12 +2,14 @@ import json
 import os
 import sqlite3
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from tokscope import paths
-from tokscope.core.ingest import ingest
+from tokscope.core.ingest import connect, ingest, open_db
 from tokscope.core.skills import canonical_name, loaded_text_hash
 from tokscope.core.pricing import cost_usd
 
@@ -65,6 +67,40 @@ class Fixture(unittest.TestCase):
 
     def rows(self, sql):
         return sqlite3.connect(self.db).execute(sql).fetchall()
+
+
+class SharedConnectionTest(Fixture):
+    def test_the_database_is_in_wal_mode_after_the_first_connect(self):
+        connect(self.db).close()
+        self.assertEqual(sqlite3.connect(self.db).execute("PRAGMA journal_mode").fetchone()[0], "wal")
+
+    def test_a_writer_holding_a_transaction_does_not_fail_another_writer_within_the_timeout(self):
+        connect(self.db).close()
+        holder = open_db(self.db)
+        holder.execute("BEGIN IMMEDIATE")
+        holder.execute("INSERT INTO sessions (session_id) VALUES ('held')")
+        errors = []
+
+        def write():
+            try:
+                other = open_db(self.db)
+                other.execute("INSERT INTO sessions (session_id) VALUES ('waited')")  # waits, no "database is locked"
+                other.commit()
+            except sqlite3.OperationalError as e:
+                errors.append(e)
+
+        t = threading.Thread(target=write)
+        t.start()
+        time.sleep(0.5)
+        holder.commit()
+        t.join(5)
+        self.assertEqual(errors, [])
+        self.assertEqual(sorted(r[0] for r in holder.execute("SELECT session_id FROM sessions")), ["held", "waited"])
+
+    def test_no_module_opens_the_database_file_without_the_shared_settings(self):
+        root = Path(__file__).resolve().parent.parent / "tokscope"
+        raw = [str(p.relative_to(root)) for p in root.rglob("*.py") if "sqlite3.connect(" in p.read_text() and p.name != "ingest.py"]
+        self.assertEqual(raw, ["core/privacy.py"])  # only privacy's ":memory:" copy
 
 
 class IngestTest(Fixture):
