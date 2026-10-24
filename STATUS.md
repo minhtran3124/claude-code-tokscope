@@ -18,6 +18,7 @@ Try Pause / Unpause once on a real deployment; then close #23 after a look at th
 - GitHub Actions jobs do not start: account payment or spending limit (Settings > Billing).
 
 ## Recent
+- 2026-10-24: #48 every database open goes through `open_db` (WAL, 10 s busy timeout), dashboard shows a failed ingest in the live chip; PR open on feat/ingest-hardening.
 - 2026-10-24: #47 transcripts folders: `paths.projects_dirs()` ($CLAUDE_CONFIG_DIR list, else XDG + ~/.claude), `ingest --projects-dir`, ingest prints the folders; 335 tests pass.
 - 2026-10-24: confirmed #46 with a real fork and fixed it (one session keeps a shared request).
 - 2026-10-24: running sessions: `features/live.py` reads `~/.claude/sessions/*.json` (pid alive, status busy or idle, entrypoint), `/api/live`, Overview "N sessions running" with a pulsing dot while any works, Sessions rows tagged "running · Terminal" or "open · VS Code"; 302 tests pass; checked at 1440 and 375 px (phone shows the dot only); PR #75 merged; desktop app rebuilt (install.sh) and service restarted on main.

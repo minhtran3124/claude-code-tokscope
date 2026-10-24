@@ -8,7 +8,6 @@ import json
 import os
 import re
 import shutil
-import sqlite3
 import subprocess
 import tarfile
 import io
@@ -173,7 +172,7 @@ def regrade(db_path, task, skill=None):
     also re-check which version each run read (a newer ingest may have found text an older one missed)."""
     from ..core.skills import check_load
 
-    conn = sqlite3.connect(db_path)
+    conn = connect(db_path)
     _schema(conn)
     rows = conn.execute("SELECT run_id, result, passed FROM bench_runs WHERE task IN (?, ?)",
                         (task["name"], task["name"] + "-leaky")).fetchall()
@@ -196,7 +195,7 @@ def _spread(values):
 
 def diff(db_path, task_name):
     """Per-variant median [min–max] of cost split by owner, tokens, time and pass rate."""
-    conn = sqlite3.connect(db_path)
+    conn = connect(db_path)
     _schema(conn)
     rows = conn.execute(
         """SELECT b.variant, b.passed, b.is_error, b.duration_s, b.reported_cost, b.skill_check,

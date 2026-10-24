@@ -92,6 +92,11 @@ class ServerTest(unittest.TestCase):
         self.addCleanup(self.server.server_close)
         self.addCleanup(self.server.shutdown)
 
+    def test_a_failed_ingest_shows_in_the_version_poll_and_the_page_script(self):
+        self.live.error = "database is locked"
+        self.assertEqual(json.loads(self.get("/api/version")[1])["error"], "database is locked")
+        self.assertIn("last ingest failed", dashboard.scripts.DASH_JS)
+
     def get(self, path, host=None):
         req = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}", headers={"Host": host} if host else {})
         try:
@@ -105,7 +110,7 @@ class ServerTest(unittest.TestCase):
         with mock.patch.object(core_privacy, "redacted_copy", side_effect=AssertionError("copied")) as copy:
             code, body = self.get("/api/version")
         self.assertEqual(code, 200)
-        self.assertEqual(json.loads(body), {"stamp": self.live.stamp, "live": ""})
+        self.assertEqual(json.loads(body), {"stamp": self.live.stamp, "error": None, "live": ""})
         copy.assert_not_called()
 
     def open_session(self, pid, sid, status="busy", entrypoint="cli"):

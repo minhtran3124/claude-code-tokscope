@@ -18,6 +18,7 @@ import sqlite3
 from .. import paths
 from . import tz
 from .calls import mcp_server
+from .ingest import open_db
 
 LEVELS = ("full", "redacted", "numbers")
 
@@ -158,7 +159,7 @@ class Redactor:
 
 def redacted_copy(db_path, level, where="", params=(), redactor=None):
     """An in-memory copy of the database, filtered by the report's WHERE clause on the real values, then redacted."""
-    src = sqlite3.connect(db_path)
+    src = open_db(db_path)  # the backup API reads the WAL too, so the copy has the latest rows
     conn = tz.register(sqlite3.connect(":memory:"))
     src.backup(conn)
     src.close()
