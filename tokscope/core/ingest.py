@@ -496,6 +496,9 @@ def ingest_session(db_path, phases_path, session_id, projects_dir=PROJECTS_DIR):
 
 
 def ingest(db_path, phases_path, projects_dir=PROJECTS_DIR, project_filter=None, log=print):
+    if not Path(projects_dir).is_dir():
+        log(f"ingest: no transcripts in {projects_dir} yet")
+        return 0, 0
     phases = load_phases(phases_path)
     conn = connect(db_path)
     known = dict(conn.execute("SELECT session_id, signature FROM sessions"))

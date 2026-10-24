@@ -213,6 +213,14 @@ class IngestTest(Fixture):
         self.assertEqual(self.rows("SELECT count(*) FROM requests"), [(2,)])
 
 
+class MissingDirTest(Fixture):
+    def test_missing_projects_dir(self):
+        logs = []
+        self.assertEqual(ingest(self.db, PHASES, projects_dir=self.tmp / "nope", log=logs.append), (0, 0))
+        self.assertEqual(len(logs), 1)
+        self.assertIn("no transcripts", logs[0])
+
+
 class SessionCommandTest(Fixture):
     def test_session_breakdown_is_read_fresh_from_the_transcript(self):
         from tokscope.cli import session_text
