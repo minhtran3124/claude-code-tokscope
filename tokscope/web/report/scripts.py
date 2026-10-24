@@ -63,8 +63,9 @@ const tzp=ts=>{const d=new Date(/(Z|[+-][0-9][0-9]:?[0-9][0-9])$/.test(ts)?ts:ts
   if(TZ==='utc'||isNaN(d))return{day:ts.slice(0,10),hm:ts.slice(11,16)};
   const p=n=>String(n).padStart(2,'0');
   return{day:`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`,hm:`${p(d.getHours())}:${p(d.getMinutes())}`}};
-const tzName=()=>TZ==='utc'?'UTC':((new Intl.DateTimeFormat('en',{timeZoneName:'short'}).formatToParts(new Date()).find(x=>x.type==='timeZoneName')||{}).value||'local');
-function tzText(ts,fmt,end){if(!ts)return'';const a=tzp(ts),z=tzName();
+// the abbreviation depends on the date (PST or PDT), so it is taken at the timestamp shown
+const tzName=ts=>TZ==='utc'?'UTC':((new Intl.DateTimeFormat('en',{timeZoneName:'short'}).formatToParts(ts?new Date(/(Z|[+-][0-9][0-9]:?[0-9][0-9])$/.test(ts)?ts:ts+'Z'):new Date()).find(x=>x.type==='timeZoneName')||{}).value||'local');
+function tzText(ts,fmt,end){if(!ts)return'';const a=tzp(ts),z=tzName(ts);
   return fmt==='hm'?`${a.hm} ${z}`:fmt==='range'?`${a.day} ${a.hm} → ${end?tzp(end).hm:''} ${z}`:`${a.day} ${a.hm} ${z}`}
 function tzSync(r){(r||document).querySelectorAll('time[data-ts]').forEach(el=>{el.textContent=tzText(el.dataset.ts,el.dataset.fmt,el.dataset.end)})}
 function setTz(mode){TZ=mode==='utc'?'utc':'local';try{TZ==='utc'?localStorage.setItem('tokscope-tz','utc'):localStorage.removeItem('tokscope-tz')}catch(_){}
