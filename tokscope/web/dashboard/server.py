@@ -19,7 +19,7 @@ from ...features import live as livemod
 from ...integrations import managed, registry
 from ..theme import fonts
 from ..theme.brand import FAVICON
-from ...core.ingest import PROJECTS_DIR, connect, ingest
+from ...core.ingest import connect, ingest
 from ..report.sections.sessions import _sessions_json
 from .common import Filters, PAGES
 from .pages.library import JOB_ID
@@ -54,7 +54,7 @@ def api(conn, name, qs, stamp):
 class Live:
     """Ingests new transcripts every `interval` seconds; `stamp` changes when the data does."""
 
-    def __init__(self, db, phases, interval, projects_dir=PROJECTS_DIR):
+    def __init__(self, db, phases, interval, projects_dir=None):
         self.db, self.phases, self.interval, self.projects_dir = db, phases, interval, projects_dir
         self.stamp = self._stamp()
         self.error = None
@@ -272,7 +272,7 @@ def handler(db, live, port, level, token=None):
     return Handler
 
 
-def serve(db, phases, port=8765, interval=10.0, open_browser=True, level="full", log=print, projects_dir=PROJECTS_DIR):
+def serve(db, phases, port=8765, interval=10.0, open_browser=True, level="full", log=print, projects_dir=None):
     live = Live(db, phases, interval, projects_dir)
     live.tick()  # start from fresh data
     server = ThreadingHTTPServer(("127.0.0.1", port), BaseHTTPRequestHandler)

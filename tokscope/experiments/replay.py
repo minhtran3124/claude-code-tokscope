@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from statistics import median
 
-from ..core.ingest import COMMAND_RE, PROJECTS_DIR, _is_human_prompt, _text, BUILTIN_COMMANDS, ingest_session
+from ..core.ingest import COMMAND_RE, find_transcripts, _is_human_prompt, _text, BUILTIN_COMMANDS, ingest_session
 
 ARGS_RE = re.compile(r"<command-args>(.*?)</command-args>", re.S)
 TOKENS = "(input + cache_read + cache_write_5m + cache_write_1h + output)"
@@ -63,8 +63,8 @@ def _schema(conn):
             conn.execute(f"ALTER TABLE replay_runs ADD COLUMN {col} TEXT")
 
 
-def find_transcript(session_id, projects_dir=PROJECTS_DIR):
-    matches = sorted(Path(projects_dir).glob(f"*/{session_id}.jsonl"))
+def find_transcript(session_id, projects_dir=None):
+    matches = find_transcripts(session_id, projects_dir)
     if not matches:
         raise FileNotFoundError(f"no transcript for session {session_id}")
     return matches[0]
@@ -227,7 +227,7 @@ def _fmt(v):
     return str(int(v))
 
 
-def diff(db_path, source_session, projects_dir=PROJECTS_DIR):
+def diff(db_path, source_session, projects_dir=None):
     """Tokens per turn as the model saw it, original vs each replay; a run that replayed merged prompts one by
     one (before merging existed) is summed over the same group."""
     conn = sqlite3.connect(db_path)

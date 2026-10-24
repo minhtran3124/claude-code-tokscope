@@ -7,7 +7,7 @@ from pathlib import Path
 
 from . import __version__, paths
 from .core.calls import turn_calls
-from .core.ingest import CARRIED, PROJECTS_DIR, connect, ingest, ingest_session
+from .core.ingest import CARRIED, connect, ingest, ingest_session
 from .core import tz
 from .core.pricing import API_EQ_NOTE, unpriced, unpriced_text
 from .core.privacy import LEVELS
@@ -226,6 +226,7 @@ def main():
     sub = p.add_subparsers(dest="cmd", required=True)
     pi = sub.add_parser("ingest", help="parse transcripts into SQLite (incremental)")
     pi.add_argument("--project", help="only project dirs containing this text")
+    pi.add_argument("--projects-dir", metavar="PATH", help="read this transcripts folder instead of the default ones")
     pi.add_argument("--session", help="re-parse this one session id only")
     pss = sub.add_parser("session", help="print one session's breakdown (ingests it first)")
     pss.add_argument("session_id")
@@ -283,11 +284,11 @@ def main():
 
     DB.parent.mkdir(parents=True, exist_ok=True)
     if args.cmd == "ingest" and args.session:
-        if not ingest_session(DB, PHASES, args.session):
+        if not ingest_session(DB, PHASES, args.session, args.projects_dir):
             sys.exit(f"tokscope: no transcript for session {args.session}")
     elif args.cmd == "ingest":
         start = time.time()
-        ingest(DB, PHASES, PROJECTS_DIR, args.project)
+        ingest(DB, PHASES, args.projects_dir, args.project)
         print(f"took {time.time() - start:.1f}s -> {DB}")
     elif args.cmd == "session":
         ingest_session(DB, PHASES, args.session_id)
@@ -308,7 +309,7 @@ def main():
         if args.skill == "import":
             from .core.skills import import_from_transcripts
 
-            done = import_from_transcripts(connect(DB), PROJECTS_DIR, args.name)
+            done = import_from_transcripts(connect(DB), None, args.name)
             for sk, version, first, n in done:
                 print(f"kept {sk} {version}: SKILL.md from {n} load(s), first {first[:16].replace('T', ' ')}")
             print(f"{len(done)} older version(s) kept" if done else "no older version found in the transcripts")
@@ -371,7 +372,7 @@ def main():
         from .web.report import write_report
 
         if args.cmd == "open":
-            ingest(DB, PHASES, PROJECTS_DIR, log=lambda *_: None)  # only changed transcripts; well under a second
+            ingest(DB, PHASES, None, log=lambda *_: None)  # only changed transcripts; well under a second
         where, params = _filters(args)
         args.out = args.out or (REPORT if args.privacy == "full" else REPORT.with_name(f"report-{args.privacy}.html"))
         write_report(DB, args.out, where, params, level=args.privacy)

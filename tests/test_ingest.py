@@ -238,6 +238,29 @@ class IngestTest(Fixture):
         self.assertEqual(self.rows("SELECT count(*) FROM requests"), [(2,)])
 
 
+class ConfigDirTest(Fixture):
+    def test_claude_config_dir_is_read(self):
+        (self.tmp / "cfg").mkdir()
+        self.project.parent.rename(self.tmp / "cfg" / "projects")
+        with mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": str(self.tmp / "cfg")}):
+            self.write_main_at(self.tmp / "cfg" / "projects" / "proj")
+            self.assertEqual(ingest(self.db, PHASES, log=lambda *_: None), (1, 0))
+
+    def write_main_at(self, d):
+        (d / f"{SID}.jsonl").write_text(json.dumps(human("hi")) + "\n" + json.dumps(assistant("r1")) + "\n")
+
+    def test_sessions_from_two_dirs_are_ingested_once_each(self):
+        other = self.tmp / "other" / "proj"
+        other.mkdir(parents=True)
+        self.write_main_at(self.project)
+        self.write_main_at(other)  # the same session id in both: counted once
+        (other / "s2.jsonl").write_text(json.dumps(human("hi")) + "\n" + json.dumps(assistant("r9")) + "\n")
+        dirs = [self.tmp / "projects", self.tmp / "other", self.tmp / "projects"]
+        self.assertEqual(ingest(self.db, PHASES, projects_dir=dirs, log=lambda *_: None), (2, 0))
+        self.assertEqual(self.rows("SELECT count(*) FROM sessions"), [(2,)])
+        self.assertEqual(self.rows("SELECT count(*) FROM requests"), [(2,)])
+
+
 class MissingDirTest(Fixture):
     def test_missing_projects_dir(self):
         logs = []
