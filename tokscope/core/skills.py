@@ -243,13 +243,12 @@ def record(conn, skill, folder, seen_at, source, version=None):
     if version is None:
         return None
     _ensure(conn)
-    known = conn.execute("SELECT 1 FROM skill_versions WHERE skill = ? AND version = ?", (skill, version)).fetchone()
+    seen_at = _utc(seen_at)
+    known = conn.execute("SELECT first_seen, last_seen FROM skill_versions WHERE skill = ? AND version = ?", (skill, version)).fetchone()
     if known:
-        conn.execute("UPDATE skill_versions SET last_seen = max(last_seen, ?) WHERE skill = ? AND version = ?",
-                     (seen_at, skill, version))
-        if source == "load":  # a load is proof the version existed then; a scan's date is only an estimate
-            conn.execute("UPDATE skill_versions SET first_seen = min(first_seen, ?) WHERE skill = ? AND version = ?",
-                         (seen_at, skill, version))
+        first = _first(known[0], seen_at) if source == "load" else known[0]  # a load is proof it existed then; a scan's date is an estimate
+        conn.execute("UPDATE skill_versions SET last_seen = ?, first_seen = ? WHERE skill = ? AND version = ?",
+                     (_last(known[1], seen_at), first, skill, version))
     else:
         conn.execute("INSERT INTO skill_versions VALUES (?,?,?,?,?,?,?,?)",
                      (skill, version, str(folder) if folder else None, label(folder) if folder else None, seen_at, seen_at,
@@ -282,8 +281,23 @@ def _git_date(folder):
         return None
 
 
+def _dt(iso):
+    """Any timestamp the tool meets (`...Z`, `+00:00`, fractions, naive = UTC) as an aware UTC datetime."""
+    d = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    return d.replace(tzinfo=timezone.utc) if d.tzinfo is None else d.astimezone(timezone.utc)
+
+
 def _utc(iso):
-    return datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(timezone.utc).isoformat()
+    return _dt(iso).isoformat()
+
+
+def _first(*stamps):
+    """The earliest of the non-empty timestamps, compared as datetimes, as given."""
+    return min((t for t in stamps if t), key=_dt, default=None)
+
+
+def _last(*stamps):
+    return max((t for t in stamps if t), key=_dt, default=None)
 
 
 def _evidence(conn, skill, folder):
@@ -292,33 +306,36 @@ def _evidence(conn, skill, folder):
     git = _git_date(folder)
     if git:
         dates.append(_utc(git))
-    seen = conn.execute("SELECT min(ts) FROM skill_calls WHERE skill = ? AND ' ' || text_hash || ' ' LIKE ?",
-                        (skill, f"% {body_hash(folder)} %")).fetchone()[0]
+    seen = _first(*(t for (t,) in conn.execute("SELECT ts FROM skill_calls WHERE skill = ? AND ' ' || text_hash || ' ' LIKE ?",
+                                               (skill, f"% {body_hash(folder)} %"))))
     if seen:
         dates.append(_utc(seen))
-    return min(dates)
+    return _first(*dates)
 
 
 def scan(conn, now=None):
     """Hash every skill a transcript has loaded, in the folder its latest session would load it from, and date it."""
     _ensure(conn)
     now = now or datetime.now(timezone.utc).isoformat()
-    for skill, cwd in conn.execute(
-            "SELECT k.skill, s.cwd FROM skill_calls k JOIN sessions s USING (session_id) "
-            "WHERE k.ts = (SELECT max(ts) FROM skill_calls WHERE skill = k.skill) GROUP BY k.skill").fetchall():
+    latest = {}  # skill -> (ts, cwd) of its latest load, by time not by string
+    for skill, ts, cwd in conn.execute("SELECT k.skill, k.ts, s.cwd FROM skill_calls k JOIN sessions s USING (session_id)"):
+        if ts and (skill not in latest or _dt(ts) > _dt(latest[skill][0])):
+            latest[skill] = (ts, cwd)
+    for skill, (_, cwd) in latest.items():
         folder = skill_dir(skill, cwd)
         version = fingerprint(folder) if folder else builtin_version(skill)
         if version is None:
             continue
         row = conn.execute("SELECT first_seen, source FROM skill_versions WHERE skill = ? AND version = ?", (skill, version)).fetchone()
         # a version never starts before the one it replaced
-        floor = conn.execute("SELECT max(first_seen) FROM skill_versions WHERE skill = ? AND version != ? AND first_seen < ?",
-                             (skill, version, row[0] if row else "9")).fetchone()[0]
+        mine = _dt(row[0]) if row else None
+        floor = _last(*(f for (f,) in conn.execute("SELECT first_seen FROM skill_versions WHERE skill = ? AND version != ?", (skill, version))
+                        if f and (mine is None or _dt(f) < mine)))
         dated = _evidence(conn, skill, folder) if folder else now
-        dated = dated if not floor or dated > floor else now if not row else row[0]
+        dated = dated if not floor or _dt(dated) > _dt(floor) else now if not row else row[0]
         if row:
-            conn.execute("UPDATE skill_versions SET last_seen = ?, first_seen = min(first_seen, ?) WHERE skill = ? AND version = ?",
-                         (now, dated, skill, version))
+            conn.execute("UPDATE skill_versions SET last_seen = ?, first_seen = ? WHERE skill = ? AND version = ?",
+                         (_utc(now), _first(row[0], dated), skill, version))
         else:
             record(conn, skill, folder, dated, "scan", version)
     conn.commit()
@@ -329,13 +346,15 @@ def load_versions(conn):
     _ensure(conn)
     timeline, body, by_text = {}, {}, {}
     for skill, version, first, bh, source in conn.execute(
-            "SELECT skill, version, first_seen, body_hash, source FROM skill_versions ORDER BY first_seen"):
+            "SELECT skill, version, first_seen, body_hash, source FROM skill_versions"):
         body[(skill, version)] = bh
         if bh:
             by_text.setdefault((skill, bh), version)
         # a version rebuilt from a transcript is known only at the loads that kept its text, not over a span of time
         if source != "transcript":
             timeline.setdefault(skill, []).append((first, version))
+    for rows in timeline.values():
+        rows.sort(key=lambda r: _dt(r[0]))
     out = []
     for sid, i, skill, ts, text, exact in conn.execute(
             "SELECT k.session_id, k.prompt_idx, k.skill, k.ts, k.text_hash, v.version FROM skill_calls k "
@@ -345,10 +364,10 @@ def load_versions(conn):
             # the transcript kept the text this load read: the version with that text is it, whatever the dates say
             version = next((by_text[(skill, h)] for h in text.split() if (skill, h) in by_text), None)
             if version is None:
-                before = [v for first, v in timeline.get(skill, []) if first <= _utc(ts or "1970-01-01T00:00:00Z")]
+                before = [v for first, v in timeline.get(skill, []) if _dt(first) <= _dt(ts or "1970-01-01T00:00:00Z")]
                 version = before[-1] if before and body.get((skill, before[-1])) is None else None
         elif version is None:
-            before = [v for first, v in timeline.get(skill, []) if first <= _utc(ts or "1970-01-01T00:00:00Z")]
+            before = [v for first, v in timeline.get(skill, []) if _dt(first) <= _dt(ts or "1970-01-01T00:00:00Z")]
             version = before[-1] if before else None
         out.append((sid, i, skill, ts, version, exact is not None))
     return out
@@ -365,7 +384,7 @@ def versions(conn, skill=None, bench_project="%tokscope%-bench-%", where=None):
     `where` is a (WHERE clause, params) over requests r and sessions s, such as the dashboard's filters; it replaces
     the bench exclusion, so it must exclude bench sessions itself."""
     # one unit per prompt and skill; a prompt that loaded the skill twice counts the version of its last load
-    units = {(sid, i, sk): (version, exact) for sid, i, sk, _, version, exact in sorted(load_versions(conn), key=lambda r: r[3] or "")}
+    units = {(sid, i, sk): (version, exact) for sid, i, sk, _, version, exact in sorted(load_versions(conn), key=lambda r: _dt(r[3] or "1970-01-01T00:00:00Z"))}
     cond, params = where or ("WHERE s.project NOT LIKE ?", (bench_project,))
     tokens = {(sid, i, sk): t for sid, i, sk, t in conn.execute(
         f"SELECT r.session_id, r.prompt_idx, r.skill, sum({TOKENS}) FROM requests r JOIN sessions s USING (session_id) "
@@ -388,7 +407,7 @@ def versions(conn, skill=None, bench_project="%tokscope%-bench-%", where=None):
                 e[j] += v or 0
     rows = []
     for sk, version, lbl, first, source in conn.execute(
-            "SELECT skill, version, label, first_seen, source FROM skill_versions ORDER BY skill, first_seen"):
+            "SELECT skill, version, label, first_seen, source FROM skill_versions"):
         if skill and sk != skill:
             continue
         us = per.get((sk, version), [])
@@ -401,7 +420,7 @@ def versions(conn, skill=None, bench_project="%tokscope%-bench-%", where=None):
                          "loads": len(us), "exact": 0, "tokens_median": median(t for t, _ in us),
                          **_error_fields(errs.get((sk, version)))})
     # per skill, oldest first; loads from before tracking lead
-    return sorted(rows, key=lambda r: (r["skill"], r["first_seen"] or ""))
+    return sorted(rows, key=lambda r: (r["skill"], _dt(r["first_seen"]) if r["first_seen"] else datetime.min.replace(tzinfo=timezone.utc)))
 
 
 def snapshot_dir(skill, version):
@@ -571,9 +590,9 @@ def import_from_transcripts(conn, projects_dir, skill=None):
             if kept:
                 body = _kept_body(*kept)
                 entry = bodies.setdefault((sk, _sha(body)), [body, ts, 0])
-                entry[1], entry[2] = min(entry[1], ts), entry[2] + 1
+                entry[1], entry[2] = _first(entry[1], ts), entry[2] + 1
     imported = []
-    for (sk, bh), (body, first, n) in sorted(bodies.items(), key=lambda kv: kv[1][1]):
+    for (sk, bh), (body, first, n) in sorted(bodies.items(), key=lambda kv: _dt(kv[1][1])):
         base = snapshot_dir(sk, kept_versions(sk)[0])
         head = (base / "SKILL.md").read_text(errors="replace")
         rest = head.split("---", 2)[2] if head.startswith("---") and head.count("---") >= 2 else None
@@ -598,7 +617,7 @@ def turn_versions(conn, session_id=None):
     """(session_id, prompt_idx, skill) -> (version, exact) for each prompt that loaded a skill; the last load of a
     skill in a prompt wins. One source for the report's turn rows, the pane and `tokscope session`."""
     out = {}
-    for sid, i, skill, ts, version, exact in sorted(load_versions(conn), key=lambda r: r[3] or ""):
+    for sid, i, skill, ts, version, exact in sorted(load_versions(conn), key=lambda r: _dt(r[3] or "1970-01-01T00:00:00Z")):
         if version and (session_id is None or sid == session_id):
             out[(sid, i, skill)] = (version, exact)
     return out
