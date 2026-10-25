@@ -192,6 +192,32 @@ class SkillsTest(unittest.TestCase):
         self.assertEqual((rows[v1]["loads"], rows[v1]["exact"], rows[v1]["tokens_median"], rows[v1]["label"]), (1, 1, 100, "1.2.0"))
         self.assertEqual((rows[None]["loads"], rows[None]["tokens_median"]), (1, 900))
 
+    def test_a_renamed_skill_keeps_its_loads_and_a_split_pair_is_merged(self):
+        self.load("2026-10-10T00:00:00Z", 1, "t1")
+        v1 = skills.record_load(self.conn, "s1", "t1", "review", str(self.repo / "src"), "2026-10-10T00:00:00Z")
+        before = sum(r["loads"] for r in skills.versions(self.conn, "review"))
+        # a plugin appears: reingest relabels the call and its requests, the mark still names the old skill
+        self.conn.execute("UPDATE skill_calls SET skill = 'ce:review'")
+        self.conn.execute("UPDATE requests SET skill = 'ce:review'")
+        self.assertEqual(sum(r["loads"] for r in skills.versions(self.conn, "ce:review")), 0)  # the bug
+        skills.rekey(self.conn)
+        rows = skills.versions(self.conn, "ce:review")
+        self.assertEqual((before, sum(r["loads"] for r in rows), rows[0]["version"], rows[0]["exact"]), (1, 1, v1, 1))
+        self.assertEqual(self.conn.execute("SELECT skill FROM skill_versions").fetchall(), [("ce:review",)])
+        self.assertEqual(self.conn.execute("SELECT skill FROM skill_load_versions").fetchall(), [("ce:review",)])
+        skills.rekey(self.conn)  # idempotent
+        self.assertEqual(self.conn.execute("SELECT count(*) FROM skill_versions").fetchone(), (1,))
+
+    def test_a_rekey_merges_into_an_existing_row_of_the_new_name(self):
+        self.load("2026-10-10T00:00:00Z", 1, "t1")
+        v1 = skills.record_load(self.conn, "s1", "t1", "review", str(self.repo / "src"), "2026-10-10T00:00:00Z")
+        self.conn.execute("INSERT INTO skill_versions SELECT 'ce:review', version, path, label, '2026-10-12T00:00:00+00:00', "
+                          "'2026-10-12T00:00:00+00:00', source, body_hash FROM skill_versions")
+        self.conn.execute("UPDATE skill_calls SET skill = 'ce:review'")
+        skills.rekey(self.conn)
+        self.assertEqual(self.conn.execute("SELECT skill, version, first_seen FROM skill_versions").fetchall(),
+                         [("ce:review", v1, "2026-10-10T00:00:00+00:00")])
+
     def test_a_versions_error_rate_counts_failed_calls_and_interrupts_of_its_loads(self):
         self.load("2026-10-01T00:00:00Z", 1, tokens=900)
         self.load("2026-10-10T00:00:00Z", 2, "t2", tokens=100)

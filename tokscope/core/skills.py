@@ -310,6 +310,35 @@ def record_load(conn, session_id, tool_use_id, skill, cwd, ts):
     return version
 
 
+def rekey(conn):
+    """Move load marks and their version rows to the name skill_calls now gives the load (a plugin installed or removed
+    relabels the calls on reingest; this also merges rows an older build split into bare and plugin:skill)."""
+    _ensure(conn)
+    moved = conn.execute("SELECT DISTINCT v.skill, k.skill, v.version FROM skill_load_versions v JOIN skill_calls k "
+                         "ON k.session_id = v.session_id AND k.tool_use_id = v.tool_use_id WHERE v.skill != k.skill").fetchall()
+    conn.execute("UPDATE skill_load_versions SET skill = (SELECT k.skill FROM skill_calls k WHERE k.session_id = "
+                 "skill_load_versions.session_id AND k.tool_use_id = skill_load_versions.tool_use_id) "
+                 "WHERE EXISTS (SELECT 1 FROM skill_calls k WHERE k.session_id = skill_load_versions.session_id "
+                 "AND k.tool_use_id = skill_load_versions.tool_use_id AND k.skill != skill_load_versions.skill)")
+    for old, new, version in moved:
+        row = conn.execute("SELECT path, label, first_seen, last_seen, source, body_hash FROM skill_versions "
+                           "WHERE skill = ? AND version = ?", (old, version)).fetchone()
+        if row:
+            path, lbl, first, last, source, bh = row
+            known = conn.execute("SELECT first_seen, last_seen FROM skill_versions WHERE skill = ? AND version = ?",
+                                 (new, version)).fetchone()
+            if known:
+                conn.execute("UPDATE skill_versions SET first_seen = ?, last_seen = ? WHERE skill = ? AND version = ?",
+                             (_first(known[0], first), _last(known[1], last), new, version))
+            else:
+                conn.execute("INSERT INTO skill_versions VALUES (?,?,?,?,?,?,?,?)", (new, version, path, lbl, first, last, source, bh))
+                src, dest = snapshot_dir(old, version), snapshot_dir(new, version)
+                if src.is_dir() and not dest.exists():
+                    shutil.copytree(src, dest)
+        if not conn.execute("SELECT 1 FROM skill_load_versions WHERE skill = ? AND version = ?", (old, version)).fetchone():
+            conn.execute("DELETE FROM skill_versions WHERE skill = ? AND version = ?", (old, version))
+
+
 def _git_date(folder):
     """The last commit that touched the folder, when git tracks it and it has no uncommitted edits."""
     def git(*args):
