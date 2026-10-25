@@ -16,7 +16,8 @@ HEAD_BYTES = 4096  # the start of a file that must be unchanged for it to count 
 BENCH_LIKE = "%tokscope%-bench-%"  # features.changes.BENCH_PROJECT (core cannot import it; tests/test_otel.py checks they agree)
 MATCH_SECONDS = 120  # an event and its transcript request must be this close in time
 INT64 = 2**63 - 1
-BAD_LINE = (ValueError, TypeError, AttributeError, OverflowError, RecursionError, sqlite3.Error)
+BAD_LINE = (ValueError, TypeError, AttributeError, OverflowError, RecursionError,
+            sqlite3.InterfaceError, sqlite3.ProgrammingError)  # input-caused; OperationalError (locked, disk full) propagates
 VALUE_KEYS = ("stringValue", "intValue", "doubleValue", "boolValue")
 
 
@@ -87,11 +88,11 @@ def _read(conn, path):
     data = data[:data.rfind(b"\n") + 1]  # a line still being written waits for the next run
     added, pos = 0, off
     for line in data.splitlines(True):
+        conn.execute("SAVEPOINT otel_line")
         try:  # a malformed or hostile line is skipped, and pos still moves past it
             rec = json.loads(line)
             body = rec.get("body") if isinstance(rec, dict) and rec.get("signal") == "logs" else None
             evs = list(events(body)) if isinstance(body, dict) else ()
-            conn.execute("SAVEPOINT otel_line")
             n = 0
             for j, ev in enumerate(evs):
                 n += conn.execute("INSERT OR IGNORE INTO otel_requests (src, pos, idx, session_id, prompt_id, ts, model, input, "
@@ -100,11 +101,8 @@ def _read(conn, path):
             conn.execute("RELEASE otel_line")
             added += n
         except BAD_LINE:
-            try:
-                conn.execute("ROLLBACK TO otel_line")
-                conn.execute("RELEASE otel_line")
-            except sqlite3.Error:
-                pass
+            conn.execute("ROLLBACK TO otel_line")
+            conn.execute("RELEASE otel_line")
         pos += len(line)
     conn.execute("INSERT OR REPLACE INTO otel_files VALUES (?, ?, ?)", (src, pos, _head(path, pos) if pos else None))
     return added

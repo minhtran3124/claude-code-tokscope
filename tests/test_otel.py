@@ -100,6 +100,16 @@ class OtelTest(unittest.TestCase):
         self.assertEqual(otel.ingest(conn, self.dir), 0)
         self.assertEqual(conn.execute("SELECT count(*) FROM otel_requests WHERE session_id = 's1'").fetchone()[0], 1)
 
+    def test_a_transient_db_error_propagates_and_the_offset_stays_put(self):
+        import sqlite3
+        from unittest import mock
+        (self.dir / "logs-1.jsonl").write_text(line(event("s1", "2026-10-20T12:00:00.000Z", "m", 10, 5, 0, 0, 0.01)))
+        with mock.patch.object(otel, "events", side_effect=sqlite3.OperationalError("database is locked")):
+            with self.assertRaises(sqlite3.OperationalError):
+                otel.ingest(self.conn, self.dir)
+        self.assertIsNone(self.conn.execute("SELECT off FROM otel_files").fetchone())
+        self.assertEqual(otel.ingest(self.conn, self.dir), 1)  # the next run still reads the line
+
     def test_clamped_token_counts_from_two_sessions_do_not_break_cost_check_or_the_report(self):
         from tokscope.web.report import write_report
         self.write(line(event("a", "2026-10-20T10:00:00.000Z", "m", 1e30, 0, 0, 0, 0.1))
