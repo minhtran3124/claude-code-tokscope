@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from statistics import median
 
+from ..core import errors
 from ..core.ingest import COMMAND_RE, find_transcripts, _is_human_prompt, _text, BUILTIN_COMMANDS, connect, ingest_session
 
 ARGS_RE = re.compile(r"<command-args>(.*?)</command-args>", re.S)
@@ -276,6 +277,11 @@ def diff(db_path, source_session, projects_dir=None):
             checks = ", ".join(sorted({r[8] or "–" for r in runs if r[7] == v}))
             lines.append(f"version {v}: " + (f"median {_fmt(median(vt))} over {len(vt)} checked runs" if vt else "no run read it")
                          + f" (skill check: {checks})")
-    for _, idx, _, errors, denials, dur, status, *_ in runs:
-        lines.append(f"run {idx}: {status}, {errors} turn errors, {denials} permission denials, {dur:.0f}s")
+    lines.append("tool calls: failed / total, repeats, interrupts")
+    for label, sid in (("original", source_session), *((f"run {r[1]}", r[2]) for r in runs)):
+        e = errors.session(conn, sid)
+        lines.append(f"{label:<9} {e['errors']}/{e['calls']} failed ({errors.pct(e['errors'], e['calls'])}), "
+                     f"{e['repeats']} repeats, {e['interrupts']} interrupts, {e['api_errors']} API errors")
+    for _, idx, _, turn_errors, denials, dur, status, *_ in runs:
+        lines.append(f"run {idx}: {status}, {turn_errors} turn errors, {denials} permission denials, {dur:.0f}s")
     return "\n".join(lines)

@@ -69,8 +69,13 @@ class DiffTest(unittest.TestCase):
         rows = [("s1", "k1", None, 1.0), ("s1", "k2", "ag", 2.0), ("s2", "k3", None, 3.0), ("s3", "k4", "ag", 0.5)]
         conn.executemany(
             "INSERT INTO requests (session_id, request_key, agent_id, cost_usd, output, model) VALUES (?,?,?,?,10,'m')", rows)
+        conn.executemany("INSERT INTO tool_calls (session_id, tool_use_id, is_error, repeat) VALUES (?,?,?,?)",
+                         [("s1", "t1", 1, 0), ("s1", "t2", 0, 1), ("s2", "t3", 0, 0), ("s3", "t4", 0, 0)])
+        conn.execute("INSERT INTO turn_events (session_id, kind) VALUES ('s3', 'interrupt')")
         conn.commit()
         out = bench.diff(db, "t").splitlines()
+        self.assertIn("a          1/3 failed (33.3%), 1 repeats, 0 interrupts", out)
+        self.assertIn("b          0/1 failed (0.0%), 0 repeats, 1 interrupts", out)
         a = next(line for line in out if line.startswith("a "))
         b = next(line for line in out if line.startswith("b "))
         self.assertIn("1/2", a)

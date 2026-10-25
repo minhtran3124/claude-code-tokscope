@@ -87,8 +87,12 @@ class DiffTest(unittest.TestCase):
         conn.executemany("INSERT INTO replay_turns (run_id, turn, prompt, orig_idx) VALUES (?,?,?,?)",
                          [("r0", 1, "a", None), ("r0", 2, "b", None), ("r0", 3, "c", None),
                           ("r1", 1, "a\n\nb", "1,2"), ("r1", 2, "c", "3")])
+        conn.executemany("INSERT INTO tool_calls (session_id, tool_use_id, is_error, repeat) VALUES (?,?,?,?)",
+                         [("orig", "t1", 0, 0), ("orig", "t2", 1, 0), ("new", "t3", 0, 1)])
         conn.commit()
         out = replay.diff(db, "orig", projects_dir=tmp / "projects")
+        self.assertIn("original  1/2 failed (50.0%), 0 repeats", out)
+        self.assertIn("run 1     0/1 failed (0.0%), 1 repeats", out)
         group = next(l for l in out.splitlines() if l.startswith("1,2 "))
         cells = [c for c in group.split() if c.endswith("K")]
         self.assertEqual(cells[:3], ["4.0K", "3.0K", "2.5K"])  # original; old run 1.0K+2.0K; merged run
