@@ -193,6 +193,15 @@ class OtelTest(unittest.TestCase):
         write_report(self.db, out, "WHERE s.project = ?", ("-home-u-app",), tasks_dir=self.tmp)
         self.assertNotIn("telemetry only", out.read_text())
 
+    def test_the_dashboard_cost_check_sits_in_a_data_region_so_live_refresh_swaps_it(self):
+        from tokscope.web.dashboard.common import Filters
+        from tokscope.web.dashboard.pages import overview
+        empty = overview.page_overview(self.conn, Filters({}))
+        self.assertIn('<div data-region="cost-check"></div>', empty)  # present before the first ingest, so it can fill in
+        self.write(line(event("s9", "2026-10-20T10:00:00.000Z", "claude-opus-5-5", 10, 5, 0, 0, 0.5)))
+        self.ingest()
+        self.assertRegex(overview.page_overview(self.conn, Filters({})), r'<div data-region="cost-check"><section[^>]*>.*?Cost check')
+
 
 if __name__ == "__main__":
     unittest.main()
