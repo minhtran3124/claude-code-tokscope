@@ -87,6 +87,16 @@ class OtelTest(unittest.TestCase):
         self.assertEqual(self.ingest(), 2)
         self.assertEqual({r[0] for r in self.conn.execute("SELECT input FROM otel_requests")}, {7, 8})
 
+    def test_replacing_a_file_keeps_an_event_another_file_held_too(self):
+        dup = event("s1", "2026-10-20T10:00:00.000Z", "m", 1, 1, 0, 0, 0.1)
+        (self.dir / "logs-1.jsonl").write_text(line(dup))
+        (self.dir / "logs-2.jsonl").write_text(line(dup) + line(event("s1", "2026-10-20T10:05:00.000Z", "m", 2, 2, 0, 0, 0.2)))
+        self.assertEqual(self.ingest(), 2)  # logs-2's copy of dup was deduped away
+        (self.dir / "logs-1.jsonl").write_text("")  # logs-1 rotated
+        self.ingest()
+        self.assertEqual({r[0] for r in self.conn.execute("SELECT input FROM otel_requests")}, {1, 2})
+        self.assertEqual(self.ingest(), 0)
+
     def test_a_hostile_line_is_skipped_and_the_offset_moves_past_it(self):
         good = event("s1", "2026-10-20T12:00:00.000Z", "claude-opus-4-8", 10, 5, 0, 0, 0.01)
         bad = [{"resourceLogs": [1]}, {"resourceLogs": [{"scopeLogs": [{"logRecords": [{"attributes": [attr("event.name", 7)]}]}]}]}]

@@ -81,14 +81,17 @@ def _head(path, n):
         return hashlib.sha1(f.read(min(n, HEAD_BYTES))).hexdigest()
 
 
+def _stale(conn, path):
+    """Whether a file shrank or was replaced since it was read."""
+    row = conn.execute("SELECT off, head FROM otel_files WHERE src = ?", (path.name,)).fetchone()
+    return bool(row and row[0] and (path.stat().st_size < row[0] or _head(path, row[0]) != row[1]))
+
+
 def _read(conn, path):
     """New events of one logs file; returns how many were added."""
     src = path.name
-    row = conn.execute("SELECT off, head FROM otel_files WHERE src = ?", (src,)).fetchone()
-    off, head = row or (0, None)
-    if off and (path.stat().st_size < off or _head(path, off) != head):  # shrunk or replaced: its old events go
-        conn.execute("DELETE FROM otel_requests WHERE src = ?", (src,))
-        off = 0
+    row = conn.execute("SELECT off FROM otel_files WHERE src = ?", (src,)).fetchone()
+    off = row[0] if row else 0
     added, pos = 0, off
     with open(path, "rb") as f:  # line by line from the stored offset: memory does not grow with the unread tail
         f.seek(off)
@@ -146,7 +149,13 @@ def ingest(conn, directory=None):
     directory = directory or paths.otel_dir()
     if not directory.is_dir():
         return 0
-    added = sum(_read(conn, path) for path in sorted(directory.glob("logs-*.jsonl")))
+    files = sorted(directory.glob("logs-*.jsonl"))
+    stale = [p.name for p in files if _stale(conn, p)]
+    if stale:  # their old events go. An event another file also held was deduped away there, so every file is read
+        # again: it stays if a file still has it, and is gone only when the stale file was its sole copy
+        conn.executemany("DELETE FROM otel_requests WHERE src = ?", [(s,) for s in stale])
+        conn.execute("DELETE FROM otel_files")
+    added = sum(_read(conn, path) for path in files)
     match(conn)
     conn.commit()
     return added
