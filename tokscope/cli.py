@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -370,6 +371,11 @@ def main():
     psv.add_argument("--quote-exe", action="store_true", help="Linux: wrap --exe in double quotes")
     psv.add_argument("--unit-file", help="Linux: write the unit here instead of the user folder (only writes, no enable)")
     psv.add_argument("--no-enable", action="store_true", help="Linux: only write the unit")
+    pot = sub.add_parser("otel-receiver", help="optional OTLP/HTTP-JSON receiver: saves Claude Code's OTel export to data/otel (no view reads it yet)")
+    pot.add_argument("--host", default=os.environ.get("TOKSCOPE_HOST", "127.0.0.1"), help="default 127.0.0.1 (TOKSCOPE_HOST)")
+    pot.add_argument("--port", type=int, default=int(os.environ.get("TOKSCOPE_PORT", "4318")), help="default 4318 (TOKSCOPE_PORT)")
+    pot.add_argument("--allow-remote", action="store_true", help="allow a non-loopback --host (the receiver has no authentication)")
+    pot.add_argument("--max-body", type=int, default=8 * 1024 * 1024, metavar="BYTES", help="refuse bodies over this size, also after gzip (default 8 MiB)")
     pch = sub.add_parser("check", help="compare today's spend with budgets.json; exit 0 ok, 10 near, 11 over, 30 no data")
     pch.add_argument("--once", action="store_true", required=True, help="print the state once and exit")
     pch.add_argument("--json", action="store_true")
@@ -416,6 +422,14 @@ def main():
                 print(text)
                 sys.exit(0 if running else 1)
         except (RuntimeError, OSError) as e:
+            sys.exit(f"tokscope: {e}")
+        return
+    if args.cmd == "otel-receiver":
+        from .integrations import otel_receiver
+
+        try:
+            otel_receiver.serve(args.host, args.port, otel_receiver.default_dir(), args.max_body, args.allow_remote)
+        except (ValueError, OSError) as e:
             sys.exit(f"tokscope: {e}")
         return
     DB.parent.mkdir(parents=True, exist_ok=True)
