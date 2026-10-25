@@ -9,15 +9,16 @@ updated_by: claude   # claude | manual
 # claude-code-tokscope — Status
 
 ## Summary
-#50 OTel receiver is done on `feat/otel-receiver` (final PR to main): `tokscope otel-receiver`, size caps, loopback only, README says nothing reads the data yet; 590 tests pass. macOS app #144-#148 is on `feat/macos-app`, unverified without a Mac.
+OTel receiver (#50, #157) and ingest (#58, #158) are done on `feat/otel-leftovers`: hardened receiver, deduped and linear ingest, prompt.id join; 634 tests, 1 pre-existing failure (`test_week_finding_compares_with_the_week_before`). macOS app #144-#148 is unverified without a Mac.
 
 ## Next step
-Review the #50 PR; on the M2: `cd desktop && npm run dist:mac`, open the app, report what fails. #58 is done on `feat/otel-ingest`: review its PR.
+Review the final PR `feat/otel-leftovers` -> main; on the M2: `cd desktop && npm run dist:mac` and report what fails.
 
 ## Blockers
 - GitHub Actions jobs did not start on 2026-10-25 (annotation: payment failed or spending limit; the runs on 2026-10-22 passed). Settings > Billing. Until then the new `lint` job and the 3.11 leg have not run on GitHub; both pass locally.
 
 ## Recent
+- 2026-10-25: #157/#158 combined on feat/otel-leftovers (PRs 159, 160), final PR to main; checked end to end on ::1 in a temp home (duplicate post ingested once, deep JSON 400, modes 700/600); no UI change.
 - 2026-10-25: #158 OTel ingest: dedupe key plus unique index (migration drops stored duplicates), match() n log n, reader goes line by line, statusline `prompt_id` stored and joined to OTel events in `cache.official_by`; no UI change.
 - 2026-10-25: PR #156 review fix: a malformed or hostile OTel line is skipped per line (offset still advances) and cannot stop the skills steps; a transient DB error (locked, disk full) now propagates so the offset is not advanced; telemetry-only sessions (OTel events, no transcript) are tagged Sessions rows and in the Sessions, Tokens, Output, From cache and API-eq totals at Claude Code's cost_usd, so every #58 criterion is met; 623 tests pass.
 - 2026-10-25: #58 OTel `api_request` events ingested (`core/otel.py`, `otel_requests`, `ingest --otel [DIR]`, matched to requests by session, tokens and time); Cost check card in report and dashboard Overview (drift per model, unmatched, telemetry only); 608 tests pass, ruff clean; checked end to end in a temp home (re-run adds nothing), final PR to main, summary in `specs/otel-ingest/SUMMARY.md`.
@@ -27,6 +28,3 @@ Review the #50 PR; on the M2: `cd desktop && npm run dist:mac`, open the app, re
 - 2026-10-25: skill features #132-#136 combined on feat/skill-features (PRs 137-141), final PR to main; 535 tests pass; screenshots are in the sub-PRs.
 - 2026-10-25: skill bugs #117-#123 combined on fix/skill-bugs-2 (PRs 124-130), final PR to main; 479 tests pass; no UI change.
 - 2026-10-25: skill bugs #106-#110 combined on fix/skill-bugs (PRs 111-115), final PR to main; 455 tests pass; #110 lacks hosted screenshots.
-- 2026-10-25: analytics #54-#57 combined on feat/analytics-54-57 (PRs 100-103), final PR to main; 430 tests pass; #54 official miss_causes need statusline snapshots, not stored yet.
-- 2026-10-25: #54 official miss_causes: `statusline_snapshots` table, `cache.record_snapshot` (counters only), `cache.official_by` (skill/phase), Breakdowns tables; 450 tests pass; no screenshots yet; analytics #54-#57 combined on feat/analytics-54-57 (PRs 100-103), final PR to main; 430 tests pass; #54 official miss_causes need statusline snapshots, not stored yet.
-- 2026-10-24: #97 `tokscope serve --projects-dir PATH` (a UAT server with a throwaway home no longer ingests every transcript: 40 sample files gave 40 sessions and a 1.9 MB database, against 44 MB); `uat.md` builds a sample and notes the `python -m` cwd and port-kill pitfalls from PR 94/96; PR #98 open (issue #97).

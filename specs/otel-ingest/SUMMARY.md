@@ -18,6 +18,15 @@ Branch `feat/otel-ingest`. 608 tests pass (`python3 -m unittest discover -s test
 ## Gaps
 
 - A telemetry-only session is not a row in the Sessions table or the API-eq totals (no transcript to price); it shows on the card and in "Claude Code reported", marked "telemetry only".
-- `prompt.id` is stored but not yet joined to statusline snapshots (the issue's third goal).
 - Event attribute names come from the monitoring docs; no real Claude Code export was ingested.
 - GitHub Actions has not run on this branch (billing blocker).
+
+## Leftovers #157 and #158 (branch `feat/otel-leftovers`, PRs 159 and 160)
+
+Shipped:
+- #157 receiver: nested JSON answers 400 (no `RecursionError`), `--host ::1` binds IPv6, data dir 0700 and JSONL 0600, chunked bodies decoded with the same caps.
+- #158 ingest: unique key on `otel_requests` (same export twice adds nothing; an old DB is deduped on migration), `match()` is n log n (50k-event test), the reader streams lines from the offset, `statusline_snapshots.prompt_id` joins OTel events in `cache.official_by`.
+
+Checked: temp `TOKSCOPE_HOME`, receiver on `::1`: normal POST 200, chunked POST of the same event 200, 200000-deep JSON 400; modes 700/600; `ingest --otel` gave "1 new OTel events" for the two identical posts, then "no new OTel events". 634 tests, 1 failure: `test_report.FindingTest.test_week_finding_compares_with_the_week_before` (fails on the baseline too; unrelated).
+
+Gaps: none for #157 and #158. File modes are POSIX only (no-op on Windows). Still no real Claude Code export ingested; GitHub Actions blocked by billing.
