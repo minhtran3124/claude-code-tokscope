@@ -1,12 +1,14 @@
 // A window around `tokscope serve`: start the server on a free port, show it, stop it on quit.
 const { app, BrowserWindow, Menu, WebContentsView, nativeTheme, shell } = require("electron");
 const { statusPage } = require("./loading");
+const { serverCommand } = require("./server-command");
+const os = require("os");
 const { spawn } = require("child_process");
 const net = require("net");
 const http = require("http");
 const path = require("path");
 
-// a clone keeps bin/ and tokscope/ next to desktop/; the .deb puts them in resources/
+// a clone keeps bin/ and tokscope/ next to desktop/; the .deb and the macOS .app put them in resources/ (the .app adds python/)
 const ROOT = app.isPackaged ? process.resourcesPath : path.resolve(__dirname, "..");
 let server = null;
 let win = null;
@@ -63,7 +65,8 @@ async function start() {
   // The server runs under a small sh that stops it when this process is gone, however it went (a quit, a signal,
   // SIGKILL, a crash). Killing the sh runs its trap, which stops the server.
   const guard = 'trap \'kill "$S" 2>/dev/null\' EXIT TERM INT HUP; "$@" & S=$!; while kill -0 "$PPID" 2>/dev/null && kill -0 "$S" 2>/dev/null; do sleep 1; done; kill "$S" 2>/dev/null; wait "$S"';
-  server = spawn("sh", ["-c", guard, "sh", path.join(ROOT, "bin", "tokscope"), "serve", "--no-open", "--port", String(port)], { stdio: "inherit" });
+  const run = serverCommand({ platform: process.platform, root: ROOT, port, env: process.env, home: os.homedir() });
+  server = spawn("sh", ["-c", guard, "sh", ...run.cmd], { stdio: "inherit", env: { ...process.env, ...run.env } });
   // the server is gone (it failed to bind, crashed or was killed): leave rather than show a dead page
   server.once("exit", (code) => { server = null; if (!base && win) showFailure(`the server stopped (exit ${code})`); else app.exit(code || 1); });
   const url = `http://127.0.0.1:${port}/`;

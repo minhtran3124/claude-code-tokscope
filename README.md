@@ -132,6 +132,30 @@ Things to know:
 - To update, install the new `.deb` the same way, then run `systemctl --user restart tokscope`.
 - To remove: `sudo apt remove tokscope`. Your data in `~/.local/share/tokscope` stays.
 
+## Desktop app (macOS, personal build)
+
+An Apple Silicon (arm64) `.app` for your own Mac. It bundles its own Python (python-build-standalone 3.12), because a
+Finder-launched app gets `PATH=/usr/bin:/bin:/usr/sbin:/sbin` and Apple's `python3` is 3.9. It is not signed,
+notarized or updated automatically, and there is no CI job for it: build it on the Mac.
+
+```sh
+cd desktop
+npm install
+npm run dist:mac    # fetches and checks the pinned Python (scripts/fetch-python.sh), then builds
+```
+
+`desktop/dist/` gets `tokscope-<version>-arm64.dmg` and a `.zip`. `sh scripts/fetch-python.sh --dry-run` shows the
+download and its sha256 without fetching. Data lives in `~/Library/Application Support/tokscope`.
+
+**Open an unsigned app.** Move it to Applications. The first time, macOS blocks it: open System Settings, Privacy &
+Security, and choose **Open Anyway**. Or run `xattr -dr com.apple.quarantine /Applications/tokscope.app`.
+
+**Documents folder prompt.** If your repos are under `~/Documents`, macOS asks once whether tokscope may read that
+folder. Allow it. The prompt can come back after a rebuild, because an ad-hoc signature changes with the build.
+
+The background server is off by default; the window starts its own and stops it on close. For a server at login, use
+`tokscope service install` (launchd) as on Linux.
+
 ## Important information
 
 - **Where data lives**: `$TOKSCOPE_HOME` if set; else the clone when you run `bin/tokscope`; else

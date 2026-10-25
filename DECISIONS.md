@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-10-25 · macOS app is a personal arm64 build with bundled Python (issue #147)
+
+| Decision | Why | Rejected |
+| --- | --- | --- |
+| `npm run dist:mac` builds an arm64 `.dmg` and `.zip` with electron-builder. `scripts/fetch-python.sh` downloads a pinned python-build-standalone (3.12.15, sha256 checked) into `desktop/python/`, which becomes `Resources/python`. On darwin `main.js` runs `python/bin/python3 -s -m tokscope.cli serve` with `PYTHONPATH`, `PYTHONNOUSERSITE=1`, `TOKSCOPE_HOME` in Application Support and a PATH that adds Homebrew and `~/.local/bin`. No signing, notarization, auto-update, Mac CI or Homebrew tap; the background server is opt-in. (Owner, 2026-10-25.) | Personal use on an M2. Finder gives an app a minimal PATH and Apple's `python3` is 3.9, below `requires-python`. | Relying on the system Python; universal or x64 builds; a signed, notarized release; a Mac CI job (Actions billing is blocked). |
+
 ## 2026-10-24 · A request copied into a fork is kept by one session (issue #46)
 
 | Decision | Why | Rejected |
