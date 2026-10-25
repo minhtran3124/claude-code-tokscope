@@ -186,17 +186,51 @@ def _installed_plugin_of(skill):
     return owners.pop() if len(owners) == 1 else None
 
 
+def _mtime(path):
+    try:
+        return Path(path).stat().st_mtime_ns
+    except OSError:
+        return 0
+
+
+def _plugins_stamp(name, cwd):
+    """What canonical_name's answer depends on, as mtimes: the install list, each plugin's skills and commands
+    folder, and the project and user command folders. A plugin install or removal changes the stamp."""
+    try:
+        installed = json.loads((Path.home() / ".claude" / "plugins" / "installed_plugins.json").read_text())
+    except (OSError, ValueError):
+        installed = {}
+    roots = [Path(e.get("installPath", "")) for es in installed.get("plugins", {}).values() for e in es]
+    dirs = [Path.home() / ".claude" / "plugins" / "installed_plugins.json", Path.home() / ".claude" / "commands",
+            *(r / "skills" for r in roots), *(r / "skills" / name for r in roots)]
+    for p in ([Path(cwd), *Path(cwd).parents] if cwd else []):
+        dirs += [p / ".claude" / "skills" / name, p / ".claude" / "commands"]
+    dirs += [Path.home() / ".claude" / "skills" / name]
+    return tuple(_mtime(d) for d in dirs)
+
+
 @lru_cache(maxsize=None)
-def canonical_name(name, cwd=None):
-    """plugin:skill for a plugin skill called by its bare name, so one skill is one row; other names as they are."""
-    if not name or ":" in name:
-        return name
+def _canonical(name, cwd, stamp):
     local = [p / ".claude" / "skills" / name for p in ([Path(cwd), *Path(cwd).parents] if cwd else [])]
     local.append(Path.home() / ".claude" / "skills" / name)
-    if any((f / "SKILL.md").is_file() for f in local):
-        return name
-    plugin = _installed_plugin_of(name)
+    cmds = [p / ".claude" / "commands" / f"{name}.md" for p in ([Path(cwd), *Path(cwd).parents] if cwd else [])]
+    cmds.append(Path.home() / ".claude" / "commands" / f"{name}.md")
+    if any((f / "SKILL.md").is_file() for f in local) or any(c.is_file() for c in cmds):
+        return name  # a project or personal skill or command owns the bare name; a plugin does not claim it
+    plugin = _installed_plugin_of(name)  # two plugins with the same skill name: None, the name stays bare
     return f"{plugin}:{name}" if plugin else name
+
+
+def canonical_name(name, cwd=None):
+    """plugin:skill for a plugin skill called by its bare name, so one skill is one row; other names as they are.
+    Cached per plugin-folder mtimes, so a plugin install or removal is seen by a running serve. A bare name is
+    resolved by the disk now: a reingest after removing a plugin leaves its old bare calls bare."""
+    if not name or ":" in name:
+        return name
+    return _canonical(name, cwd, _plugins_stamp(name, cwd))
+
+
+canonical_name.cache_clear = _canonical.cache_clear
 
 
 def command_known(name, cwd=None):
