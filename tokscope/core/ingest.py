@@ -104,7 +104,7 @@ CREATE INDEX IF NOT EXISTS idx_requests_ts ON requests (ts);
 """
 TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "turn_events", "headless_calls", "mcp_defs", "ingest_state", "sessions")
 # bump when the parser records something new, so unchanged transcripts are parsed again once
-PARSER_VERSION = 18
+PARSER_VERSION = 19
 TAIL_BYTES = 4096  # the bytes before a stored offset that must be unchanged for a file to count as appended to
 # what a resumed parse restores: the parser's state after the last complete line of every file
 STATE_KEYS = ("requests", "subagents", "skill_calls", "prompts", "tool_ctx", "tool_calls", "result_chars",
