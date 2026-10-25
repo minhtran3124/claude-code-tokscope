@@ -459,6 +459,21 @@ class IncrementalTest(Fixture):
         self.run_ingest()
         self.assertEqual(got, self.dump(self.db))
 
+    def test_a_skill_block_resumed_after_earlier_lines_of_its_request_retags_them_like_a_full_parse(self):
+        main = self.project / f"{SID}.jsonl"
+        self.write_main([human("go"), assistant("r0", tools=[("t0", "Agent", {})]), assistant("r1", tools=[("t1", "Bash", {"command": "ls"})])])
+        self.write_agent("a0", {"agentType": "Explore", "toolUseId": "t0", "spawnDepth": 1}, [assistant("ra")])
+        self.run_ingest()
+        self.append(main, [assistant("r1", tools=[("t9", "Skill", {"skill": "writing-plans"})])])
+        self.run_ingest()
+        got = self.dump(self.db)
+        self.assertEqual(self.rows("SELECT skill FROM tool_calls WHERE tool_use_id='t1'"), [("writing-plans",)])
+        self.db.unlink()
+        for ext in ("-wal", "-shm"):
+            Path(str(self.db) + ext).unlink(missing_ok=True)
+        self.run_ingest()
+        self.assertEqual(got, self.dump(self.db))
+
     def test_a_new_subagent_file_and_an_unchanged_session_resume_to_the_full_result(self):
         main = self.project / f"{SID}.jsonl"
         self.write_main(self.BASE)
