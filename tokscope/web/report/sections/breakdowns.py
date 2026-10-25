@@ -105,6 +105,13 @@ def _cache_section(conn, cond, params):
         official = (f"<h3>Miss causes ({cache.OFFICIAL})</h3><p class='note'>{off['misses']:,} misses in {off['sessions']} "
                     f"session{'s' * (off['sessions'] != 1)}, {_tok(off['recache_tokens'])} re-cached tokens.</p>"
                     + _table(["cause", "misses"], sorted(off["causes"].items(), key=lambda kv: (-kv[1], kv[0])), 1))
+        for by in ("skill", "phase"):
+            grouped = cache.official_by(conn, by, cond, params)
+            if grouped:
+                official += f"<h3>Official misses by {by}</h3>" + _table(
+                    [by, "misses", "re-cached", "top cause"],
+                    [(d["key"], d["misses"], _tok(d["recache_tokens"]),
+                      max(d["causes"].items(), key=lambda kv: (kv[1], kv[0]))[0] if d["causes"] else "") for d in grouped[:10]], 1)
     return _section(
         "Prompt cache", finding,
         "hit ratio = cache_read / (cache_read + cache writes + uncached input). cache-write = what writing the cache cost at list "
