@@ -153,15 +153,18 @@ def record_snapshot(conn, data):
     # hit_ratio moves with every request, so only the miss counters decide whether the snapshot is new
     if last and {k: v for k, v in json.loads(last[0]).items() if k != "hit_ratio"} == {k: v for k, v in keep.items() if k != "hit_ratio"}:
         return False
-    conn.execute("INSERT INTO statusline_snapshots VALUES (?,?,?)",
-                 (sid, datetime.now(timezone.utc).isoformat(timespec="microseconds"), blob))
+    pid = data.get("prompt_id")  # the id only (a UUID, matches the OTel prompt.id), never prompt text
+    conn.execute("INSERT INTO statusline_snapshots (session_id, ts, prompt_cache, prompt_id) VALUES (?,?,?,?)",
+                 (sid, datetime.now(timezone.utc).isoformat(timespec="microseconds"), blob,
+                  pid[:64] if isinstance(pid, str) and pid else None))
     conn.commit()
     return True
 
 
 def official_by(conn, by, where="", params=()):
     """Official misses grouped by the skill or phase that was running: each snapshot's growth over the session's previous
-    snapshot goes to the skill/phase of the latest main-thread request at or before it. Returns
+    snapshot goes to the skill/phase of the main-thread request of its prompt.id when an OTel event carries it, else of the latest
+    main-thread request at or before it. Returns
     [{key, misses, recache_tokens, causes}] biggest first, or None without snapshots."""
     if by not in ("skill", "phase"):
         raise ValueError(by)
@@ -169,10 +172,10 @@ def official_by(conn, by, where="", params=()):
         return None
     where, params = errors.for_calls(where, params)
     snaps = conn.execute(
-        "SELECT r.session_id, r.ts, r.prompt_cache FROM statusline_snapshots r JOIN sessions s USING (session_id) "
+        "SELECT r.session_id, r.ts, r.prompt_cache, r.prompt_id FROM statusline_snapshots r JOIN sessions s USING (session_id) "
         f"{where} ORDER BY r.session_id, r.ts", params).fetchall()
     out, prev, sid = {}, {}, None
-    for session, ts, blob in snaps:
+    for session, ts, blob, prompt_id in snaps:
         if session != sid:
             sid, prev = session, {"misses": 0, "tokens": 0, "causes": {}}
         try:
@@ -190,7 +193,10 @@ def official_by(conn, by, where="", params=()):
         prev = cur
         if d["misses"] <= 0:
             continue
-        row = conn.execute(f"SELECT {by} FROM requests WHERE session_id = ? AND substr(ts, 1, 19) <= substr(?, 1, 19) AND COALESCE(agent_id, '') = '' "
+        row = conn.execute(f"SELECT r.{by} FROM otel_requests o JOIN requests r ON r.session_id = o.session_id AND r.request_key = o.request_key "
+                           "WHERE o.session_id = ? AND o.prompt_id = ? AND COALESCE(r.agent_id, '') = '' ORDER BY r.ts DESC LIMIT 1",
+                           (session, prompt_id)).fetchone() if prompt_id else None  # exact: the prompt the snapshot was taken in
+        row = row or conn.execute(f"SELECT {by} FROM requests WHERE session_id = ? AND substr(ts, 1, 19) <= substr(?, 1, 19) AND COALESCE(agent_id, '') = '' "
                            "ORDER BY ts DESC LIMIT 1", (session, ts)).fetchone()
         o = out.setdefault((row[0] if row and row[0] else "(none)"), {"misses": 0, "recache_tokens": 0, "causes": {}})
         o["misses"] += d["misses"]
