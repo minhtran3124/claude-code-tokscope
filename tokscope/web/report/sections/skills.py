@@ -2,7 +2,7 @@
 
 import html
 
-from ....core import errors, skills
+from ....core import budgets, errors, skills
 from ....features.changes import impact
 from ..widgets import _diff_html, _table, _tok, _usd, _vs
 
@@ -41,6 +41,10 @@ def _skill_versions(conn, level="full", where=None, skill=None):
     rest = [k for k in by_skill if k not in changed and k not in started]
     single = sorted(k for k in rest if tracked(by_skill[k]))
     unknown = sorted(k for k in rest if not tracked(by_skill[k]))  # loaded, but no folder to hash
+    try:
+        cfg = budgets.regression_config(budgets.load())
+    except budgets.BudgetError:
+        cfg = None
     cards = []
     for name, vs in sorted(changed.items(), key=lambda kv: weight(kv[1])):
         rows, prev = [], None
@@ -61,7 +65,10 @@ def _skill_versions(conn, level="full", where=None, skill=None):
             diffs.append(f"<details class='vdiff'><summary>Diff <code>{old}</code> → <code>{new}</code> "
                          f"<span class='note'>{added} added, {removed} removed</span></summary>"
                          f"{_diff_html(lines) if lines else '<p class=note>Same text; only file names changed.</p>'}</details>")
-        cards.append(f'<section class="card" id="v-{html.escape(name)}"><h3>{html.escape(name)}</h3>'
+        g = budgets.regression(vs, cfg["pct"], cfg["min_loads"]) if cfg else None
+        warn = (f'<p class="note" role="alert"><b>Regression:</b> the newest version costs {g["change_pct"]:+.0f}% per load '
+                f'(limit +{cfg["pct"]:g}% with {cfg["min_loads"]}+ loads on both).</p>' if g and g["flagged"] else "")
+        cards.append(f'<section class="card" id="v-{html.escape(name)}"><h3>{html.escape(name)}</h3>{warn}'
                      + _table(["version", "first seen", "loads", "exact", "median tokens / load", "vs before", "tool errors",
                                        "repeats", "interrupts"], rows, 4)
                      + "".join(diffs) + "</section>")
