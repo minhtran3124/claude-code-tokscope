@@ -16,7 +16,7 @@ class ReceiverTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.dir = Path(self.tmp.name)
-        self.srv = r.make_server("127.0.0.1", 0, self.dir, max_body=10_000)
+        self.srv = r.make_server("127.0.0.1", 0, self.dir, max_body=20_000)
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
         self.addCleanup(self.srv.server_close)
         self.addCleanup(self.srv.shutdown)
@@ -38,6 +38,18 @@ class ReceiverTest(unittest.TestCase):
         self.assertTrue(f.name.startswith("logs-"))
         row = json.loads(f.read_text())
         self.assertEqual((row["signal"], row["body"]), ("logs", SAMPLE))
+
+    def test_parallel_large_posts_keep_every_line_whole(self):
+        # each line is over the 8 KiB io buffer, so an unlocked append is several writes and can interleave
+        bodies = [json.dumps({"id": i, "pad": "x" * 9000}) for i in range(16)]
+        threads = [threading.Thread(target=self.post, args=("/v1/logs", b)) for b in bodies]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        (f,) = self.files()
+        rows = [json.loads(line) for line in f.read_text().splitlines()]
+        self.assertEqual(sorted(row["body"]["id"] for row in rows), list(range(16)))
 
     def test_gzip_body_is_accepted(self):
         self.assertEqual(self.post("/v1/metrics", gzip.compress(json.dumps(SAMPLE).encode()), {"Content-Encoding": "gzip"}), 200)

@@ -6,6 +6,7 @@ import ipaddress
 import json
 import os
 import sys
+import threading
 import zlib
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -88,8 +89,9 @@ class Handler(BaseHTTPRequestHandler):
         data_dir = self.server.data_dir
         data_dir.mkdir(parents=True, exist_ok=True)
         line = json.dumps({"received_at": now.isoformat(), "signal": signal, "body": body})
-        with open(data_dir / f"{signal}-{now:%Y-%m-%d}.jsonl", "a") as f:
-            f.write(line + "\n")
+        with self.server.write_lock:  # a line over the 8 KiB buffer is several writes; keep parallel requests from interleaving
+            with open(data_dir / f"{signal}-{now:%Y-%m-%d}.jsonl", "a") as f:
+                f.write(line + "\n")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
@@ -103,6 +105,7 @@ def make_server(host, port, data_dir, max_body=DEFAULT_MAX_BODY, allow_remote=Fa
     if not allow_remote and not is_loopback(host):
         raise ValueError(f"{host!r} is not a loopback address and the receiver has no authentication; pass --allow-remote to bind it anyway")
     srv = ThreadingHTTPServer((host, port), Handler)
+    srv.write_lock = threading.Lock()
     srv.data_dir, srv.max_body, srv.allow_remote = Path(data_dir), max_body, allow_remote
     return srv
 
