@@ -6,6 +6,8 @@ Attribution rules:
   next human prompt. Matches how OTel stamps skill.name.
 - phase: derived from the last skill loaded in the session (phases.json); carries across prompts. A request
   whose prompt loaded no skill (skill NULL) holds a carried phase: see CARRIED.
+- A request that calls the Skill tool is charged to the skill it loads (the last one, if it loads several), with its
+  tool calls and the subagents it spawns, wherever the Skill block sits in the message: see DECISIONS.md.
 - A subagent inherits prompt/skill/phase from the request whose tool call spawned it.
 - A headless session (`claude -p`) started from another session's Bash call gets that session as its parent: see
   link_sessions.
@@ -109,11 +111,11 @@ CREATE INDEX IF NOT EXISTS idx_snapshots_session ON statusline_snapshots (sessio
 """
 TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "turn_events", "headless_calls", "mcp_defs", "ingest_state", "sessions")
 # bump when the parser records something new, so unchanged transcripts are parsed again once
-PARSER_VERSION = 20
+PARSER_VERSION = 21
 TAIL_BYTES = 4096  # the bytes before a stored offset that must be unchanged for a file to count as appended to
 # what a resumed parse restores: the parser's state after the last complete line of every file
 STATE_KEYS = ("requests", "subagents", "skill_calls", "prompts", "tool_ctx", "tool_calls", "result_chars",
-              "skill_texts", "skill_args", "headless", "mcp_defs", "meta", "files", "tool_err", "seen_calls", "events")
+              "skill_texts", "skill_args", "headless", "mcp_defs", "meta", "files", "tool_err", "seen_calls", "events", "cur_req")
 ARGS_RE = re.compile(r"<command-args>(.*?)</command-args>", re.S)
 PROMPT_CHARS = 160
 # a Bash command that starts a headless Claude Code session
@@ -255,6 +257,7 @@ class SessionParser:
         self.seen_calls = {}  # "prompt|agent|name|input hash" -> 1: the calls a later identical one repeats
         self.events = []  # [ts, prompt_idx, agent_id, skill, phase, kind]: interrupt, api_error, retry or compact
         self.result_chars = {}  # tool_use_id -> text size of the result that went into the context
+        self.cur_req = [None, []]  # [request_key, its tool_use ids] of the last request seen: its lines are contiguous
         self.skill_texts = {}  # Skill tool_use_id -> the SKILL.md text it loaded, where a request blob kept it
         self.skill_args = {}  # Skill tool_use_id -> the args the call passed
         self.headless = {}  # Bash tool_use_id that ran `claude -p` -> {cwd, start_ts, end_ts, child_ids}
@@ -504,7 +507,7 @@ class SessionParser:
             fields = _usage_fields(usage)
             row = self.requests.get(key)
             if row is None:
-                # attribution is fixed at the request's first line, before any Skill call it makes loads
+                # starts as the state at the first line; a Skill call in the request re-tags it (_retag)
                 self.requests[key] = {
                     "request_key": key, "ts": rec.get("timestamp"), "model": model, "agent_id": agent_id,
                     "agent_type": agent_type, "prompt_idx": state["prompt_idx"], "skill": state["skill"],
@@ -513,9 +516,12 @@ class SessionParser:
             else:
                 for name, value in fields.items():
                     row[name] = max(row[name], value) if isinstance(value, int) else value or row[name]
+        if key and self.cur_req[0] != key:
+            self.cur_req = [key, []]
         for block in msg.get("content") or []:
             if not isinstance(block, dict) or block.get("type") != "tool_use":
                 continue
+            self.cur_req[1].append(block.get("id"))
             self.tool_ctx[block.get("id")] = (state["prompt_idx"], state["skill"], state["phase"], agent_id)
             if block.get("id") not in self.tool_calls:  # a line repeated by a resumed or forked file is not a repeat call
                 key = f'{state["prompt_idx"]}|{agent_id}|{block.get("name")}|{_input_hash(block.get("input"))}'
@@ -533,6 +539,20 @@ class SessionParser:
                 self.skill_args[block.get("id")] = (block.get("input") or {}).get("args")
                 if skill:
                     self._load_skill(skill, "tool", rec, agent_id, state, block.get("id"))
+                    self._retag(state)
+
+    def _retag(self, state):
+        """The request that called Skill pays for the load: move it, its tool calls and spawned subagents to the new skill."""
+        key, ids = self.cur_req
+        row = self.requests.get(key)
+        if row is not None:
+            row["skill"], row["phase"] = state["skill"], state["phase"]
+        for tid in ids:
+            if tid in self.tool_ctx:
+                self.tool_ctx[tid] = (*self.tool_ctx[tid][:1], state["skill"], state["phase"], self.tool_ctx[tid][3])
+            if tid in self.tool_calls:
+                c = self.tool_calls[tid]
+                self.tool_calls[tid] = (c[0], c[1], c[2], state["skill"], state["phase"], *c[5:])
 
 
 def _tail_hash(src, off):
