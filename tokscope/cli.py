@@ -53,12 +53,15 @@ def summary(args):
         total = sum(r["cost_usd"] for r in found) or 1
         # a phase's carried part comes from later prompts with no skill (see ingest.CARRIED)
         carried = args.by == "phase"
+        split = "typed_loads" in (found[0] if found else {})  # by skill with loads: typed /command vs Skill tool
+        med = lambda n, m: f"{n}/{m:,.0f}" if n else "-"  # noqa: E731
         print(f"{args.by:<40} {'requests':>9} {'prompt tok':>13} {'output tok':>11} {'API-eq $':>10} {'share':>6}"
-              + (f" {'carried':>8}" if carried else ""))
+              + (f" {'carried':>8}" if carried else "") + (f" {'typed n/med':>14} {'tool n/med':>14}" if split else ""))
         for r in found:
             cost = r["cost_usd"]
             print(f"{r['key'][:40]:<40} {r['requests']:>9,} {r['prompt_tokens']:>13,} {r['output_tokens']:>11,} {cost:>10.2f} {cost / total:>6.1%}"
-                  + (f" {r['carried_cost_usd'] / (cost or 1):>8.0%}" if carried else ""))
+                  + (f" {r['carried_cost_usd'] / (cost or 1):>8.0%}" if carried else "")
+                  + (f" {med(r['typed_loads'], r['typed_median_tokens']):>14} {med(r['tool_loads'], r['tool_median_tokens']):>14}" if split else ""))
     # the notes are not data: with json or csv, stdout holds only the rows
     note_out = sys.stdout if fmt == "table" else sys.stderr
     print(API_EQ_NOTE, file=note_out)

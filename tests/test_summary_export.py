@@ -52,6 +52,45 @@ class CliTest(unittest.TestCase):
                      (ts(1),))
         conn.commit()
 
+    def seed_sources(self):
+        """xia2, 160 tokens a request: prompt 1 (2 requests) is typed; prompt 2 (1) and 3 (2) are the model's."""
+        conn = connect(self.db)
+        for key, idx in (("e", 2), ("f", 3), ("g", 3)):
+            conn.execute("INSERT INTO requests (session_id, request_key, ts, model, prompt_idx, skill, phase, input, output, cache_read, "
+                         "cache_write_5m, cache_write_1h, cost_usd) VALUES ('s1', ?, ?, 'claude-opus-5-5', ?, 'xia2', 'plan', 100, 10, 50, 0, 0, 1)",
+                         (key, ts(1), idx))
+        conn.executemany("INSERT INTO skill_calls (session_id, ts, skill, source, prompt_idx, failed) VALUES ('s1', ?, 'xia2', ?, ?, ?)",
+                         [(ts(1), "command", 1, 0), (ts(1), "tool", 2, 0), (ts(1), "tool", 3, 0), (ts(1), "tool", 4, 1)])
+        conn.commit()
+
+    def test_skill_summary_splits_loads_by_source_with_the_median_tokens(self):
+        self.seed_sources()
+        text, _ = self.run_cli(format="csv")
+        rows = {r["key"]: r for r in csv.DictReader(io.StringIO(text))}
+        self.assertEqual(list(rows["xia2"]), list(summary.FIELDS + summary.SOURCE_FIELDS))
+        x = rows["xia2"]  # a failed load is no load; prompt 1 has two requests of 160 tokens, prompt 3 too, prompt 2 one
+        self.assertEqual((x["typed_loads"], x["typed_median_tokens"], x["tool_loads"], x["tool_median_tokens"]), ("1", "320", "2", "240"))
+        self.assertEqual((rows["(none)"]["typed_loads"], rows["(none)"]["typed_median_tokens"]), ("0", ""))
+        table, _ = self.run_cli(format="table")
+        self.assertIn("typed n/med", table)
+        self.assertIn("2/240", table)
+
+    def test_summary_without_skill_loads_adds_no_source_columns(self):
+        text, _ = self.run_cli(format="csv")
+        self.assertEqual(list(next(csv.DictReader(io.StringIO(text)))), list(summary.FIELDS))
+        table, _ = self.run_cli(format="table")
+        self.assertNotIn("typed", table)
+
+    def test_the_skill_section_shows_both_sources_and_nothing_with_no_loads(self):
+        from tokscope.web.report.sections.skills import _skill_versions
+
+        self.assertNotIn("Loads by source", _skill_versions(connect(self.db))[1])
+        self.seed_sources()
+        page = _skill_versions(connect(self.db))[1]
+        self.assertIn("Loads by source", page)
+        self.assertIn("1 · 320", page.replace("&nbsp;", " "))
+        self.assertIn("2 · 240", page.replace("&nbsp;", " "))
+
     def test_errors_count_failed_and_repeated_calls_and_interrupts_per_skill(self):
         self.seed_calls()
         text, err = self.run_cli(format="csv", errors=True)

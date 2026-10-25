@@ -475,6 +475,27 @@ def load_versions(conn, failed=False):
     return out
 
 
+def source_split(conn, skill=None, bench_project="%tokscope%-bench-%", where=None):
+    """{skill: {"command": (loads, median tokens), "tool": (loads, median tokens)}}: loads typed as a /command against
+    loads the model made with the Skill tool, with the same unit as versions() (one prompt's requests, a prompt that
+    loaded the skill twice counting its last load). A source with no loads is left out. `where` as in versions()."""
+    last = {}
+    for sid, i, sk, source, ts in conn.execute(
+            "SELECT session_id, prompt_idx, skill, source, ts FROM skill_calls WHERE COALESCE(failed, 0) = 0"):
+        key = (sid, i, sk)
+        if key not in last or _dt(ts or "1970-01-01T00:00:00Z") >= _dt(last[key][1] or "1970-01-01T00:00:00Z"):
+            last[key] = (source, ts)
+    cond, params = where or ("WHERE s.project NOT LIKE ?", (bench_project,))
+    tokens = {(sid, i, sk): t for sid, i, sk, t in conn.execute(
+        f"SELECT r.session_id, r.prompt_idx, r.skill, sum({TOKENS}) FROM requests r JOIN sessions s USING (session_id) "
+        f"{cond} AND r.skill IS NOT NULL GROUP BY 1, 2, 3", params)}
+    per = {}
+    for key, (source, _) in last.items():
+        if key in tokens and source in ("command", "tool") and (not skill or key[2] == skill):
+            per.setdefault(key[2], {}).setdefault(source, []).append(tokens[key])
+    return {sk: {src: (len(ts), round(median(ts))) for src, ts in by.items()} for sk, by in per.items()}
+
+
 def _error_fields(e, failed=0):
     calls, errors, repeats, interrupts = e or (0, 0, 0, 0)
     return {"calls": calls, "errors": errors, "repeats": repeats, "interrupts": interrupts, "failed_loads": failed,
