@@ -21,7 +21,7 @@ from pathlib import Path
 from .. import paths
 from . import tz
 from .pricing import cost_usd, refresh_costs
-from .skills import canonical_name, loaded_text_hash
+from .skills import canonical_name, command_known, loaded_text_hash
 
 # a phase inherited from an earlier prompt: no skill ran in this request's prompt (follow-ups like "ok, continue")
 CARRIED = "(r.skill IS NULL AND r.phase IS NOT NULL)"
@@ -104,7 +104,7 @@ CREATE INDEX IF NOT EXISTS idx_requests_ts ON requests (ts);
 """
 TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "turn_events", "headless_calls", "mcp_defs", "ingest_state", "sessions")
 # bump when the parser records something new, so unchanged transcripts are parsed again once
-PARSER_VERSION = 19
+PARSER_VERSION = 20
 TAIL_BYTES = 4096  # the bytes before a stored offset that must be unchanged for a file to count as appended to
 # what a resumed parse restores: the parser's state after the last complete line of every file
 STATE_KEYS = ("requests", "subagents", "skill_calls", "prompts", "tool_ctx", "tool_calls", "result_chars",
@@ -363,7 +363,7 @@ class SessionParser:
                 elif kind == "user":
                     self._on_tool_results(rec)
                     self._on_task_done(rec)
-                    self._on_command_skill_text(rec, agent_id)
+                    self._on_command_skill_text(rec, agent_id, state if is_main else None)
                     if is_main:
                         self._on_user(rec, state)
 
@@ -415,8 +415,20 @@ class SessionParser:
             return
         match = COMMAND_RE.search(_text(rec.get("message", {}).get("content")))
         command = match.group(1) if match else None
+        state.pop("pending", None)
         if command in BUILTIN_COMMANDS:
             return
+        if command and not self._is_skill_command(command, rec):
+            state["pending"] = rec  # a skill text in the next meta message makes it a skill after all
+            return
+        self._start_prompt(rec, command, state)
+
+    def _is_skill_command(self, command, rec):
+        """A typed /cmd is a skill only when a SKILL.md or command file resolves for it or phases.json lists it;
+        any other (/rename, /copy...) is a built-in that changes nothing about the prompt, phase or skill."""
+        return command.split(":")[-1] in self.phases or command_known(command, self.meta["cwd"] or rec.get("cwd"))
+
+    def _start_prompt(self, rec, command, state):
         state["prompt_idx"] += 1
         self.meta["prompts"] += 1
         self.prompts.append((state["prompt_idx"], rec.get("timestamp"), _prompt_text(rec, command)))
@@ -426,7 +438,7 @@ class SessionParser:
             args = COMMAND_ARGS_RE.search(_text(rec.get("message", {}).get("content")))
             self.skill_calls[-1]["args"] = args.group(1) if args else None
 
-    def _on_command_skill_text(self, rec, agent_id=None):
+    def _on_command_skill_text(self, rec, agent_id=None, state=None):
         """A typed /skill puts its SKILL.md in the next meta message; it belongs to the last command load. A message
         with a sourceToolUseID belongs to that Skill tool call, and one in a subagent file to no main-thread command."""
         if not rec.get("isMeta"):
@@ -440,6 +452,10 @@ class SessionParser:
             return
         if agent_id is not None:
             return
+        pending = state.pop("pending", None) if state is not None else None
+        if pending:
+            match = COMMAND_RE.search(_text(pending.get("message", {}).get("content")))
+            self._start_prompt(pending, match.group(1), state)
         load = next((c for c in reversed(self.skill_calls) if c["source"] == "command"), None)
         if load is not None and "text" not in load:
             load["text"] = text

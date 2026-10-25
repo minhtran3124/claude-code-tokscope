@@ -191,6 +191,22 @@ def canonical_name(name, cwd=None):
     return f"{plugin}:{name}" if plugin else name
 
 
+def command_known(name, cwd=None):
+    """True when a SKILL.md or a command file (.claude/commands/<name>.md, project, user or plugin) resolves for `name`."""
+    if skill_dir(name, cwd):
+        return True
+    plugin, _, bare = name.rpartition(":")
+    dirs = [p / ".claude" / "commands" for p in ([Path(cwd), *Path(cwd).parents] if cwd else [])]
+    dirs.append(Path.home() / ".claude" / "commands")
+    try:
+        installed = json.loads((Path.home() / ".claude" / "plugins" / "installed_plugins.json").read_text())
+    except (OSError, ValueError):
+        installed = {}
+    dirs += [Path(e.get("installPath", "")) / "commands" for key, es in installed.get("plugins", {}).items()
+             if not plugin or key.split("@")[0] == plugin for e in es]
+    return any((d / f"{bare}.md").is_file() for d in dirs)
+
+
 def builtin_version(name):
     """cc-<version> for a skill built into Claude Code (unpacked under /tmp/claude-*/bundled-skills/<version>/)."""
     hits = sorted(BUNDLED_ROOT.glob(f"claude-*/bundled-skills/*/*/{name}"), key=lambda p: p.stat().st_mtime)
