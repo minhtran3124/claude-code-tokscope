@@ -178,6 +178,6 @@ def redacted_copy(db_path, level, where="", params=(), redactor=None):
         conn.execute(f"DELETE FROM requests WHERE rowid NOT IN (SELECT r.rowid FROM requests r JOIN sessions s USING (session_id) {where})",
                      tuple(params))
         for table in ("tool_calls", "turn_events", "statusline_snapshots", "otel_requests"):  # keyed by session: drop the ones the filter left without requests
-            conn.execute(f"DELETE FROM {table} WHERE session_id NOT IN (SELECT session_id FROM requests)")
+            conn.execute(f"DELETE FROM {table} WHERE session_id IS NULL OR session_id NOT IN (SELECT session_id FROM requests)")
     (redactor or Redactor(level)).apply(conn)
     return conn

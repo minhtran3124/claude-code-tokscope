@@ -124,6 +124,14 @@ class PrivacyTest(unittest.TestCase):
         for table in ("tool_calls", "turn_events"):
             self.assertEqual(copy.execute(f"SELECT count(*) FROM {table} WHERE session_id = ?", (sid,)).fetchone()[0], 0)
 
+    def test_a_filtered_copy_drops_otel_events_without_a_session(self):
+        conn = connect(self.db)
+        conn.execute("INSERT INTO otel_requests (src, pos, idx, session_id, ts, model, input) VALUES ('f', 0, 0, NULL, '2026-01-01T00:00:00Z', 'm', 5)")
+        conn.commit()
+        conn.close()
+        copy = privacy.redacted_copy(self.db, "redacted", "WHERE s.project LIKE ?", ("%other-client%",))
+        self.assertEqual(copy.execute("SELECT count(*) FROM otel_requests WHERE session_id IS NULL").fetchone()[0], 0)
+
     def test_an_alias_is_stable_on_one_machine_and_differs_on_another(self):
         a, b = privacy.Redactor("numbers", key=b"k1", phase_names=set()), privacy.Redactor("numbers", key=b"k1", phase_names=set())
         other = privacy.Redactor("numbers", key=b"k2", phase_names=set())
