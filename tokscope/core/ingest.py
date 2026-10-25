@@ -111,7 +111,7 @@ CREATE INDEX IF NOT EXISTS idx_snapshots_session ON statusline_snapshots (sessio
 """
 TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "turn_events", "headless_calls", "mcp_defs", "ingest_state", "sessions")
 # bump when the parser records something new, so unchanged transcripts are parsed again once
-PARSER_VERSION = 21
+PARSER_VERSION = 22
 TAIL_BYTES = 4096  # the bytes before a stored offset that must be unchanged for a file to count as appended to
 # what a resumed parse restores: the parser's state after the last complete line of every file
 STATE_KEYS = ("requests", "subagents", "skill_calls", "prompts", "tool_ctx", "tool_calls", "result_chars",
@@ -753,6 +753,9 @@ def ingest_session(db_path, phases_path, session_id, projects_dir=None):
     store(conn, main_path.parent.name, parse_session(conn, main_path, load_phases(phases_path)),
           session_signature(main_path))
     link_sessions(conn)
+    from .skills import rekey
+
+    rekey(conn)
     conn.commit()
     conn.close()
     return True
@@ -790,8 +793,9 @@ def ingest(db_path, phases_path, projects_dir=None, project_filter=None, log=pri
     link_sessions(conn)
     conn.commit()
     log(f"ingest: {parsed} sessions parsed, {skipped} unchanged")
-    from .skills import scan  # a skill edited since the last ingest shows up as a new version
+    from .skills import rekey, scan  # a skill edited since the last ingest shows up as a new version
 
+    rekey(conn)  # loads keep their version under a renamed skill
     scan(conn)
     conn.close()
     return parsed, skipped
