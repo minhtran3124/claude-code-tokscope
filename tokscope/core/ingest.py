@@ -104,12 +104,12 @@ CREATE TABLE IF NOT EXISTS mcp_defs (
     session_id TEXT, server TEXT, tools INTEGER, chars INTEGER, PRIMARY KEY (session_id, server)
 );
 CREATE TABLE IF NOT EXISTS statusline_snapshots (
-    session_id TEXT, ts TEXT, prompt_cache TEXT
+    session_id TEXT, ts TEXT, prompt_cache TEXT, prompt_id TEXT
 );
 CREATE TABLE IF NOT EXISTS otel_requests (
     src TEXT, pos INTEGER, idx INTEGER, session_id TEXT, prompt_id TEXT, ts TEXT, model TEXT, input INTEGER,
     output INTEGER, cache_read INTEGER, cache_write INTEGER, cost_usd REAL, duration_ms REAL, speed TEXT,
-    request_key TEXT, PRIMARY KEY (src, pos, idx)
+    request_key TEXT, dedupe TEXT, PRIMARY KEY (src, pos, idx)
 );
 CREATE TABLE IF NOT EXISTS otel_files (src TEXT PRIMARY KEY, off INTEGER, head TEXT);
 CREATE INDEX IF NOT EXISTS idx_otel_session ON otel_requests (session_id, ts);
@@ -641,6 +641,9 @@ def connect(db_path):
                       ("inference_geo", "TEXT")):  # refilled by the PARSER_VERSION bump
         if name not in have:
             conn.execute(f"ALTER TABLE requests ADD COLUMN {name} {typ}")
+    if "prompt_id" not in {c[1] for c in conn.execute("PRAGMA table_info(statusline_snapshots)")}:
+        conn.execute("ALTER TABLE statusline_snapshots ADD COLUMN prompt_id TEXT")  # joins an OTel event's prompt.id
+    otel.migrate(conn)
     refresh_costs(conn)
     columns = {c[1] for c in conn.execute("PRAGMA table_info(sessions)")}
     for name in ("entrypoint", "parent_session_id", "first_req_ts"):  # refilled by the PARSER_VERSION bump (not parent_session_id)

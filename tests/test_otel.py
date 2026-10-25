@@ -83,10 +83,9 @@ class OtelTest(unittest.TestCase):
         self.assertEqual(self.ingest(), 1)
         self.assertEqual([r[0] for r in self.conn.execute("SELECT input FROM otel_requests")], [3])
         # replaced by a longer file with other content
-        self.write(line(event("s1", "2026-10-22T09:00:00.000Z", "m", 7, 7, 0, 0, 0.7)) * 2, mode="w")
+        self.write(line(event("s1", "2026-10-22T09:00:00.000Z", "m", 7, 7, 0, 0, 0.7)) + line(event("s1", "2026-10-22T09:01:00.000Z", "m", 8, 8, 0, 0, 0.7)), mode="w")
         self.assertEqual(self.ingest(), 2)
-        self.assertEqual({r[0] for r in self.conn.execute("SELECT input FROM otel_requests")}, {7})
-        self.assertEqual(self.conn.execute("SELECT count(*) FROM otel_requests").fetchone()[0], 2)
+        self.assertEqual({r[0] for r in self.conn.execute("SELECT input FROM otel_requests")}, {7, 8})
 
     def test_a_hostile_line_is_skipped_and_the_offset_moves_past_it(self):
         good = event("s1", "2026-10-20T12:00:00.000Z", "claude-opus-4-8", 10, 5, 0, 0, 0.01)
@@ -96,7 +95,7 @@ class OtelTest(unittest.TestCase):
         text = "".join(line(b) for b in bad) + "[" * 100000 + "\n" + line(good)
         (self.dir / "logs-1.jsonl").write_text(text)
         conn = self.conn
-        self.assertEqual(otel.ingest(conn, self.dir), 4)  # the good event, and "nan"/"1e999" read as 0 tokens, "1e30" clamped
+        self.assertEqual(otel.ingest(conn, self.dir), 3)  # the good event, "nan"/"1e999" read as the same 0-token event (deduped), "1e30" clamped
         self.assertEqual(otel.ingest(conn, self.dir), 0)
         self.assertEqual(conn.execute("SELECT count(*) FROM otel_requests WHERE session_id = 's1'").fetchone()[0], 1)
 
@@ -138,6 +137,54 @@ class OtelTest(unittest.TestCase):
         self.assertIsNone(otel.cost_check(self.conn))
         self.assertEqual(cost_check(self.conn, "", ()), "")
         self.assertFalse(gone.exists())
+
+    def test_the_same_export_twice_adds_nothing_even_in_another_file(self):
+        body = line(event("s1", "2026-10-20T10:00:00.000Z", "claude-sonnet-4-6", 100, 50, 1000, 0, 0.01))
+        self.write(body + body)
+        self.assertEqual(self.ingest(), 1)
+        self.write(body, name="logs-2026-10-21.jsonl")
+        self.assertEqual(self.ingest(), 0)
+        self.assertEqual(self.conn.execute("SELECT count(*) FROM otel_requests").fetchone()[0], 1)
+
+    def test_a_database_with_stored_duplicates_migrates_and_keeps_one_copy(self):
+        self.conn.executescript("DROP INDEX idx_otel_dedupe; ALTER TABLE otel_requests DROP COLUMN dedupe")
+        for pos in (0, 10):
+            self.conn.execute("INSERT INTO otel_requests (src, pos, idx, session_id, prompt_id, ts, model, input, output, cache_read, "
+                              "cache_write, cost_usd, duration_ms, speed) VALUES ('f', ?, 0, 's1', 'p1', 't', 'm', 1, 1, 0, 0, 0.1, 5.0, NULL)", (pos,))
+        self.conn.commit()
+        self.conn = connect(self.db)
+        self.assertEqual(self.conn.execute("SELECT count(*) FROM otel_requests").fetchone()[0], 1)
+        self.assertEqual(self.conn.execute("SELECT count(*) FROM otel_requests WHERE dedupe IS NULL").fetchone()[0], 0)
+        self.conn = connect(self.db)  # a second connect is a no-op
+
+    def test_match_is_not_quadratic(self):
+        import time
+        m, n = "claude-sonnet-4-6", 50000
+        rows = [("s1", f"k{i}", f"2026-10-20T10:00:00.{i % 1000:03d}Z", m, 1, 1, 0, 0, 0, 0, 0.0) for i in range(n)]
+        self.conn.executemany("INSERT INTO requests (session_id, request_key, ts, model, input, output, thinking, cache_read, "
+                              "cache_write_5m, cache_write_1h, cost_usd) VALUES (?,?,?,?,?,?,?,?,?,?,?)", rows)
+        self.conn.executemany("INSERT INTO otel_requests (src, pos, idx, session_id, ts, model, input, output, cache_read, cache_write, dedupe) "
+                              "VALUES ('f', ?, 0, 's1', ?, ?, 1, 1, 0, 0, ?)", [(i, r[2], m, str(i)) for i, r in enumerate(rows)])
+        t = time.time()
+        otel.match(self.conn)
+        self.assertLess(time.time() - t, 15)
+        self.assertEqual(self.conn.execute("SELECT count(DISTINCT request_key) FROM otel_requests").fetchone()[0], n)
+
+    def test_the_reader_goes_line_by_line_not_whole_tail(self):
+        from unittest import mock
+        self.write("".join(line(event("s1", f"2026-10-20T10:00:{i:02d}.000Z", "m", 1, 1, 0, 0, 0.1)) for i in range(5)))
+        reads = []
+        real = open
+
+        def spy(*a, **k):
+            f = real(*a, **k)
+            if a and str(a[0]).endswith(".jsonl"):
+                orig = f.read
+                f.read = lambda *x: reads.append(x) or orig(*x)
+            return f
+        with mock.patch("builtins.open", spy):
+            self.assertEqual(self.ingest(), 5)
+        self.assertEqual([r for r in reads if not r or r[0] in (-1, None)], [])
 
     def test_an_old_database_gains_the_tables(self):
         self.conn.executescript("DROP TABLE otel_requests; DROP TABLE otel_files")

@@ -4,6 +4,7 @@ Attribute names follow https://code.claude.com/docs/en/monitoring-usage: model, 
 output_tokens, cache_read_tokens, cache_creation_tokens, cost_usd, duration_ms, speed, prompt.id, session.id, event.timestamp.
 The files are read incrementally: a byte offset per file, so a re-run adds nothing; a shrunk or replaced file is read again."""
 
+import bisect
 import hashlib
 import json
 import math
@@ -88,30 +89,56 @@ def _read(conn, path):
     if off and (path.stat().st_size < off or _head(path, off) != head):  # shrunk or replaced: its old events go
         conn.execute("DELETE FROM otel_requests WHERE src = ?", (src,))
         off = 0
-    with open(path, "rb") as f:
-        f.seek(off)
-        data = f.read()
-    data = data[:data.rfind(b"\n") + 1]  # a line still being written waits for the next run
     added, pos = 0, off
-    for line in data.splitlines(True):
-        conn.execute("SAVEPOINT otel_line")
-        try:  # a malformed or hostile line is skipped, and pos still moves past it
-            rec = json.loads(line)
-            body = rec.get("body") if isinstance(rec, dict) and rec.get("signal") == "logs" else None
-            evs = list(events(body)) if isinstance(body, dict) else ()
-            n = 0
-            for j, ev in enumerate(evs):
-                n += conn.execute("INSERT OR IGNORE INTO otel_requests (src, pos, idx, session_id, prompt_id, ts, model, input, "
-                                      "output, cache_read, cache_write, cost_usd, duration_ms, speed) "
-                                      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (src, pos, j, *ev)).rowcount
-            conn.execute("RELEASE otel_line")
-            added += n
-        except BAD_LINE:
-            conn.execute("ROLLBACK TO otel_line")
-            conn.execute("RELEASE otel_line")
-        pos += len(line)
+    with open(path, "rb") as f:  # line by line from the stored offset: memory does not grow with the unread tail
+        f.seek(off)
+        for line in iter(f.readline, b""):
+            if not line.endswith(b"\n"):  # a line still being written waits for the next run
+                break
+            added += _line(conn, src, pos, line)
+            pos += len(line)
     conn.execute("INSERT OR REPLACE INTO otel_files VALUES (?, ?, ?)", (src, pos, _head(path, pos) if pos else None))
     return added
+
+
+def dedupe_key(ev):
+    """A stable key of one event (session, prompt id, ts, model, counts, cost, duration, speed): a re-sent export repeats it."""
+    return hashlib.sha1(json.dumps(ev, separators=(",", ":")).encode()).hexdigest()
+
+
+def _line(conn, src, pos, line):
+    """Add the events of one file line; a malformed or hostile line is skipped (the caller still moves past it)."""
+    conn.execute("SAVEPOINT otel_line")
+    try:
+        rec = json.loads(line)
+        body = rec.get("body") if isinstance(rec, dict) and rec.get("signal") == "logs" else None
+        evs = list(events(body)) if isinstance(body, dict) else ()
+        n = 0
+        for j, ev in enumerate(evs):  # OR IGNORE: the same event again (a retried export) hits the unique dedupe index
+            n += conn.execute("INSERT OR IGNORE INTO otel_requests (src, pos, idx, session_id, prompt_id, ts, model, input, "
+                              "output, cache_read, cache_write, cost_usd, duration_ms, speed, dedupe) "
+                              "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (src, pos, j, *ev, dedupe_key(ev))).rowcount
+        conn.execute("RELEASE otel_line")
+        return n
+    except BAD_LINE:
+        conn.execute("ROLLBACK TO otel_line")
+        conn.execute("RELEASE otel_line")
+        return 0
+
+
+def migrate(conn):
+    """Give an older otel_requests its dedupe key: fill it, drop the duplicates already stored (the first copy stays), then
+    enforce uniqueness. Safe to run on every connect."""
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_otel_dedupe'").fetchone():
+        return  # migrated: connect() takes no write lock
+    if not any(c[1] == "dedupe" for c in conn.execute("PRAGMA table_info(otel_requests)")):
+        conn.execute("ALTER TABLE otel_requests ADD COLUMN dedupe TEXT")
+    old = conn.execute("SELECT rowid, session_id, prompt_id, ts, model, input, output, cache_read, cache_write, cost_usd, "
+                       "duration_ms, speed FROM otel_requests WHERE dedupe IS NULL").fetchall()
+    conn.executemany("UPDATE otel_requests SET dedupe = ? WHERE rowid = ?", [(dedupe_key(r[1:]), r[0]) for r in old])
+    conn.execute("DELETE FROM otel_requests WHERE rowid NOT IN (SELECT min(rowid) FROM otel_requests GROUP BY dedupe)")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_otel_dedupe ON otel_requests (dedupe)")
+    conn.commit()
 
 
 def ingest(conn, directory=None):
@@ -133,7 +160,9 @@ def _secs(ts):
 
 
 def match(conn):
-    """Pair each unmatched event with the request of its session that has the same tokens and the closest time."""
+    """Pair each unmatched event with the request of its session that has the same tokens and the closest time.
+
+    Requests are bucketed by their tokens and sorted by time, so each event is a binary search: n log n per session."""
     todo = conn.execute("SELECT rowid, session_id, ts, input, output, cache_read, cache_write FROM otel_requests "
                         "WHERE request_key IS NULL AND session_id IS NOT NULL ORDER BY ts").fetchall()
     by_session = {}
@@ -141,16 +170,23 @@ def match(conn):
         by_session.setdefault(r[1], []).append(r)
     for sid, evs in by_session.items():
         taken = {k for (k,) in conn.execute("SELECT request_key FROM otel_requests WHERE session_id = ? AND request_key IS NOT NULL", (sid,))}
-        reqs = [(k, _secs(ts), tokens) for k, ts, *tokens in conn.execute(
-            "SELECT request_key, ts, input, output, cache_read, cache_write_5m + cache_write_1h FROM requests WHERE session_id = ?", (sid,))
-            if k not in taken]
+        buckets = {}
+        for k, ts, *tokens in conn.execute(
+                "SELECT request_key, ts, input, output, cache_read, cache_write_5m + cache_write_1h FROM requests WHERE session_id = ?", (sid,)):
+            rt = _secs(ts)
+            if k not in taken and rt is not None:
+                buckets.setdefault(tuple(tokens), []).append((rt, k))
+        for b in buckets.values():
+            b.sort()
         for rowid, _, ts, *tokens in evs:
-            t = _secs(ts)
-            best = min(((abs(rt - t), k) for k, rt, tk in reqs if t is not None and rt is not None and tk == tokens
-                        and abs(rt - t) <= MATCH_SECONDS), default=None)
-            if best:
-                conn.execute("UPDATE otel_requests SET request_key = ? WHERE rowid = ?", (best[1], rowid))
-                reqs = [r for r in reqs if r[0] != best[1]]
+            t, b = _secs(ts), buckets.get(tuple(tokens))
+            if t is None or not b:
+                continue
+            i = bisect.bisect_left(b, (t,))
+            best = min((c for c in (i - 1, i) if 0 <= c < len(b)), key=lambda c: (abs(b[c][0] - t), b[c][1]))
+            if abs(b[best][0] - t) <= MATCH_SECONDS:
+                conn.execute("UPDATE otel_requests SET request_key = ? WHERE rowid = ?", (b[best][1], rowid))
+                del b[best]
 
 
 def cost_check(conn, cond="", params=(), since=None, scoped=False):
