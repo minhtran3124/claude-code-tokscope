@@ -248,6 +248,19 @@ class IngestTest(Fixture):
         self.assertEqual((skill, source), ("review", "command"))
         self.assertIn(loaded_text_hash("Base directory for this skill: /x\n\n# Review\nReview $ARGUMENTS."), text_hash.split())
 
+    def test_a_typed_command_and_a_later_skill_call_each_keep_their_own_text_hash(self):
+        cmd = "<command-message>mycmd</command-message>\n<command-name>/mycmd</command-name>"
+        foo = "Base directory for this skill: /x/foo\n\n# Foo\nDo foo."
+        meta = {"type": "user", "isMeta": True, "sourceToolUseID": "t1",
+                "message": {"role": "user", "content": [{"type": "text", "text": foo}]}}
+        side = {"type": "user", "isMeta": True, "message": {"role": "user", "content": [{"type": "text", "text": "Base directory for this skill: /x/other\n\n# Other"}]}}
+        self.write_main([human(cmd), assistant("r1", tools=[("t1", "Skill", {"skill": "foo"})]), meta, assistant("r2")])
+        self.write_agent("ag1", {"agentType": "Explore", "toolUseId": "t9"}, [side, assistant("r9")])
+        self.run_ingest()
+        got = dict(self.rows("SELECT skill, text_hash FROM skill_calls"))
+        self.assertIsNone(got["mycmd"])
+        self.assertEqual(got["foo"], loaded_text_hash(foo))
+
     def test_a_plugin_skill_called_by_its_bare_name_is_stored_under_its_full_name(self):
         install = self.tmp / "home" / "cache" / "ce"
         (install / "skills" / "simplify").mkdir(parents=True)
