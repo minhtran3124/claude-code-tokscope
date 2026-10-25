@@ -41,6 +41,23 @@ class SkillsTest(unittest.TestCase):
                           "cache_read, cache_write_5m, cache_write_1h, cost_usd) VALUES ('s1', ?, ?, 'm', ?, 'review', 'review', "
                           "?, 0, 0, 0, 0, 0)", (f"r{prompt}", ts, prompt, tokens))
 
+    def test_ordinary_skill_keeps_its_hash(self):
+        self.assertEqual(skills.body_hash(self.skill), "b9f04a790a4a")  # pinned: a parser change must not move it
+
+    def test_frontmatter_is_delimited_by_lines_of_exactly_three_dashes(self):
+        both = write_skill(self.tmp / "dash", "---\nname: d\nversion: 2.0\ndescription: a --- b\n---\nBODY\n")
+        self.assertEqual(skills._body((both / "SKILL.md").read_text()), "BODY")
+        self.assertEqual(skills.label(both), "2.0")
+        rule = "---\nNot frontmatter\n"
+        self.assertEqual(skills._body(rule), rule.strip())
+        self.assertIsNone(skills.label(write_skill(self.tmp / "rule", rule)))
+        self.assertEqual(skills._body("---\nname: x\n---\n---\nrule\n"), "---\nrule")
+
+    def test_crlf_frontmatter(self):
+        crlf = write_skill(self.tmp / "crlf", "---\r\nname: c\r\nversion: 3.1\r\n---\r\nBODY\r\n")
+        self.assertEqual(skills._body((crlf / "SKILL.md").read_bytes().decode()), "BODY")
+        self.assertEqual(skills.label(crlf), "3.1")
+
     def test_the_fingerprint_is_the_content_not_the_place_or_the_clock(self):
         twin = write_skill(self.tmp / "elsewhere" / "review", (self.skill / "SKILL.md").read_text())
         self.assertEqual(skills.fingerprint(self.skill), skills.fingerprint(twin))

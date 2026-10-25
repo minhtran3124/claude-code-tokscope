@@ -50,11 +50,20 @@ def _sha(text):
     return hashlib.sha256(text.encode()).hexdigest()[:12]
 
 
+def _split_front(text):
+    """(frontmatter, rest): the block between a first line that is exactly `---` and the next such line, else
+    (None, text). A `---` inside a value or a leading rule without a closing line is not a delimiter."""
+    lines = text.splitlines(keepends=True)
+    if lines and lines[0].rstrip("\r\n") == "---":
+        for i in range(1, len(lines)):
+            if lines[i].rstrip("\r\n") == "---":
+                return "".join(lines[1:i]), "".join(lines[i + 1:])
+    return None, text
+
+
 def _body(skill_md):
     """SKILL.md as Claude Code puts it in the context: the frontmatter dropped."""
-    if skill_md.startswith("---") and skill_md.count("---") >= 2:
-        skill_md = skill_md.split("---", 2)[2]
-    return skill_md.strip()
+    return _split_front(skill_md)[1].strip()
 
 
 def body_hash(folder):
@@ -137,8 +146,7 @@ def fingerprint(folder):
 def label(folder):
     """The human version in SKILL.md frontmatter (`version: 1.3.0`), if the author keeps one."""
     text = (Path(folder) / "SKILL.md").read_text(errors="replace")
-    head = text.split("---", 2)[1] if text.startswith("---") and text.count("---") >= 2 else ""
-    m = FRONTMATTER_VERSION.search(head)
+    m = FRONTMATTER_VERSION.search(_split_front(text)[0] or "")
     return m.group(1) if m else None
 
 
@@ -576,7 +584,7 @@ def import_from_transcripts(conn, projects_dir, skill=None):
     for (sk, bh), (body, first, n) in sorted(bodies.items(), key=lambda kv: kv[1][1]):
         base = snapshot_dir(sk, kept_versions(sk)[0])
         head = (base / "SKILL.md").read_text(errors="replace")
-        rest = head.split("---", 2)[2] if head.startswith("---") and head.count("---") >= 2 else None
+        rest = _split_front(head)[1] if _split_front(head)[0] is not None else None
         # the frontmatter and the whitespace that followed it, so the rebuilt file differs from it only in the body
         front = head[:len(head) - len(rest.lstrip())] if rest is not None else ""
         work = paths.home() / "data" / "skills-import" / sk.replace(":", "__") / bh
