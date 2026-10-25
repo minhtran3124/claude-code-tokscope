@@ -86,6 +86,11 @@ class LibraryTest(unittest.TestCase):
         self.assertEqual(library.usage(self.conn, found, days=30)[mine][0], 1)
         self.assertNotIn(mine, library.usage(self.conn, found, project="-other"))
 
+    def test_the_page_names_the_range_its_load_counts_cover(self):
+        for qs, label in (({}, "last 30 days"), ({"range": ["all"]}, "all time")):
+            page = dashboard.page_library(self.conn, dashboard.Filters(qs), {}, "full")
+            self.assertIn(f"0 loads in {label}", page)
+
     def test_api_library_counts_loads_by_skill_id(self):
         from tokscope.web.dashboard import server
         self._calls([("s1", "2999-01-01T00:00:00.000Z", "mine-a")])
