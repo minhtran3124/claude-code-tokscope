@@ -5,7 +5,7 @@ import json
 from datetime import datetime, timezone
 
 from ... import paths
-from ...core import privacy, tz
+from ...core import otel, privacy, tz
 from ..theme import fonts
 from ..theme.classic import CLASSIC_CSS, SKIN_APPLY, SKIN_BUTTON
 from ..theme.layout import LAYOUT_CSS, LAYOUT_TOKEN_CSS
@@ -16,6 +16,7 @@ from ...core.pricing import API_EQ_NOTE, unpriced, unpriced_text
 from .common import TOKENS
 from .scripts import JS, SORT_SEG
 from .sections.benchmarks import _benchmarks
+from .sections.cost_check import cost_check
 from .sections.breakdowns import _breakdowns
 from .sections.rows import summary_view
 from .sections.sessions import _sessions_json
@@ -42,6 +43,7 @@ def write_report(db_path, out_path, where="", params=(), tasks_dir=None, level="
     conn = connect(db_path)
     conn.executescript("CREATE TABLE IF NOT EXISTS prompts (session_id TEXT, prompt_idx INTEGER, ts TEXT, text TEXT)")
     tasks_dir = tasks_dir or paths.tasks()
+    scoped = bool(where)  # a filter (project, model, skill, range) is on: the Cost check leaves out events no request owns
     if level != "full":
         conn.close()
         conn = privacy.redacted_copy(db_path, level, where, params)
@@ -53,11 +55,18 @@ def write_report(db_path, out_path, where="", params=(), tasks_dir=None, level="
         f"SELECT count(DISTINCT session_id), sum({TOKENS}), sum(output), sum(cache_read), sum(cost_usd), min(r.ts), max(r.ts), "
         f"count(DISTINCT CASE WHEN agent_id IS NOT NULL THEN session_id || agent_id END) "
         f"FROM requests r JOIN sessions s USING (session_id) {cond}", params).fetchone()
+    only = [] if scoped else otel.only_sessions(conn)  # no transcript: counted in the totals, not in any breakdown
+    if only:
+        t = otel.only_totals(conn)
+        n_sess += t["sessions"]
+        tokens, out, cache_read, usd = (tokens or 0) + t["tokens"], (out or 0) + t["output"], (cache_read or 0) + t["cache_read"], (usd or 0) + t["usd"]
+        first = min(filter(None, (first, *(s["first"] for s in only))), default=None)
+        last = max(filter(None, (last, *(s["last"] for s in only))), default=None)
     kpis = [("Sessions", f"{n_sess:,}", n_sess, "int"), ("Tokens", _tok(tokens), tokens, "tok"),
             ("Output tokens", _tok(out), out, "tok"), ("Subagent runs", f"{n_runs:,}", n_runs, "int"),
             ("From cache", f"{(cache_read or 0) / (tokens or 1):.0%}", round(100 * (cache_read or 0) / (tokens or 1)), "pct"),
             ("API-eq", _usd(usd), round(usd or 0, 2), "usd")]
-    api_eq_title = f' title="{html.escape(API_EQ_NOTE)}"'
+    api_eq_title = f' title="{html.escape(API_EQ_NOTE + otel.ONLY_NOTE if only else API_EQ_NOTE)}"'
     kpi_html = "".join(f'<div class="kpi" style="--i:{i}"{api_eq_title if k == "API-eq" else ""}><span>{k}</span><b data-count="{raw or 0}" data-kind="{kind}">{v}</b></div>'
                        for i, (k, v, raw, kind) in enumerate(kpis))
 
@@ -66,7 +75,7 @@ def write_report(db_path, out_path, where="", params=(), tasks_dir=None, level="
     days = conn.execute(f"SELECT localday(r.ts) d, sum({TOKENS}), sum(cost_usd) FROM requests r JOIN sessions s "
                         f"USING (session_id) {cond} GROUP BY d ORDER BY d", params).fetchall()
     bench_head, bench_detail = _benchmarks(conn, tasks_dir)
-    data = json.dumps(_sessions_json(conn, cond, params), separators=(",", ":")).replace("</", "<\\/")
+    data = json.dumps(_sessions_json(conn, cond, params, only), separators=(",", ":")).replace("</", "<\\/")
     now_utc = datetime.now(timezone.utc)
     generated = f'<time data-ts="{now_utc:%Y-%m-%dT%H:%M:%SZ}" data-fmt="dt">{now_utc:%Y-%m-%d %H:%M} UTC</time>'
 
@@ -94,7 +103,8 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 <p class="sub">{(first or '')[:10]} → {(last or '')[:10]} · real sessions (benchmarks separate) · generated {generated}</p>
 {_hero(conn, cond, params)}
 {_session_start(conn, cond, params)}
-<div class="kpis">{kpi_html}</div>{_unpriced(conn, cond, params)}</div>
+<div class="kpis">{kpi_html}</div>{_unpriced(conn, cond, params)}
+{cost_check(conn, cond, params, scoped=scoped)}</div>
 
 <section class="card reveal" id="sessions"><h2>Sessions</h2>
 <p class="note"><span class="key"><i></i>main thread</span><span class="key"><i class="a"></i>subagents</span>

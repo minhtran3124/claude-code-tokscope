@@ -2,12 +2,13 @@
 
 from pathlib import Path
 
-from ....core import skills
+from ....core import otel, skills
 from ....core.calls import turn_calls
 from ..common import TOKENS
 
 
-def _sessions_json(conn, cond, params):
+def _sessions_json(conn, cond, params, telemetry=()):
+    """telemetry: otel.only_sessions rows, shown as 'only' sessions (no transcript: no prompts, skills or turns)."""
     base = f"FROM requests r JOIN sessions s USING (session_id) {cond}"
     sessions = {}
     for sid, proj, title, start, end, prompts, cwd, tokens, out, usd, main, agents, runs in conn.execute(
@@ -55,4 +56,10 @@ def _sessions_json(conn, cond, params):
         if sid in sessions:
             sessions[sid]["parent"] = parent
             sessions[sid]["parent_title"] = sessions[parent]["title"] if parent in sessions else f"session {parent[:8]}"
+    for t in telemetry:
+        sessions[t["id"]] = {"id": t["id"], "title": "", "start": t["first"] or "", "end": t["last"] or "", "prompts": 0,
+                             "project": "", "path": "", "tokens": t["input"] + t["output"] + t["cache_read"] + t["cache_write"],
+                             "output": t["output"], "usd": t["usd"], "main": 0, "agents": 0, "runs": 0, "owners": {}, "skills": {},
+                             "turns": [], "top_skill": "", "only": True, "tip": otel.ONLY_TIP, "requests": t["requests"],
+                             "models": ", ".join(sorted(m.removeprefix("claude-") for m in t["models"])), "unpriced": t["unpriced"]}
     return list(sessions.values())

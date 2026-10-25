@@ -16,7 +16,7 @@ To install and run it, see [README.md](README.md).
 | Dashboard | A local web server on `127.0.0.1` with seven pages (below). |
 | Claude Code mod (`mod/`) | The `/tokscope` command, a live pane, and marks for each Skill and Agent call. |
 | Desktop app (`desktop/`) | An Electron window around the dashboard, with a systemd user service on Linux. A personal arm64 macOS build with bundled Python (not signed). |
-| OTel receiver (optional) | `tokscope otel-receiver`: OTLP/HTTP JSON on `127.0.0.1:4318`, one JSONL file per day in `data/otel/` (`TOKSCOPE_DATA_DIR` changes the folder). Collects only: no view reads it yet (#58). |
+| OTel receiver (optional) | `tokscope otel-receiver`: OTLP/HTTP JSON on `127.0.0.1:4318`, one JSONL file per day in `data/otel/` (`TOKSCOPE_DATA_DIR` changes the folder). `tokscope ingest` reads its `api_request` events (`ingest --otel [DIR]` only those) into `otel_requests`; the Cost check card (report, dashboard Overview) compares Claude Code's `cost_usd` with API-eq per model and lists unmatched events. A telemetry-only session (OTel events, no transcript) is a tagged Sessions row and is in the totals at Claude Code's `cost_usd`, in no breakdown. |
 
 ## Dashboard pages
 
@@ -215,4 +215,4 @@ Built-in tool and agent names and phase names do not change.
 - **Tool tokens are estimates** (`~`): the API reports usage per request, so MCP and tool tokens come from result size
   (4 characters per token).
 - **Transcripts expire** after Claude Code's `cleanupPeriodDays`; set it high (for example 365) to keep history.
-  `tokscope ingest` can rebuild the database from transcripts, but not the OTel logs or the marks.
+  `tokscope ingest` can rebuild the database from transcripts, but not the OTel logs or the marks (the events in the database are rebuilt from `data/otel`).

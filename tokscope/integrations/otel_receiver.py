@@ -1,10 +1,9 @@
 """Minimal OTLP/HTTP-JSON receiver: appends each export request to a daily JSONL file per signal.
 
-It only collects data: no view reads data/otel yet (issue #58)."""
+core/otel.py reads the api_request events from the logs files into the database."""
 
 import ipaddress
 import json
-import os
 import sys
 import threading
 import zlib
@@ -20,7 +19,7 @@ DEFAULT_MAX_BODY = 8 * 1024 * 1024
 
 
 def default_dir():
-    return Path(os.environ.get("TOKSCOPE_DATA_DIR") or paths.home() / "data" / "otel")
+    return paths.otel_dir()
 
 
 def is_loopback(host):

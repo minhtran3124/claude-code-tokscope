@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import __version__, paths
 from .core.calls import turn_calls
-from .core.ingest import connect, ingest, ingest_session
+from .core.ingest import connect, ingest, ingest_otel, ingest_session
 from .core import tz
 from .core.pricing import API_EQ_NOTE, unpriced, unpriced_text
 from .core import errors
@@ -329,6 +329,8 @@ def main():
     pi.add_argument("--project", help="only project dirs containing this text")
     pi.add_argument("--projects-dir", metavar="PATH", help="read this transcripts folder instead of the default ones")
     pi.add_argument("--session", help="re-parse this one session id only")
+    pi.add_argument("--otel", nargs="?", const="", metavar="DIR",
+                    help="read only the OTel api_request events (data/otel, or DIR), not the transcripts")
     pss = sub.add_parser("session", help="print one session's breakdown (ingests it first)")
     pss.add_argument("session_id")
     pss.add_argument("--json", action="store_true", help="machine-readable, for the live pane")
@@ -438,6 +440,8 @@ def main():
         if not ingest_session(DB, PHASES, args.session, args.projects_dir):
             sys.exit(f"tokscope: no transcript for session {args.session}")
         _budget_line(args.session)
+    elif args.cmd == "ingest" and args.otel is not None:
+        ingest_otel(DB, Path(args.otel).expanduser() if args.otel else None)
     elif args.cmd == "ingest":
         start = time.time()
         ingest(DB, PHASES, args.projects_dir, args.project)

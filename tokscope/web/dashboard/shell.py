@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import quote, urlencode
 
 from ... import paths
-from ...core import tz
+from ...core import otel, tz
 from ...features import library, projects
 from ..theme import fonts
 from ..theme.classic import CLASSIC_CSS, CLASSIC_DASH_CSS, SKIN_APPLY
@@ -69,7 +69,8 @@ def _nav_counts(conn, level="full"):
     """The all-time number beside a page in the sidebar (not filtered; the label says so). Projects, Library and Benchmarks
     show their contents at the full level only, so they carry no count below it."""
     n = lambda sql: conn.execute(sql).fetchone()[0]  # noqa: E731
-    out = {"sessions": n(f"SELECT count(*) FROM sessions WHERE project NOT LIKE '{BENCH_PROJECT}'")}
+    out = {"sessions": n(f"SELECT count(*) FROM sessions WHERE project NOT LIKE '{BENCH_PROJECT}'")
+           + len(otel.only_sessions(conn))}  # plus the telemetry-only ones (OTel events, no transcript)
     if level != "full":
         return out
     try:

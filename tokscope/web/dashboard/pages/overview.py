@@ -4,12 +4,13 @@ import copy
 import html
 from datetime import date, datetime, timedelta, timezone
 
-from ....core import baseline, budgets, cache, skills, tz
+from ....core import baseline, budgets, cache, otel, skills, tz
 from ....features import library, live
 from ... import charts
 from ....features.changes import list_changes
 from ....core.pricing import API_EQ_NOTE, unpriced, unpriced_text
 from ...report.common import TOKENS
+from ...report.sections.cost_check import cost_check
 from ...report.widgets import _start_line, _table, _tok, _usd
 from ..common import Filters, _iso, _q
 
@@ -19,6 +20,12 @@ def _totals(conn, cond, params):
     return conn.execute(
         f"SELECT sum({TOKENS}), sum(cost_usd), count(DISTINCT session_id), sum(output), "
         f"count(DISTINCT CASE WHEN agent_id IS NOT NULL THEN session_id || agent_id END), sum(cache_read) {base}", params).fetchone()
+
+
+def _with_only(t, only):
+    """_totals plus the telemetry-only sessions (tokens, cost, sessions, output, cache; subagent runs stay)."""
+    return ((t[0] or 0) + only["tokens"], (t[1] or 0) + only["usd"], (t[2] or 0) + only["sessions"],
+            (t[3] or 0) + only["output"], t[4], (t[5] or 0) + only["cache_read"])
 
 
 def _spark(values, w=96, h=22):
@@ -103,9 +110,17 @@ def _day_rows(conn, f, shift=0):
 
 def _kpis(conn, f):
     cond, params = f.cond()
-    now = _totals(conn, cond, params)
     cmp = _window(conn, f)
-    before = _totals(conn, *f.cond(1)) if cmp else (None,) * 6
+    now, before = _totals(conn, cond, params), _totals(conn, *f.cond(1)) if cmp else (None,) * 6
+    # sessions with OTel events and no transcript: in the tiles, not in the per-day series or any breakdown (no filter names them)
+    only = None if (f.project or f.model or f.skill) else otel.only_totals(conn, _iso(f.now - timedelta(days=f.days)) if f.days else None)
+    if only and only["sessions"]:
+        now = _with_only(now, only)
+        if cmp:
+            end = f.now - timedelta(days=f.days)
+            before = _with_only(before, otel.only_totals(conn, _iso(end - timedelta(days=f.days)), _iso(end)))
+    else:
+        only = None
     rows = _day_rows(conn, f)
     col = lambda i: [r[i] or 0 for r in rows]  # noqa: E731
     cache = lambda t: round(100 * (t[5] or 0) / (t[0] or 1)) if t[0] else None  # noqa: E731
@@ -123,7 +138,9 @@ def _kpis(conn, f):
              ("cache", "From cache", cache(now) or 0, f"{cache(now) or 0}%", "pct", None, cache_daily)]
     out = []
     for i, (key, label, raw, text, kind, idx, series) in enumerate(tiles):
-        title = f' title="{html.escape(API_EQ_NOTE)}"' if key == "usd" else ""
+        title = f' title="{html.escape(API_EQ_NOTE + (otel.ONLY_NOTE if only else ""))}"' if key == "usd" else ""
+        if only and key in ("tokens", "sessions", "output"):
+            title = f' title="{html.escape(otel.ONLY_NOTE.strip())}"'
         if key == "cache":
             title = ' title="Share of all tokens that came from cache, against the window before"'
         chip = ""
@@ -135,6 +152,10 @@ def _kpis(conn, f):
     note = (f'<p class="note strip-note">Change = average per day in this range against the {n} day{"" if n == 1 else "s"} before it. '
             f'From cache compares its share of all tokens, not a per-day average.</p>' if cmp else "")
     warn = unpriced_text(unpriced(conn, cond, params))
+    if only:
+        note += (f'<p class="note strip-note"><span class="tag" title="{html.escape(otel.ONLY_TIP)}">telemetry only</span> '
+                 f'{only["sessions"]:,} session{"s" * (only["sessions"] != 1)} with no transcript are in Tokens, API-eq, Sessions, Output tokens and '
+                 f'From cache, at Claude Code\'s own cost_usd. The per-day change and the charts leave them out.</p>')
     note += f'<p class="note unpriced" role="note">{html.escape(warn)}</p>' if warn else ""
     return f'<div class="kpis strip">{"".join(out)}</div>{note}'
 
@@ -512,6 +533,9 @@ def page_overview(conn, f):
         f'<div data-region="budgets">{_budgets(conn)}</div>',
         f'<div data-region="kpis">{_kpis(conn, f)}</div>',
         f'<div data-region="cache">{_cache_finding(conn, f)}</div>',
+        '<div data-region="cost-check">'
+        + cost_check(conn, *f.cond(), since=_iso(f.now - timedelta(days=f.days)) if f.days else None,
+                     scoped=bool(f.project or f.model or f.skill)) + '</div>',
         _session_start(conn, f),
         f'<section class="card"><h2>Biggest movers</h2><p class="note">{f.label()}, tokens per day against the window before</p>'
         f'<div data-region="changed">{_movers(conn, f, cmp)}<h3>New skill versions</h3>{_new_versions(conn, f)}</div></section>',
