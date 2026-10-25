@@ -15,7 +15,7 @@ To install and run it, see [README.md](README.md).
 | HTML report | One file with the summary, totals, sessions, breakdowns, skill versions and benchmarks. |
 | Dashboard | A local web server on `127.0.0.1` with seven pages (below). |
 | Claude Code mod (`mod/`) | The `/tokscope` command, a live pane, and marks for each Skill and Agent call. |
-| Desktop app (`desktop/`) | An Electron window around the dashboard, with a systemd user service. Linux only. |
+| Desktop app (`desktop/`) | An Electron window around the dashboard, with a systemd user service on Linux. A personal arm64 macOS build with bundled Python (not signed). |
 | OTel receiver (optional) | `collector/otlp_receiver.py`: OTLP/HTTP JSON on `127.0.0.1:4318`, one JSONL file per day in `data/otel/` (`TOKSCOPE_DATA_DIR` changes the folder). Not part of the package. |
 
 ## Dashboard pages
