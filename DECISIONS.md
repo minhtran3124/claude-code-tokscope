@@ -50,3 +50,9 @@
 | Decision | Why | Rejected |
 | --- | --- | --- |
 | A request that contains a `Skill` tool call is charged to the skill it loads, with its tool calls and the subagents it spawns, wherever the Skill block sits in the message. Several Skill calls in one request: the last one. Later requests keep the last skill, as before. Totals per session do not change, only the split. `PARSER_VERSION` is 21. | The request's output is the cost of making the load. A subagent in the same message already got the new skill, so its parent must agree. | Charging the previous skill (what it was); splitting a request between skills. |
+
+## 2026-10-25 · A failed skill load is not a load (issue #134)
+
+| Decision | Why | Rejected |
+| --- | --- | --- |
+| A `Skill` tool call whose result has `is_error` or starts with `Unknown skill` is a failed load: `skill_calls.failed` is 1, and it gives back the skill and phase it took, so its own request, its tool calls and later requests keep the skill that was active before (unless a later Skill call in the same turn already replaced it). Failed loads are left out of loads, versions, scan and library use; they show per skill in the Versions card and in `summary --by skill --errors` (`failed_loads`). Per-session totals do not change, only the split. `PARSER_VERSION` is 24. | An unknown skill loads nothing, so charging later work to it hides the real skill's cost and counts a load that never happened. | Dropping the failed row (loses the count); keeping the failed skill active (what it was). |

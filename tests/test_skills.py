@@ -243,6 +243,29 @@ class SkillsTest(unittest.TestCase):
         self.assertEqual(self.conn.execute("SELECT skill, version, first_seen FROM skill_versions").fetchall(),
                          [("ce:review", v1, "2026-10-10T00:00:00+00:00")])
 
+    def test_failed_loads_are_counted_per_skill_and_are_not_loads(self):
+        self.load("2026-10-10T00:00:00Z", 1, "t1")
+        v1 = skills.record_load(self.conn, "s1", "t1", "review", str(self.repo / "src"), "2026-10-10T00:00:00Z")
+        for tid, sk in (("t2", "review"), ("t3", "nonexistent")):
+            self.conn.execute("INSERT INTO skill_calls (session_id, ts, skill, phase, source, prompt_idx, tool_use_id, failed) "
+                              "VALUES ('s1', '2026-10-11T00:00:00Z', ?, NULL, 'tool', 2, ?, 1)", (sk, tid))
+        rows = {(r["skill"], r["version"]): r for r in skills.versions(self.conn)}
+        self.assertEqual((rows[("review", v1)]["loads"], rows[("review", v1)]["failed_loads"]), (1, 1))
+        self.assertEqual((rows[("nonexistent", None)]["loads"], rows[("nonexistent", None)]["failed_loads"]), (0, 1))
+        self.assertEqual(skills.load_versions(self.conn)[0][2], "review")
+        self.assertEqual(len(skills.load_versions(self.conn)), 1)
+
+    def test_failed_loads_follow_the_filters_and_skip_bench_sessions(self):
+        for sid, project in (("s1", "p"), ("s2", "b"), ("sb", "x-tokscope-bench-1")):
+            self.conn.execute("INSERT OR IGNORE INTO sessions (session_id, project) VALUES (?, ?)", (sid, project))
+            self.conn.execute("INSERT INTO skill_calls (session_id, ts, skill, phase, source, prompt_idx, tool_use_id, failed) "
+                              "VALUES (?, '2026-10-11T00:00:00Z', 'nonexistent', NULL, 'tool', 1, 't', 1)", (sid,))
+        n = lambda **k: sum(r["failed_loads"] for r in skills.versions(self.conn, **k))  # noqa: E731
+        self.assertEqual(n(), 2)  # bench excluded
+        self.assertEqual(n(where=("WHERE s.project = ?", ("p",))), 1)
+        self.assertEqual(n(where=("WHERE s.project = ? AND r.model = ?", ("p", "m"))), 1)
+        self.assertEqual(n(where=("WHERE s.project = ?", ("none",))), 0)
+
     def test_a_versions_error_rate_counts_failed_calls_and_interrupts_of_its_loads(self):
         self.load("2026-10-01T00:00:00Z", 1, tokens=900)
         self.load("2026-10-10T00:00:00Z", 2, "t2", tokens=100)
@@ -367,3 +390,45 @@ class SkillsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SkillsExportTest(SkillsTest):
+    def seed(self):
+        self.load("2026-10-01T00:00:00Z", 1, "t1", tokens=100)
+        skills.record_load(self.conn, "s1", "t1", "review", str(self.repo / "src"), "2026-10-01T00:00:00Z")
+        write_skill(self.skill, "---\nname: review\nversion: 1.3.0\n---\n# v2\n")
+        self.load("2026-10-10T00:00:00Z", 2, "t2", tokens=150)
+        skills.record_load(self.conn, "s1", "t2", "review", str(self.repo / "src"), "2026-10-10T00:00:00Z")
+        self.conn.commit()
+
+    def out(self, fmt):
+        from tokscope.cli import skills_text
+        with mock.patch("tokscope.cli.DB", self.tmp / "t.db"):
+            return skills_text(None, fmt)
+
+    def test_json_rows_carry_usage_and_regression(self):
+        self.seed()
+        rows = json.loads(self.out("json"))
+        self.assertEqual([r["loads"] for r in rows], [1, 1])
+        self.assertEqual([r["tokens_median"] for r in rows], [100, 150])
+        self.assertEqual([r["regression_pct"] for r in rows], [None, 50.0])
+        self.assertTrue(rows[0]["last_seen"])
+        self.assertEqual(set(rows[0]), set(skills.EXPORT))
+
+    def test_csv_has_header_and_one_row_per_version(self):
+        import csv
+        import io
+        self.seed()
+        got = list(csv.DictReader(io.StringIO(self.out("csv"))))
+        self.assertEqual(tuple(got[0]), skills.EXPORT)
+        self.assertEqual([r["tokens_median"] for r in got], ["100", "150"])
+
+    def test_table_stays_the_default(self):
+        self.seed()
+        self.assertTrue(self.out("table").startswith("skill / version"))
+
+    def test_csv_quotes_formula_cells(self):
+        row = {"skill": "=cmd", "version": "+x", "label": "-1", "source": "@s", "first_seen": None, "last_seen": None,
+               "loads": 1, "exact": 0, "tokens_median": 5, "calls": 0, "errors": 0, "repeats": 0, "interrupts": 0, "failed_loads": 0}
+        cells = skills.to_csv([row]).splitlines()[1].split(",")
+        self.assertEqual(cells[:4], ["'=cmd", "'+x", "'-1", "'@s"])

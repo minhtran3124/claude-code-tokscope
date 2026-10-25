@@ -29,10 +29,10 @@ def summary_errors(conn, args, where, params, fmt):
     elif fmt == "csv":
         print(summary_csv(found, errors.FIELDS), end="")
     else:
-        print(f"{args.by:<40} {'calls':>8} {'errors':>7} {'err %':>6} {'repeats':>8} {'interrupts':>10} {'api errors':>10} {'retries':>8}")
+        print(f"{args.by:<40} {'calls':>8} {'errors':>7} {'err %':>6} {'repeats':>8} {'interrupts':>10} {'api errors':>10} {'retries':>8} {'failed loads':>12}")
         for r in found:
             print(f"{r['key'][:40]:<40} {r['calls']:>8,} {r['errors']:>7,} {errors.pct(r['errors'], r['calls']):>6} "
-                  f"{r['repeats']:>8,} {r['interrupts']:>10,} {r['api_errors']:>10,} {r['retries']:>8,}")
+                  f"{r['repeats']:>8,} {r['interrupts']:>10,} {r['api_errors']:>10,} {r['retries']:>8,} {r['failed_loads']:>12,}")
     kinds = errors.classes(conn, where, params)
     if kinds:
         print("error classes: " + ", ".join(f"{k} {n}" for k, n in kinds), file=sys.stdout if fmt == "table" else sys.stderr)
@@ -53,12 +53,15 @@ def summary(args):
         total = sum(r["cost_usd"] for r in found) or 1
         # a phase's carried part comes from later prompts with no skill (see ingest.CARRIED)
         carried = args.by == "phase"
+        split = "typed_loads" in (found[0] if found else {})  # by skill with loads: typed /command vs Skill tool
+        med = lambda n, m: f"{n}/{m:,.0f}" if n else "-"  # noqa: E731
         print(f"{args.by:<40} {'requests':>9} {'prompt tok':>13} {'output tok':>11} {'API-eq $':>10} {'share':>6}"
-              + (f" {'carried':>8}" if carried else ""))
+              + (f" {'carried':>8}" if carried else "") + (f" {'typed n/med':>14} {'tool n/med':>14}" if split else ""))
         for r in found:
             cost = r["cost_usd"]
             print(f"{r['key'][:40]:<40} {r['requests']:>9,} {r['prompt_tokens']:>13,} {r['output_tokens']:>11,} {cost:>10.2f} {cost / total:>6.1%}"
-                  + (f" {r['carried_cost_usd'] / (cost or 1):>8.0%}" if carried else ""))
+                  + (f" {r['carried_cost_usd'] / (cost or 1):>8.0%}" if carried else "")
+                  + (f" {med(r['typed_loads'], r['typed_median_tokens']):>14} {med(r['tool_loads'], r['tool_median_tokens']):>14}" if split else ""))
     # the notes are not data: with json or csv, stdout holds only the rows
     note_out = sys.stdout if fmt == "table" else sys.stderr
     print(API_EQ_NOTE, file=note_out)
@@ -143,10 +146,14 @@ def record_skill_versions(lines):
     conn.commit()
 
 
-def skills_text(skill=None):
-    from .core.skills import versions
+def skills_text(skill=None, fmt="table"):
+    from .core import skills as sk
 
-    rows = versions(connect(DB), skill)
+    rows = sk.versions(connect(DB), skill)
+    if fmt == "json":
+        return json.dumps(sk.export_rows(rows), indent=2)
+    if fmt == "csv":
+        return sk.to_csv(rows).rstrip("\n")
     if not rows:
         return "tokscope: no skill versions yet; run `tokscope ingest` (and load a skill) first."
     # one block per skill, its versions indented under it, oldest first
@@ -360,6 +367,7 @@ def main():
     pk = sub.add_parser("skills", help="each skill's versions (content hash), loads and median tokens per load")
     pk.add_argument("skill", nargs="?", help="only this skill; `import [skill]` keeps older versions transcripts still show")
     pk.add_argument("name", nargs="?", help=argparse.SUPPRESS)
+    pk.add_argument("--format", choices=("table", "json", "csv"), default="table", help="json or csv print only the rows")
     ps = sub.add_parser("summary", help="print a cost table")
     ps.add_argument("--by", choices=SUMMARY_SQL, default="phase")
     ps.add_argument("--errors", action="store_true", help="count failed and repeated tool calls, interrupts, API errors "
@@ -423,7 +431,7 @@ def main():
                 print(f"kept {sk} {version}: SKILL.md from {n} load(s), first {first[:16].replace('T', ' ')}")
             print(f"{len(done)} older version(s) kept" if done else "no older version found in the transcripts")
         else:
-            print(skills_text(args.skill))
+            print(skills_text(args.skill, args.format))
     elif args.cmd == "change":
         from .features.changes import add_change, impact_text, list_changes
 

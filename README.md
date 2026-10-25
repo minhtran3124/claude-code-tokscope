@@ -62,6 +62,7 @@ Without the script: `pipx install .` (or `uv tool install .`), then add the full
 tokscope ingest              # read your transcripts into the database (see below for other folders)
 tokscope summary --by phase  # a table in the terminal (--by skill | agent | model)
 tokscope summary --by skill --format csv > skills.csv   # or --format json: only the rows on stdout
+tokscope skills --format csv > versions.csv   # each skill version: loads, tokens, errors, regression (or --format json)
 tokscope open                # write the HTML report and open it
 tokscope serve               # the live dashboard on http://127.0.0.1:8765
 ```
@@ -147,7 +148,11 @@ Things to know:
   error that names the problem. Keys: `daily_usd`, `daily_tokens`, `block_pct`, `weekly_pct` (quota %, needs statusline
   snapshots that tokscope does not store yet, so it reports "no data"), `skills.<name>` and `agents.<name>` with
   `daily_usd`, `daily_tokens` and (skills) `per_load_tokens` (median of a load). Per-skill and per-agent spend is
-  attributed as in `summary --by skill|agent`. Example:
+  attributed as in `summary --by skill|agent`. Optional `regression` (`{"pct": 20, "min_loads": 5}`, off when absent,
+  `{}` uses those defaults) compares each skill's newest tracked version with the previous one and counts as over when its
+  median tokens per load is more than `pct` % higher with at least `min_loads` loads on both (`regression.<skill>` in
+  `check`, so exit 11; a skill with one version or too few loads is not judged). It also shows in the statusline, the
+  `SessionEnd` line (for skills that session loaded), Overview and the report's skill versions card. Example:
   `{"daily_usd": 50, "skills": {"xia2": {"per_load_tokens": 200000}}, "agents": {"reviewer": {"daily_usd": 10}}}`.
   `tokscope check --once [--json]` prints the state and exits 0 ok, 10 near (80% or more of any budget), 11 over, 30 no
   data (no file, nothing measurable, no requests) and 2 for a bad file. The live pane, the dashboard Overview and

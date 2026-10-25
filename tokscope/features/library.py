@@ -22,6 +22,7 @@ from pathlib import Path
 
 from .. import paths
 from ..core import skills
+from ..core.calls import CHARS_PER_TOKEN
 from ..core.markdown import frontmatter
 from .changes import BENCH_PROJECT
 
@@ -150,7 +151,7 @@ def usage(conn, found, days=None, project=None, now=None):
         params.append(project)
     try:
         rows = conn.execute("SELECT k.skill, s.cwd, count(*), max(k.ts) FROM skill_calls k JOIN sessions s USING (session_id) "
-                            f"WHERE {' AND '.join(where)} GROUP BY 1, 2", params).fetchall()
+                            f"WHERE COALESCE(k.failed, 0) = 0 AND {' AND '.join(where)} GROUP BY 1, 2", params).fetchall()
     except sqlite3.OperationalError:
         return {}
     by_folder, by_name = {}, {}
@@ -167,6 +168,32 @@ def usage(conn, found, days=None, project=None, now=None):
             n0, last0 = out.get(k["id"], (0, None))
             out[k["id"]] = (n0 + n, max(last0 or "", last or "") or None)
     return out
+
+
+IDLE_DAYS = 90
+PREFIX_METHOD = ("Estimate. Claude Code lists each skill's name and description in the first request of every session. "
+                 f"Size = the description bytes in SKILL.md, at about {CHARS_PER_TOKEN} characters per token.")
+
+
+def prefix(k):
+    """(bytes, ~tokens) the skill's description adds to every session's prefix (frontmatter, an estimate)."""
+    n = len(k["description"].encode())
+    return n, round(n / CHARS_PER_TOKEN)
+
+
+def idle(conn, found, project=None, now=None, days=IDLE_DAYS):
+    """{skill id: "used" | "unused" | "never"}: "never" has no load at all, "unused" none in the last `days` days
+    (whatever range the page shows). Bench sessions are left out, as usage() does."""
+    now = now or datetime.now(timezone.utc)
+    last = usage(conn, found, None, project, now)
+    cut = (now - timedelta(days=days)).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    return {k["id"]: "never" if not last.get(k["id"]) else "unused" if (last[k["id"]][1] or "") < cut else "used" for k in found}
+
+
+def dead_cost(found, state):
+    """(skills not loaded in 90 days or ever, ~tokens their descriptions add to every session)."""
+    dead = [k for k in found if state.get(k["id"], "used") != "used"]
+    return len(dead), sum(prefix(k)[1] for k in dead)
 
 
 def ste_linter(found):

@@ -2,7 +2,7 @@
 
 import html
 
-from ....core import errors, skills
+from ....core import budgets, errors, skills
 from ....features.changes import impact
 from ..widgets import _diff_html, _table, _tok, _usd, _vs
 
@@ -27,7 +27,7 @@ def _skill_versions(conn, level="full", where=None, skill=None):
     `where` (the dashboard's filters) counts only the loads it matches and drops versions with none."""
     by_skill = {}
     for r in skills.versions(conn, skill, where=where):
-        if r["loads"] or (r["version"] and not where):
+        if r["loads"] or r["failed_loads"] or (r["version"] and not where):
             by_skill.setdefault(r["skill"], []).append(r)
     if not by_skill and where:
         return 0, "<p class='note'>No skill loads match these filters.</p>"
@@ -41,6 +41,10 @@ def _skill_versions(conn, level="full", where=None, skill=None):
     rest = [k for k in by_skill if k not in changed and k not in started]
     single = sorted(k for k in rest if tracked(by_skill[k]))
     unknown = sorted(k for k in rest if not tracked(by_skill[k]))  # loaded, but no folder to hash
+    try:
+        cfg = budgets.regression_config(budgets.load())
+    except budgets.BudgetError:
+        cfg = None
     cards = []
     for name, vs in sorted(changed.items(), key=lambda kv: weight(kv[1])):
         rows, prev = [], None
@@ -48,7 +52,7 @@ def _skill_versions(conn, level="full", where=None, skill=None):
             label = f" v{v['label']}" if v["label"] else ""
             rows.append(((f"<code>{html.escape(v['version'] or 'before tracking')}</code>{html.escape(label)}", "raw"),
                          (v["first_seen"] or "")[:10] or "–", _loads(v["loads"]), v["exact"], v["tokens_median"] or 0,
-                         _vs(prev, v["tokens_median"]), _err(v["calls"], v["errors"]), v["repeats"], v["interrupts"]))
+                         _vs(prev, v["tokens_median"]), _err(v["calls"], v["errors"]), v["repeats"], v["interrupts"], v["failed_loads"]))
             prev = v["tokens_median"] if v["tokens_median"] is not None else prev
         diffs = []
         versions = [v["version"] for v in tracked(vs)]
@@ -61,9 +65,12 @@ def _skill_versions(conn, level="full", where=None, skill=None):
             diffs.append(f"<details class='vdiff'><summary>Diff <code>{old}</code> → <code>{new}</code> "
                          f"<span class='note'>{added} added, {removed} removed</span></summary>"
                          f"{_diff_html(lines) if lines else '<p class=note>Same text; only file names changed.</p>'}</details>")
-        cards.append(f'<section class="card" id="v-{html.escape(name)}"><h3>{html.escape(name)}</h3>'
+        g = budgets.regression(vs, cfg["pct"], cfg["min_loads"]) if cfg else None
+        warn = (f'<p class="note" role="alert"><b>Regression:</b> the newest version costs {g["change_pct"]:+.0f}% per load '
+                f'(limit +{cfg["pct"]:g}% with {cfg["min_loads"]}+ loads on both).</p>' if g and g["flagged"] else "")
+        cards.append(f'<section class="card" id="v-{html.escape(name)}"><h3>{html.escape(name)}</h3>{warn}'
                      + _table(["version", "first seen", "loads", "exact", "median tokens / load", "vs before", "tool errors",
-                                       "repeats", "interrupts"], rows, 4)
+                                       "repeats", "interrupts", "failed loads"], rows, 4)
                      + "".join(diffs) + "</section>")
     parts = ["<h3>Changed</h3>" + "".join(cards) if cards else
              "<p class='note'>No skill has changed since tracking began. Edit one and its next load shows here, with the diff.</p>"]
@@ -84,6 +91,20 @@ def _skill_versions(conn, level="full", where=None, skill=None):
     if unknown:
         parts.append(f"<p class='note'>No folder found, so no version (built into Claude Code and not unpacked, or deleted): "
                      f"{html.escape(', '.join(unknown))}.</p>")
+    split = skills.source_split(conn, skill, where=where)
+    if split:  # typed /command loads against loads the model made with the Skill tool
+        cell = lambda d: (f"{d[0]} · {_tok(d[1])}" if d else "–")  # noqa: E731
+        rows = [(k, cell(by.get("command")), cell(by.get("tool"))) for k, by in sorted(split.items()) if k in by_skill]
+        if rows:
+            parts.append("<h3>Loads by source</h3><p class='note'>Typed as a /command, or chosen by the model with the Skill "
+                         "tool: loads · median tokens per load.</p>" + _table(["skill", "typed (/command)", "model (Skill tool)"], rows, -1))
+    failed = {}
+    for k, vs in by_skill.items():
+        if sum(v["failed_loads"] for v in vs):
+            failed[k] = sum(v["failed_loads"] for v in vs)
+    if failed:
+        parts.append("<p class='note'>Failed loads (unknown skill or an error result; not counted as loads): "
+                     + html.escape(", ".join(f"{k} {n}" for k, n in sorted(failed.items()))) + ".</p>")
     return len(changed), f'<div class="versions">{"".join(parts)}</div>'
 
 

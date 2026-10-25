@@ -218,6 +218,31 @@ class IngestTest(Fixture):
             ("r4", None, "plan", 2),
         ])
 
+    FAILED_LOAD = [
+        human("plan it"),
+        assistant("r1", tools=[("t1", "Skill", {"skill": "writing-plans"})]), result("t1", "Launching skill"),
+        assistant("r2", tools=[("t2", "Skill", {"skill": "nonexistent"}), ("t3", "Bash", {"command": "ls"})]),
+        result("t2", "Unknown skill: nonexistent", is_error=True),
+        assistant("r3"),
+    ]
+
+    def test_a_failed_load_leaves_the_previous_skill_active_and_counts_once(self):
+        self.write_main(self.FAILED_LOAD)
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT request_key, skill, phase FROM requests ORDER BY request_key"),
+                         [("r1", "writing-plans", "plan"), ("r2", "writing-plans", "plan"), ("r3", "writing-plans", "plan")])
+        self.assertEqual(self.rows("SELECT skill, failed FROM skill_calls ORDER BY ts, tool_use_id"),
+                         [("writing-plans", 0), ("nonexistent", 1)])
+        self.assertEqual(self.rows("SELECT skill FROM tool_calls WHERE tool_use_id = 't3'"), [("writing-plans",)])
+
+    def test_a_failed_load_with_no_skill_before_it_leaves_none_and_totals_are_unchanged(self):
+        ok = [human("go"), assistant("r1", tools=[("t1", "Skill", {"skill": "nonexistent"})]), result("t1", "x", is_error=True),
+              assistant("r2")]
+        self.write_main(ok)
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT skill, phase FROM requests ORDER BY request_key"), [(None, None), (None, None)])
+        self.assertEqual(self.rows("SELECT sum(output), count(*) FROM requests"), [(20, 2)])
+
     def test_a_load_keeps_the_hash_of_the_skill_text_its_request_blob_carried(self):
         text = "Base directory for this skill: /x/review\n\n# Review\nRead the diff.\n\n\nARGUMENTS: the PR"
         blob = {"type": "api-request-blob", "message": {"content": [
@@ -458,6 +483,20 @@ class IncrementalTest(Fixture):
             Path(str(self.db) + ext).unlink(missing_ok=True)
         self.run_ingest()
         self.assertEqual(got, self.dump(self.db))
+
+    def test_a_failed_load_resumed_across_ingests_equals_a_full_parse(self):
+        main = self.project / f"{SID}.jsonl"
+        self.write_main(IngestTest.FAILED_LOAD[:4])
+        self.run_ingest()
+        self.append(main, IngestTest.FAILED_LOAD[4:])
+        self.run_ingest()
+        got = self.dump(self.db)
+        self.db.unlink()
+        for ext in ("-wal", "-shm"):
+            Path(str(self.db) + ext).unlink(missing_ok=True)
+        self.run_ingest()
+        self.assertEqual(got, self.dump(self.db))
+        self.assertEqual(self.rows("SELECT skill FROM requests WHERE request_key = 'r3'"), [("writing-plans",)])
 
     def test_a_skill_block_resumed_after_earlier_lines_of_its_request_retags_them_like_a_full_parse(self):
         main = self.project / f"{SID}.jsonl"

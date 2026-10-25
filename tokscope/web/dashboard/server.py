@@ -57,8 +57,10 @@ def api(conn, name, qs, stamp):
     if name == "library":
         found = library.discover(conn)
         used = library.usage(conn, found)
+        state = library.idle(conn, found)
         return [{"name": k["name"], "scope": k["scope"], "origin": k["origin"], "reason": k["reason"], "description": k["description"],
-                 "path": str(k["folder"]), "loads": used.get(k["id"], (0, None))[0]} for k in found]
+                 "path": str(k["folder"]), "loads": used.get(k["id"], (0, None))[0],
+                 "status": state[k["id"]], "prefix_tokens_est": library.prefix(k)[1]} for k in found]
     if name == "sessions":
         cond, params = f.cond()
         return [{k: s[k] for k in ("id", "title", "start", "end", "prompts", "tokens", "output", "usd", "main", "agents", "runs")}
