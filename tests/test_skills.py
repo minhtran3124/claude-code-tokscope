@@ -171,6 +171,19 @@ class SkillsTest(unittest.TestCase):
         got = {i: (v, exact) for _, i, _, _, v, exact in skills.load_versions(self.conn)}
         self.assertEqual(got, {1: (None, False), 2: (v1, True), 3: (v2, False)})
 
+    def test_a_load_a_fraction_after_a_version_started_lands_on_that_version(self):
+        v1 = skills.record(self.conn, "review", self.skill, "2026-10-01T00:00:00Z", "scan")
+        (self.skill / "SKILL.md").write_text("---\nversion: 1.3.0\n---\n# v2\n")
+        v2 = skills.record(self.conn, "review", self.skill, "2026-10-10T10:00:05+00:00", "scan")
+        self.load("2026-10-10T10:00:05.400Z", 1)    # same second, but 'Z' sorts after '+00:00' as a string
+        self.load("2026-10-10T10:00:04.900Z", 2)
+        got = {i: v for _, i, _, _, v, _ in skills.load_versions(self.conn)}
+        self.assertEqual(got, {1: v2, 2: v1})
+        # a load stamped with a fraction moves first_seen earlier only when it really is earlier
+        skills.record(self.conn, "review", self.skill, "2026-10-10T10:00:05.400Z", "load")
+        self.assertEqual(self.conn.execute("SELECT first_seen FROM skill_versions WHERE version = ?", (v2,)).fetchone()[0],
+                         "2026-10-10T10:00:05+00:00")
+
     def test_versions_give_loads_and_median_tokens_per_version_and_an_untracked_bucket(self):
         self.load("2026-10-01T00:00:00Z", 1, tokens=900)
         self.load("2026-10-10T00:00:00Z", 2, "t2", tokens=100)
