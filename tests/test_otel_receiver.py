@@ -117,6 +117,53 @@ class ReceiverTest(unittest.TestCase):
         self.srv.data_dir = blocker / "otel"  # mkdir under a file raises OSError
         self.assertEqual(self.post("/v1/logs", json.dumps(SAMPLE)), 500)
 
+    def test_deeply_nested_json_is_400_and_not_written(self):
+        self.assertEqual(self.post("/v1/logs", "[" * 9_999 + "]" * 9_999), 400)
+        self.assertEqual(self.files(), [])
+        self.assertEqual(self.post("/v1/logs", json.dumps(SAMPLE)), 200)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX modes")
+    def test_data_folder_and_files_are_private(self):
+        old = os.umask(0)
+        self.addCleanup(os.umask, old)
+        self.srv.data_dir = self.dir / "otel"
+        self.assertEqual(self.post("/v1/logs", json.dumps(SAMPLE)), 200)
+        self.assertEqual(os.stat(self.dir / "otel").st_mode & 0o777, 0o700)
+        (f,) = (self.dir / "otel").glob("*.jsonl")
+        self.assertEqual(os.stat(f).st_mode & 0o777, 0o600)
+
+    def test_ipv6_loopback_binds(self):
+        try:
+            srv = r.make_server("::1", 0, self.dir)
+        except OSError:
+            self.skipTest("no IPv6 on this host")
+        self.addCleanup(srv.server_close)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        c = http.client.HTTPConnection("::1", srv.server_address[1], timeout=5)
+        c.request("POST", "/v1/logs", json.dumps(SAMPLE), {"Content-Type": "application/json"})
+        self.assertEqual(c.getresponse().status, 200)
+        c.close()
+
+    def chunked(self, chunks, headers=None):
+        c = http.client.HTTPConnection("127.0.0.1", self.srv.server_address[1], timeout=5)
+        c.request("POST", "/v1/logs", iter(chunks), {"Content-Type": "application/json", "Transfer-Encoding": "chunked", **(headers or {})}, encode_chunked=True)
+        status = c.getresponse().status
+        c.close()
+        return status
+
+    def test_chunked_body_is_accepted(self):
+        raw = json.dumps(SAMPLE).encode()
+        self.assertEqual(self.chunked([raw[:10], raw[10:]]), 200)
+        self.assertEqual(json.loads(self.files()[0].read_text())["body"], SAMPLE)
+        self.assertEqual(self.chunked([gzip.compress(raw)], {"Content-Encoding": "gzip"}), 200)
+
+    def test_oversized_chunked_body_is_refused(self):
+        self.assertEqual(self.chunked([b'{"x": "' + b"a" * 11_000, b"a" * 11_000, b'"}']), 413)
+        bomb = gzip.compress(b'{"x": "' + b"a" * 5_000_000 + b'"}')
+        self.assertEqual(self.chunked([bomb], {"Content-Encoding": "gzip"}), 413)
+        self.assertEqual(self.files(), [])
+
     def test_bad_port_and_max_body_are_refused(self):
         with self.assertRaises(ValueError):
             r.make_server("127.0.0.1", 70000, self.dir)
