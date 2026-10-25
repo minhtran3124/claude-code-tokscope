@@ -360,6 +360,15 @@ def main():
     pv.add_argument("--privacy", choices=LEVELS, default="full")
     pv.add_argument("--projects-dir", metavar="PATH", help="read this transcripts folder instead of the default ones "
                     "(a small sample keeps a test server from ingesting every transcript)")
+    psv = sub.add_parser("service", help="keep the dashboard server running from login (launchd on macOS, systemd on Linux); opt-in")
+    psv.add_argument("action", choices=["install", "uninstall", "status"])
+    psv.add_argument("--port", type=int, default=8770)
+    psv.add_argument("--python", help="macOS: the Python the agent runs (default: this one)")
+    psv.add_argument("--root", help="macOS: folder that holds the tokscope package (default: this checkout)")
+    psv.add_argument("--exe", help="Linux: the tokscope launcher in ExecStart (default: bin/tokscope of this checkout)")
+    psv.add_argument("--quote-exe", action="store_true", help="Linux: wrap --exe in double quotes")
+    psv.add_argument("--unit-file", help="Linux: write the unit here instead of the user folder (only writes, no enable)")
+    psv.add_argument("--no-enable", action="store_true", help="Linux: only write the unit")
     pch = sub.add_parser("check", help="compare today's spend with budgets.json; exit 0 ok, 10 near, 11 over, 30 no data")
     pch.add_argument("--once", action="store_true", required=True, help="print the state once and exit")
     pch.add_argument("--json", action="store_true")
@@ -392,6 +401,22 @@ def main():
     except ValueError as e:
         sys.exit(f"tokscope: {e}")
 
+    if args.cmd == "service":  # before the data folder is made: the .deb's postinst runs this as root
+        from .features import service
+
+        try:
+            if args.action == "install":
+                print(service.install(args.python, args.root, args.exe, args.port, unit_file=args.unit_file,
+                                      enable=not (args.no_enable or args.unit_file), quote=args.quote_exe))
+            elif args.action == "uninstall":
+                print(service.uninstall())
+            else:
+                _, running, text = service.status()
+                print(text)
+                sys.exit(0 if running else 1)
+        except (RuntimeError, OSError) as e:
+            sys.exit(f"tokscope: {e}")
+        return
     DB.parent.mkdir(parents=True, exist_ok=True)
     if args.cmd == "ingest" and args.session:
         if not ingest_session(DB, PHASES, args.session, args.projects_dir):
