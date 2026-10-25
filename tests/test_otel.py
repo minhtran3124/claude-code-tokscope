@@ -152,6 +152,19 @@ class OtelTest(unittest.TestCase):
         self.assertIn(f"${cost * 1.5 + 0.5 + 0.25 + 3.0:,.2f}", card)  # the Claude Code total, telemetry-only included
         self.assertNotIn("telemetry only", cost_check(self.conn, COND, (), scoped=True))
 
+    def test_report_cost_check_follows_the_report_filter(self):
+        from tokscope.web.report import write_report
+        self.req("a", "2026-10-20T10:00:00.000Z", "claude-sonnet-4-6", 1000, 500, 0, 0)
+        self.write(line(event("s1", "2026-10-20T10:00:00.000Z", "claude-sonnet-4-6", 1000, 500, 0, 0, 0.5))
+                   + line(event("gone", "2026-10-20T09:00:00.000Z", "claude-sonnet-4-6", 40, 20, 100, 0, 2.0)))
+        self.ingest()
+        self.conn.commit()
+        out = self.tmp / "r.html"
+        write_report(self.db, out, tasks_dir=self.tmp)
+        self.assertIn("telemetry only", out.read_text())
+        write_report(self.db, out, "WHERE s.project = ?", ("-home-u-app",), tasks_dir=self.tmp)
+        self.assertNotIn("telemetry only", out.read_text())
+
 
 if __name__ == "__main__":
     unittest.main()

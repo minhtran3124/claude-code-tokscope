@@ -43,6 +43,7 @@ def write_report(db_path, out_path, where="", params=(), tasks_dir=None, level="
     conn = connect(db_path)
     conn.executescript("CREATE TABLE IF NOT EXISTS prompts (session_id TEXT, prompt_idx INTEGER, ts TEXT, text TEXT)")
     tasks_dir = tasks_dir or paths.tasks()
+    scoped = bool(where)  # a filter (project, model, skill, range) is on: the Cost check leaves out events no request owns
     if level != "full":
         conn.close()
         conn = privacy.redacted_copy(db_path, level, where, params)
@@ -96,7 +97,7 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 {_hero(conn, cond, params)}
 {_session_start(conn, cond, params)}
 <div class="kpis">{kpi_html}</div>{_unpriced(conn, cond, params)}
-{cost_check(conn, cond, params)}</div>
+{cost_check(conn, cond, params, scoped=scoped)}</div>
 
 <section class="card reveal" id="sessions"><h2>Sessions</h2>
 <p class="note"><span class="key"><i></i>main thread</span><span class="key"><i class="a"></i>subagents</span>
