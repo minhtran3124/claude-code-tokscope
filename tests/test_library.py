@@ -70,6 +70,36 @@ class LibraryTest(unittest.TestCase):
         self.assertIsNone(library.read(k, "../../../secret.txt")[0])
         self.assertIsNone(library.read(k, "/etc/passwd")[0])
 
+    def _calls(self, rows):
+        self.conn.execute("INSERT OR IGNORE INTO sessions (session_id, project, cwd, title, prompts) VALUES ('b1', 'x-tokscope-bench-1', ?, 't', 1)",
+                          (str(self.project),))
+        for sid, ts, name in rows:
+            self.conn.execute("INSERT INTO skill_calls (session_id, ts, skill) VALUES (?, ?, ?)", (sid, ts, name))
+
+    def test_usage_skips_bench_sessions_and_follows_range_and_project(self):
+        found = library.discover(self.conn)
+        ids = {(k["scope"], k["dir"]): k["id"] for k in found}
+        mine = ids[("personal", "mine-a")]
+        self._calls([("s1", "2020-01-01T00:00:00.000Z", "mine-a"), ("s1", "2999-01-01T00:00:00.000Z", "mine-a"),
+                     ("b1", "2999-01-02T00:00:00.000Z", "mine-a")])
+        self.assertEqual(library.usage(self.conn, found)[mine], (2, "2999-01-01T00:00:00.000Z"))
+        self.assertEqual(library.usage(self.conn, found, days=30)[mine][0], 1)
+        self.assertNotIn(mine, library.usage(self.conn, found, project="-other"))
+
+    def test_same_name_in_two_scopes_keeps_own_counts_and_a_frontmatter_name_matches(self):
+        skill(self.home / ".claude" / "skills" / "proj-own", "proj-own")           # personal twin of the project skill
+        skill(self.home / ".claude" / "skills" / "folder-x", "fm-name")
+        self.conn.execute("INSERT INTO sessions (session_id, project, cwd, title, prompts) VALUES ('s9', '-z', ?, 't', 1)", (str(self.tmp),))
+        found = library.discover(self.conn)
+        ids = {(k["scope"], k["dir"]): k["id"] for k in found}
+        self._calls([("s1", "2999-01-01T00:00:00Z", "proj-own"), ("s9", "2999-01-01T00:00:00Z", "proj-own"),
+                     ("s9", "2999-01-02T00:00:00Z", "proj-own"), ("s9", "2999-01-01T00:00:00Z", "fm-name")])
+        used = library.usage(self.conn, found)
+        personal = ids[("personal", "proj-own")]
+        project = next(k["id"] for k in found if k["dir"] == "proj-own" and k["scope"] != "personal")
+        self.assertEqual((used[personal][0], used[project][0]), (2, 1))   # each session loads the copy its cwd resolves to
+        self.assertEqual(used[ids[("personal", "folder-x")]][0], 1)
+
     def test_the_page_lists_yours_and_hides_installed_ones(self):
         page = dashboard.page_library(self.conn, dashboard.Filters({}), {}, "full")
         mine = re.findall(r'<a class="sk"[^>]*data-origin="mine"[^>]*>', page)

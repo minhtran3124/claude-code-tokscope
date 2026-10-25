@@ -22,7 +22,7 @@ def _ste_counts(findings):
 
 
 def _skill_card(k, used, lint=None):
-    loads, last = used.get(k["dir"], (0, None))
+    loads, last = used.get(k["id"], (0, None))
     findings = (lint or {}).get(k["folder"] / "SKILL.md")
     meta = (f"{loads:,} load{'s' * (loads != 1)}" + (f" · last {last[:10]}" if last else "")
             + (f" · {_ste_counts(findings)}" if findings is not None else ""))
@@ -397,7 +397,7 @@ def _library_skill(k, qs, used, conn, linter=None, found=(), back="/library"):
         view = f'<div class="viewbar"><span class="note">{text.count(chr(10)) + 1:,} lines</span></div>{_source(text)}'
     tree = "".join(f'<a href="{base}&file={html.escape(r)}"{" class=on aria-current=page" if r == rel else ""}>{html.escape(r)}</a>'
                    for r, _ in listed)
-    loads, last = used.get(k["dir"], (0, None))
+    loads, last = used.get(k["id"], (0, None))
     tracked = conn.execute("SELECT count(*) FROM skill_versions WHERE skill = ?", (k["dir"],)).fetchone()[0] if conn.execute(
         "SELECT 1 FROM sqlite_master WHERE name = 'skill_versions'").fetchone() else 0
     facts = [("Where", f"<code>{html.escape(library._tilde(k['folder']))}</code>"),
@@ -429,10 +429,11 @@ def _library_skill(k, qs, used, conn, linter=None, found=(), back="/library"):
 def page_library(conn, f, qs, level):
     if level != "full":
         return f'<div class="empty"><b>Skill text is hidden</b>The library shows file contents at the full level only (now {level}).</div>'
-    found, used = library.discover(conn, f.project or None), library.usage(conn)
+    found = library.discover(conn, f.project or None)
     linter = library.ste_linter(found)
     pick = (qs.get("skill") or [""])[0]
     k = next((k for k in found if k["id"] == pick), None) or next((k for k in library.discover(conn) if k["id"] == pick), None)
+    used = library.usage(conn, found if k in found else [*found, k] if k else found, f.days, f.project or None, f.now)
     if k:
         return _library_skill(k, qs, used, conn, linter, found, "/library" + (f"?{urlencode({'project': f.project})}" if f.project else ""))
     lint, note = None, " Install the asd-ste100 skill to see STE findings here." if linter is None else ""
