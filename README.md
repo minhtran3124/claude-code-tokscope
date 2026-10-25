@@ -135,7 +135,8 @@ Things to know:
 ## Important information
 
 - **Where data lives**: `$TOKSCOPE_HOME` if set; else the clone when you run `bin/tokscope`; else
-  `~/.local/share/tokscope` (or `$XDG_DATA_HOME/tokscope`). It holds `data/tokscope.db`, the marks, the skill
+  `~/.local/share/tokscope` (or `$XDG_DATA_HOME/tokscope`). On macOS a new install uses
+  `~/Library/Application Support/tokscope`; an existing `~/.local/share/tokscope` is kept. It holds `data/tokscope.db`, the marks, the skill
   versions, the reports, the benchmarks and `privacy.key`. Git ignores all of it.
 - **Reports hold private text.** The default report and the `full` dashboard show your prompts, titles and paths.
   Before you share a report, make it with `tokscope report --privacy redacted` (or `numbers`).
