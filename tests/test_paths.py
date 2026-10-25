@@ -24,6 +24,33 @@ class PathsTest(unittest.TestCase):
             os.environ.pop("TOKSCOPE_HOME", None)
             self.assertEqual(paths.home(), Path("/tmp/xdg/tokscope"))
 
+    def _installed(self, platform, home, env=None):
+        with mock.patch.object(paths, "SRC", Path(home) / "nosrc"), mock.patch.object(Path, "home", return_value=Path(home)), \
+                mock.patch.object(paths.sys, "platform", platform), mock.patch.dict(os.environ, env or {}):
+            os.environ.pop("TOKSCOPE_HOME", None)
+            if not env:
+                os.environ.pop("XDG_DATA_HOME", None)
+            return paths.home()
+
+    def test_macos_new_install_uses_application_support(self):
+        with tempfile.TemporaryDirectory() as h:
+            self.assertEqual(self._installed("darwin", h), Path(h) / "Library/Application Support/tokscope")
+
+    def test_macos_keeps_an_existing_local_share_folder(self):
+        with tempfile.TemporaryDirectory() as h:
+            (Path(h) / ".local/share/tokscope").mkdir(parents=True)
+            self.assertEqual(self._installed("darwin", h), Path(h) / ".local/share/tokscope")
+
+    def test_linux_is_unchanged(self):
+        with tempfile.TemporaryDirectory() as h:
+            self.assertEqual(self._installed("linux", h), Path(h) / ".local/share/tokscope")
+
+    def test_xdg_and_tokscope_home_still_win_on_macos(self):
+        with tempfile.TemporaryDirectory() as h:
+            self.assertEqual(self._installed("darwin", h, {"XDG_DATA_HOME": "/tmp/xdg"}), Path("/tmp/xdg/tokscope"))
+            with mock.patch.dict(os.environ, {"TOKSCOPE_HOME": "/tmp/tk"}), mock.patch.object(paths.sys, "platform", "darwin"):
+                self.assertEqual(paths.home(), Path("/tmp/tk"))
+
     def test_a_phases_file_in_the_data_home_overrides_the_shipped_one(self):
         with tempfile.TemporaryDirectory() as h, mock.patch.dict(os.environ, {"TOKSCOPE_HOME": h}):
             self.assertEqual(paths.phases(), paths.ASSETS / "phases.json")

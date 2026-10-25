@@ -1,9 +1,11 @@
 """Where tokscope keeps its data: the SQLite db, hook marks, reports and benchmark files.
 
 A source checkout keeps them in the repo (data/, reports/, bench/), so a clone works as before. An installed
-package (pipx, uv tool) has no repo around it and uses $TOKSCOPE_HOME, else $XDG_DATA_HOME/tokscope."""
+package (pipx, uv tool) has no repo around it and uses $TOKSCOPE_HOME, else $XDG_DATA_HOME/tokscope. On macOS
+without those, a new install uses ~/Library/Application Support/tokscope; an existing ~/.local/share/tokscope stays."""
 
 import os
+import sys
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parent.parent
@@ -16,7 +18,12 @@ def home():
         return Path(env).expanduser()
     if (SRC / "pyproject.toml").exists() and (SRC / "bin" / "tokscope").exists():
         return SRC  # running from the repo, or an editable install of it
-    return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "tokscope"
+    if xdg := os.environ.get("XDG_DATA_HOME"):
+        return Path(xdg) / "tokscope"
+    old = Path.home() / ".local" / "share" / "tokscope"
+    if sys.platform == "darwin" and not old.exists():
+        return Path.home() / "Library" / "Application Support" / "tokscope"
+    return old
 
 
 def projects_dirs(extra=None):
