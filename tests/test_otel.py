@@ -259,6 +259,7 @@ class OtelTest(unittest.TestCase):
         rows = {s["id"]: s for s in _sessions_json(self.conn, COND, (), got)}
         self.assertEqual(sorted(rows), ["gone", "s1"])
         self.assertTrue(rows["gone"]["only"])
+        self.assertIn("No transcript", rows["gone"]["tip"])  # the row's tooltip
         self.assertEqual((rows["gone"]["tokens"], rows["gone"]["usd"], rows["gone"]["turns"]), (320, 3.0, []))
         self.assertNotIn("only", rows["s1"])
         page = self.report()

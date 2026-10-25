@@ -125,7 +125,7 @@ function row(s){
   const by=s.parent_title||s.parent?.slice(0,8)||'',from=s.parent?`\nstarted by ${by}${byId.has(s.parent)?'':' (outside this range)'}`:'';
   // a parent outside the range has no row to sit under, so the child names it
   d.innerHTML=`<summary><input type=checkbox aria-label="compare" ${picked.has(s.id)?'checked':''}${s.only?' disabled':''}>
-    <span class=d>${esc(when(s))}</span><span class="t${/^session [0-9a-f]{8}$/.test(s.title||'')?' sid':''}" title="${esc(s.title+from)}"><span class=tt>${s.title?hl(s.title,q.value.trim()):s.only?'(no transcript)':'(untitled)'}</span>${s.only?`<span class=tag title="${esc(s.tip)}">telemetry only</span>`:''}${liveTag(s.id)}${/^session [0-9a-f]{8}$/.test(s.title||'')?'':`<code class=sid8>${esc(s.id.slice(0,8))}</code>`}${s.parent&&!byId.has(s.parent)?`<small class=from>from ${DASH&&s.parent?`<a href="/sessions?range=all&amp;q=${encodeURIComponent(s.parent)}" title="show the session that started this one (all time)">${esc(by)}</a>`:esc(by)}</small>`:''}</span>
+    <span class=d>${esc(when(s))}</span><span class="t${/^session [0-9a-f]{8}$/.test(s.title||'')?' sid':''}" title="${esc(s.title+from)}"><span class=tt>${s.title?hl(s.title,q.value.trim()):s.only?'':'(untitled)'}</span>${s.only?`<span class=tag title="${esc(s.tip)}">telemetry only</span>`:''}${liveTag(s.id)}${/^session [0-9a-f]{8}$/.test(s.title||'')?'':`<code class=sid8>${esc(s.id.slice(0,8))}</code>`}${s.parent&&!byId.has(s.parent)?`<small class=from>from ${DASH&&s.parent?`<a href="/sessions?range=all&amp;q=${encodeURIComponent(s.parent)}" title="show the session that started this one (all time)">${esc(by)}</a>`:esc(by)}</small>`:''}</span>
     <span class=sk>${esc(s.top_skill||'')}</span><span class="r n">${s.prompts}</span><span class="r n" title="${s.runs||0} subagent runs" aria-label="${s.runs||0} subagent runs">${s.runs||'–'}</span><span class=r><b>${fmt(s.tokens)}</b></span>${split(s.main,s.agents)}<span class=cv aria-hidden=true>›</span></summary><div class=body></div>`;
   const cb=d.querySelector('input');
   cb.addEventListener('click',e=>e.stopPropagation());
@@ -156,7 +156,7 @@ function callCell(t){
 function detail(s){
   if(s.only)return `<dl class=ids>${[['Session ID',s.id]].map(([k,v])=>`<dt>${k}</dt><dd><span class=code>${esc(v)}</span><button type=button class="btn cp" data-copy="${esc(v)}">Copy</button></dd>`).join('')}</dl>
     <p class=note><time data-ts="${esc(s.start)}" data-end="${esc(s.end)}" data-fmt=range>${esc(tzText(s.start,'range',s.end))}</time> · ${s.requests} request${s.requests===1?'':'s'}${s.models?' · '+esc(s.models):''} · output ${fmt(s.output)} · <span class=usd>${usd(s.usd)} by Claude Code</span></p>
-    <p class=note><span class=tag>telemetry only</span> ${esc(s.tip)}.${s.unpriced?` ${s.unpriced} request${s.unpriced===1?'':'s'} sent no cost and have no list price, so count as $0.`:''} No prompts, skills or subagents are known, so it is in no breakdown.</p>`;
+    <p class=note><span class=tag>telemetry only</span> ${esc(s.tip)}.${s.unpriced?` ${s.unpriced} request${s.unpriced===1?'':'s'} sent no cost and have no list price, so count as $0.`:''} It is in no skill, agent or phase breakdown.</p>`;
   const top=Math.max(...s.turns.map(t=>t.tokens),1);
   const turns=s.turns.map((t,k)=>`<tr><td data-label="#">${t.i??'–'}</td><td class=l data-label="prompt">${esc(t.text||(t.i===0?'(session start)':''))}</td>
     <td class=lm data-label="skill">${esc(t.skill||'')}${t.version?` <code class=ver title="${t.version[1]?'exact: hashed at the Skill call':'inferred from the kept text or the date'} · tokscope skills ${esc(t.skill)}">${esc(t.version[0].slice(0,6))}</code>`:''}</td><td data-label="tokens">${bar(t.tokens,top,t.agents_tokens,Math.min(k,12))}</td><td data-label="output">${fmt(t.output)}</td>
@@ -209,7 +209,7 @@ function render(){
   const rowFor=e=>{if(e.more)return moreBtn(e);const s=e.s;let el=nodes.get(s.id);
     if(!el){el=row(s);nodes.set(s.id,el)}
     else{el.getAnimations().forEach(a=>a.cancel());el.classList.remove('ghost');el.style.top='';
-      el.querySelector('.tt').innerHTML=s.title?hl(s.title,q.value.trim()):'(untitled)';el.querySelector('.d').textContent=when(s);
+      el.querySelector('.tt').innerHTML=s.title?hl(s.title,q.value.trim()):s.only?'':'(untitled)';el.querySelector('.d').textContent=when(s);
       el.classList.toggle('picked',picked.has(s.id));el.querySelector('input').checked=picked.has(s.id)}
     el.classList.toggle('child',e.d>0);el.classList.toggle('dim',e.dim);el.style.setProperty('--depth',e.d);
     return el};

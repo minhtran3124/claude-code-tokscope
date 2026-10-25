@@ -19,7 +19,7 @@ MATCH_SECONDS = 120  # an event and its transcript request must be this close in
 INT64 = 2**63 - 1
 BAD_LINE = (ValueError, TypeError, AttributeError, OverflowError, RecursionError,
             sqlite3.InterfaceError, sqlite3.ProgrammingError)  # input-caused; OperationalError (locked, disk full) propagates
-ONLY_TIP = "telemetry only: no transcript, so no prompts, skills or subagents; the cost is Claude Code's own cost_usd"
+ONLY_TIP = "No transcript, so no prompts, skills or subagents. The cost is Claude Code's own cost_usd"
 ONLY_NOTE = " Includes telemetry-only sessions (no transcript): their figure is Claude Code's own cost_usd."
 VALUE_KEYS = ("stringValue", "intValue", "doubleValue", "boolValue")
 
