@@ -16,6 +16,7 @@ from ...core.pricing import API_EQ_NOTE, unpriced, unpriced_text
 from .common import TOKENS
 from .scripts import JS, SORT_SEG
 from .sections.benchmarks import _benchmarks
+from .sections.cost_check import cost_check
 from .sections.breakdowns import _breakdowns
 from .sections.rows import summary_view
 from .sections.sessions import _sessions_json
@@ -94,7 +95,8 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 <p class="sub">{(first or '')[:10]} → {(last or '')[:10]} · real sessions (benchmarks separate) · generated {generated}</p>
 {_hero(conn, cond, params)}
 {_session_start(conn, cond, params)}
-<div class="kpis">{kpi_html}</div>{_unpriced(conn, cond, params)}</div>
+<div class="kpis">{kpi_html}</div>{_unpriced(conn, cond, params)}
+{cost_check(conn, cond, params)}</div>
 
 <section class="card reveal" id="sessions"><h2>Sessions</h2>
 <p class="note"><span class="key"><i></i>main thread</span><span class="key"><i class="a"></i>subagents</span>

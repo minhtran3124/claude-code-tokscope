@@ -21,7 +21,7 @@ import sqlite3
 from pathlib import Path
 
 from .. import paths
-from . import tz
+from . import otel, tz
 from .pricing import cost_usd, refresh_costs
 from .skills import canonical_name, loaded_text_hash
 
@@ -106,6 +106,13 @@ CREATE TABLE IF NOT EXISTS mcp_defs (
 CREATE TABLE IF NOT EXISTS statusline_snapshots (
     session_id TEXT, ts TEXT, prompt_cache TEXT
 );
+CREATE TABLE IF NOT EXISTS otel_requests (
+    src TEXT, pos INTEGER, idx INTEGER, session_id TEXT, prompt_id TEXT, ts TEXT, model TEXT, input INTEGER,
+    output INTEGER, cache_read INTEGER, cache_write INTEGER, cost_usd REAL, duration_ms REAL, speed TEXT,
+    request_key TEXT, PRIMARY KEY (src, pos, idx)
+);
+CREATE TABLE IF NOT EXISTS otel_files (src TEXT PRIMARY KEY, off INTEGER, head TEXT);
+CREATE INDEX IF NOT EXISTS idx_otel_session ON otel_requests (session_id, ts);
 CREATE TABLE IF NOT EXISTS ingest_state (session_id TEXT PRIMARY KEY, state TEXT);
 CREATE INDEX IF NOT EXISTS idx_requests_ts ON requests (ts);
 CREATE INDEX IF NOT EXISTS idx_snapshots_session ON statusline_snapshots (session_id, ts);
@@ -784,11 +791,22 @@ def ingest_session(db_path, phases_path, session_id, projects_dir=None):
     return True
 
 
-def ingest(db_path, phases_path, projects_dir=None, project_filter=None, log=print):
+def ingest_otel(db_path, otel_dir=None, log=print):
+    """Only the OTel api_request events (no transcripts); returns the number of new events."""
+    conn = connect(db_path)
+    added = otel.ingest(conn, otel_dir)
+    log(f"ingest: {added} new OTel events" if added else "ingest: no new OTel events")
+    conn.close()
+    return added
+
+
+def ingest(db_path, phases_path, projects_dir=None, project_filter=None, log=print, otel_dir=None):
     """projects_dir: one folder, a list, or None for the default ones. A session id found twice is read once."""
     dirs = [d for d in paths.projects_dirs(projects_dir) if d.is_dir()]
     if not dirs:
         log(f"ingest: no transcripts in {', '.join(map(str, paths.projects_dirs(projects_dir)))} yet")
+        if (otel_dir or paths.otel_dir()).is_dir():
+            ingest_otel(db_path, otel_dir, log)
         return 0, 0
     log("ingest: reading " + ", ".join(map(str, dirs)))
     phases = load_phases(phases_path)
@@ -816,6 +834,8 @@ def ingest(db_path, phases_path, projects_dir=None, project_filter=None, log=pri
     link_sessions(conn)
     conn.commit()
     log(f"ingest: {parsed} sessions parsed, {skipped} unchanged")
+    if (otel_dir or paths.otel_dir()).is_dir():  # a missing folder is a no-op
+        otel.ingest(conn, otel_dir)  # after the sessions: it also matches the events to their requests
     from .skills import rekey, scan  # a skill edited since the last ingest shows up as a new version
 
     rekey(conn)  # loads keep their version under a renamed skill

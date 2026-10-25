@@ -10,6 +10,7 @@ from ... import charts
 from ....features.changes import list_changes
 from ....core.pricing import API_EQ_NOTE, unpriced, unpriced_text
 from ...report.common import TOKENS
+from ...report.sections.cost_check import cost_check
 from ...report.widgets import _start_line, _table, _tok, _usd
 from ..common import Filters, _iso, _q
 
@@ -512,6 +513,8 @@ def page_overview(conn, f):
         f'<div data-region="budgets">{_budgets(conn)}</div>',
         f'<div data-region="kpis">{_kpis(conn, f)}</div>',
         f'<div data-region="cache">{_cache_finding(conn, f)}</div>',
+        cost_check(conn, *f.cond(), since=_iso(f.now - timedelta(days=f.days)) if f.days else None,
+                   scoped=bool(f.project or f.model or f.skill)),
         _session_start(conn, f),
         f'<section class="card"><h2>Biggest movers</h2><p class="note">{f.label()}, tokens per day against the window before</p>'
         f'<div data-region="changed">{_movers(conn, f, cmp)}<h3>New skill versions</h3>{_new_versions(conn, f)}</div></section>',

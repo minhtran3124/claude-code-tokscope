@@ -201,8 +201,13 @@ from Terminal and from Claude Code's statusline.
 ## Optional: the OTel receiver
 
 `tokscope otel-receiver` saves the OpenTelemetry export of Claude Code to `data/otel/<signal>-YYYY-MM-DD.jsonl`
-in the data home (`TOKSCOPE_DATA_DIR` replaces that whole `data/otel` folder: the files go straight into it). **It only collects data: no report, dashboard page or
-number reads these files yet** (reading them is planned, issue #58). Skip it unless you want the raw events.
+in the data home (`TOKSCOPE_DATA_DIR` replaces that whole `data/otel` folder: the files go straight into it). `tokscope ingest` (also the dashboard's
+background ingest) then reads the `claude_code.api_request` events into the database: model, tokens, `cost_usd`, duration,
+session and prompt id. They are matched to transcript requests by session, token counts and time, and the **Cost check**
+card (report and dashboard Overview) shows tokscope's API-eq against Claude Code's own `cost_usd`, the drift per model
+(a model with no rate drifts 100%), unmatched events, and sessions that exist only in telemetry ("telemetry only", counted
+in the card's Claude Code total, not in the API-eq KPIs). `tokscope ingest --otel [DIR]` reads only these events. No folder, no change.
+Skip the receiver unless you want this check or a request history that outlives the transcripts.
 
 ```sh
 tokscope otel-receiver       # listens on 127.0.0.1:4318

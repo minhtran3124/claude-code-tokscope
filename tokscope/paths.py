@@ -28,6 +28,11 @@ def home():
     return old
 
 
+def otel_dir():
+    """Where the OTel receiver writes its JSONL files; $TOKSCOPE_DATA_DIR replaces the whole folder."""
+    return Path(os.environ.get("TOKSCOPE_DATA_DIR") or home() / "data" / "otel")
+
+
 def projects_dirs(extra=None):
     """Transcript folders: --projects-dir, else each $CLAUDE_CONFIG_DIR entry (comma-separated) + /projects, else
     every existing ~/.config/claude/projects and ~/.claude/projects. Duplicates dropped, order kept."""

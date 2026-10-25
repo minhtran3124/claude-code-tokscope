@@ -1,0 +1,157 @@
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from tokscope.core import otel
+from tokscope.core.ingest import connect, ingest_otel
+from tokscope.core.pricing import cost_usd
+from tokscope.web.report.sections.cost_check import cost_check
+
+COND = "WHERE s.project NOT LIKE '%bench%'"
+
+
+def attr(k, v):
+    if isinstance(v, bool):
+        return {"key": k, "value": {"boolValue": v}}
+    if isinstance(v, int):
+        return {"key": k, "value": {"intValue": str(v)}}  # OTLP JSON sends 64-bit ints as strings
+    if isinstance(v, float):
+        return {"key": k, "value": {"doubleValue": v}}
+    return {"key": k, "value": {"stringValue": v}}
+
+
+def event(session, ts, model, inp, out, read, write, cost, name="api_request", prompt="p1"):
+    a = {"event.name": name, "event.timestamp": ts, "session.id": session, "prompt.id": prompt, "model": model,
+         "input_tokens": inp, "output_tokens": out, "cache_read_tokens": read, "cache_creation_tokens": write,
+         "cost_usd": cost, "duration_ms": 1840.0, "speed": "normal"}
+    return {"resourceLogs": [{"resource": {"attributes": []}, "scopeLogs": [{"logRecords": [
+        {"body": {"stringValue": "claude_code." + name}, "attributes": [attr(k, v) for k, v in a.items()]}]}]}]}
+
+
+def line(body, signal="logs"):
+    return json.dumps({"received_at": "2026-10-20T12:00:00+00:00", "signal": signal, "body": body}) + "\n"
+
+
+class OtelTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.dir = self.tmp / "otel"
+        self.dir.mkdir()
+        self.db = self.tmp / "t.db"
+        self.conn = connect(self.db)
+        self.conn.execute("INSERT INTO sessions (session_id, project) VALUES ('s1', '-home-u-app')")
+
+    def write(self, text, name="logs-2026-10-20.jsonl", mode="a"):
+        with open(self.dir / name, mode) as f:
+            f.write(text)
+
+    def req(self, key, ts, model, inp, out, read, write, session="s1"):
+        cost = cost_usd(model, inp, out, read, write, 0)
+        self.conn.execute("INSERT INTO requests (session_id, request_key, ts, model, input, output, thinking, cache_read, "
+                          "cache_write_5m, cache_write_1h, cost_usd) VALUES (?,?,?,?,?,?,0,?,?,0,?)",
+                          (session, key, ts, model, inp, out, read, write, cost))
+
+    def ingest(self):
+        return otel.ingest(self.conn, self.dir)
+
+    def test_ingest_once_and_a_rerun_adds_nothing(self):
+        self.write(line(event("s1", "2026-10-20T10:00:00.000Z", "claude-sonnet-4-6", 100, 50, 1000, 0, 0.01))
+                   + line(event("s1", "2026-10-20T10:00:05.000Z", "claude-sonnet-4-6", 10, 5, 0, 0, 0.001, name="tool_result"))
+                   + line({"resourceMetrics": []}, "metrics"))
+        self.assertEqual(self.ingest(), 1)  # only the api_request event
+        self.assertEqual(self.ingest(), 0)
+        row = self.conn.execute("SELECT session_id, prompt_id, ts, model, input, output, cache_read, cache_write, cost_usd, "
+                                "duration_ms FROM otel_requests").fetchall()
+        self.assertEqual(row, [("s1", "p1", "2026-10-20T10:00:00.000Z", "claude-sonnet-4-6", 100, 50, 1000, 0, 0.01, 1840.0)])
+
+    def test_a_later_line_is_added_and_a_half_written_line_waits(self):
+        self.write(line(event("s1", "2026-10-20T10:00:00.000Z", "claude-sonnet-4-6", 1, 1, 0, 0, 0.1)))
+        self.assertEqual(self.ingest(), 1)
+        nxt = line(event("s1", "2026-10-20T10:01:00.000Z", "claude-sonnet-4-6", 2, 2, 0, 0, 0.2))
+        self.write(nxt[:30])
+        self.assertEqual(self.ingest(), 0)
+        self.write(nxt[30:])
+        self.assertEqual(self.ingest(), 1)
+        self.assertEqual(self.conn.execute("SELECT count(*) FROM otel_requests").fetchone()[0], 2)
+
+    def test_a_shrunk_or_replaced_file_is_read_again_without_duplicates(self):
+        self.write(line(event("s1", "2026-10-20T10:00:00.000Z", "m", 1, 1, 0, 0, 0.1))
+                   + line(event("s1", "2026-10-20T10:01:00.000Z", "m", 2, 2, 0, 0, 0.2)))
+        self.assertEqual(self.ingest(), 2)
+        self.write(line(event("s1", "2026-10-21T09:00:00.000Z", "m", 3, 3, 0, 0, 0.3)), mode="w")  # rotated: shorter
+        self.assertEqual(self.ingest(), 1)
+        self.assertEqual([r[0] for r in self.conn.execute("SELECT input FROM otel_requests")], [3])
+        # replaced by a longer file with other content
+        self.write(line(event("s1", "2026-10-22T09:00:00.000Z", "m", 7, 7, 0, 0, 0.7)) * 2, mode="w")
+        self.assertEqual(self.ingest(), 2)
+        self.assertEqual({r[0] for r in self.conn.execute("SELECT input FROM otel_requests")}, {7})
+        self.assertEqual(self.conn.execute("SELECT count(*) FROM otel_requests").fetchone()[0], 2)
+
+    def test_a_missing_folder_is_a_no_op(self):
+        gone = self.tmp / "nothing"
+        self.assertEqual(otel.ingest(self.conn, gone), 0)
+        self.assertEqual(ingest_otel(self.db, gone, log=lambda *_: None), 0)
+        self.assertIsNone(otel.cost_check(self.conn))
+        self.assertEqual(cost_check(self.conn, "", ()), "")
+        self.assertFalse(gone.exists())
+
+    def test_an_old_database_gains_the_tables(self):
+        self.conn.executescript("DROP TABLE otel_requests; DROP TABLE otel_files")
+        self.conn.commit()
+        self.conn = connect(self.db)
+        self.write(line(event("s1", "2026-10-20T10:00:00.000Z", "m", 1, 1, 0, 0, 0.1)))
+        self.assertEqual(self.ingest(), 1)
+
+    def test_events_match_requests_by_session_tokens_and_time(self):
+        m = "claude-sonnet-4-6"
+        self.req("a", "2026-10-20T10:00:01.000Z", m, 100, 50, 1000, 0)
+        self.req("b", "2026-10-20T10:00:02.000Z", m, 100, 50, 1000, 0)  # same tokens: one event each
+        self.req("c", "2026-10-20T11:00:00.000Z", m, 5, 5, 0, 0)
+        self.write(line(event("s1", "2026-10-20T10:00:00.000Z", m, 100, 50, 1000, 0, 0.01))
+                   + line(event("s1", "2026-10-20T10:00:02.500Z", m, 100, 50, 1000, 0, 0.01))
+                   + line(event("s1", "2026-10-20T11:00:00.000Z", m, 6, 5, 0, 0, 0.01))  # tokens differ
+                   + line(event("s1", "2026-10-20T10:00:01.000Z", m, 5, 5, 0, 0, 0.01)))  # an hour off
+        self.ingest()
+        got = dict(self.conn.execute("SELECT ts, request_key FROM otel_requests"))
+        self.assertEqual(got["2026-10-20T10:00:00.000Z"], "a")
+        self.assertEqual(got["2026-10-20T10:00:02.500Z"], "b")
+        self.assertIsNone(got["2026-10-20T11:00:00.000Z"])
+        self.assertEqual(self.conn.execute("SELECT count(*) FROM otel_requests WHERE request_key IS NULL").fetchone()[0], 2)
+
+    def test_a_transcript_that_arrives_later_matches_the_old_events(self):
+        self.write(line(event("s1", "2026-10-20T10:00:00.000Z", "claude-sonnet-4-6", 1, 1, 0, 0, 0.01)))
+        self.ingest()
+        self.req("a", "2026-10-20T10:00:00.500Z", "claude-sonnet-4-6", 1, 1, 0, 0)
+        self.ingest()
+        self.assertEqual(self.conn.execute("SELECT request_key FROM otel_requests").fetchone()[0], "a")
+
+    def test_drift_per_model_a_model_with_no_rate_drifts_100_percent_and_telemetry_only_sessions_show(self):
+        cost = cost_usd("claude-sonnet-4-6", 1000, 500, 0, 0, 0)
+        self.req("a", "2026-10-20T10:00:00.000Z", "claude-sonnet-4-6", 1000, 500, 0, 0)
+        self.req("b", "2026-10-20T10:01:00.000Z", "claude-mystery-9", 10, 10, 0, 0)  # no rate: cost_usd is NULL
+        self.write(line(event("s1", "2026-10-20T10:00:00.000Z", "claude-sonnet-4-6", 1000, 500, 0, 0, cost * 1.5))
+                   + line(event("s1", "2026-10-20T10:01:00.000Z", "claude-mystery-9", 10, 10, 0, 0, 0.5))
+                   + line(event("s1", "2026-10-20T10:02:00.000Z", "claude-sonnet-4-6", 9, 9, 0, 0, 0.25))  # no request
+                   + line(event("gone", "2026-10-20T09:00:00.000Z", "claude-sonnet-4-6", 40, 20, 100, 0, 2.0))
+                   + line(event("gone", "2026-10-20T09:01:00.000Z", "claude-sonnet-4-6", 40, 20, 100, 0, 1.0)))
+        self.ingest()
+        c = otel.cost_check(self.conn, COND, ())
+        by = {m["model"]: m for m in c["models"]}
+        self.assertAlmostEqual(by["claude-sonnet-4-6"]["drift"], 1 / 3, places=6)  # |cost - 1.5 cost| / (1.5 cost)
+        self.assertEqual(by["claude-mystery-9"]["drift"], 1.0)
+        self.assertTrue(by["claude-mystery-9"]["unpriced"])
+        self.assertEqual(c["n"], 2)
+        self.assertEqual(tuple(c["unmatched"]), (1, 0.25))
+        self.assertEqual(tuple(c["only"]), (1, 2, 320, 3.0))  # session "gone" has no transcript
+        card = cost_check(self.conn, COND, ())
+        self.assertIn("100% (no rate)", card)
+        self.assertIn("33%", card)
+        self.assertIn("telemetry only", card)
+        self.assertIn("1 unmatched event", card)
+        self.assertIn(f"${cost * 1.5 + 0.5 + 0.25 + 3.0:,.2f}", card)  # the Claude Code total, telemetry-only included
+        self.assertNotIn("telemetry only", cost_check(self.conn, COND, (), scoped=True))
+
+
+if __name__ == "__main__":
+    unittest.main()
