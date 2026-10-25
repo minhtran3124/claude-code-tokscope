@@ -31,6 +31,15 @@ class ServiceTest(unittest.TestCase):
         self.assertEqual(d["EnvironmentVariables"], {"PYTHONPATH": "/Apps/tokscope/Resources"})
         self.assertTrue(d["RunAtLoad"] and d["KeepAlive"])
 
+    def test_plist_pins_the_data_folder_when_given(self):
+        d = plistlib.loads(service.plist_bytes("/py", "/R", 8770, "/tmp/t.log", data_home="/D"))
+        self.assertEqual(d["EnvironmentVariables"], {"PYTHONPATH": "/R", "TOKSCOPE_HOME": "/D", "PYTHONNOUSERSITE": "1"})
+        self.assertEqual(d["ProgramArguments"][:3], ["/py", "-s", "-m"])
+        r = Runner()
+        service.install("/py", "/R", runner=r, mac=True, home=self.home, uid=501, data_home="/D")
+        path = service.plist_path(self.home)
+        self.assertEqual(plistlib.loads(path.read_bytes())["EnvironmentVariables"]["TOKSCOPE_HOME"], "/D")
+
     def test_mac_install_writes_the_agent_and_bootstraps(self):
         r = Runner()
         msg = service.install("/py", "/root", runner=r, mac=True, home=self.home, uid=501)

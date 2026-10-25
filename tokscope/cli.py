@@ -365,6 +365,7 @@ def main():
     psv.add_argument("--port", type=int, default=8770)
     psv.add_argument("--python", help="macOS: the Python the agent runs (default: this one)")
     psv.add_argument("--root", help="macOS: folder that holds the tokscope package (default: this checkout)")
+    psv.add_argument("--home", help="macOS: the data folder the agent reads (TOKSCOPE_HOME); also isolates the user site")
     psv.add_argument("--exe", help="Linux: the tokscope launcher in ExecStart (default: bin/tokscope of this checkout)")
     psv.add_argument("--quote-exe", action="store_true", help="Linux: wrap --exe in double quotes")
     psv.add_argument("--unit-file", help="Linux: write the unit here instead of the user folder (only writes, no enable)")
@@ -407,7 +408,7 @@ def main():
         try:
             if args.action == "install":
                 print(service.install(args.python, args.root, args.exe, args.port, unit_file=args.unit_file,
-                                      enable=not (args.no_enable or args.unit_file), quote=args.quote_exe))
+                                      enable=not (args.no_enable or args.unit_file), quote=args.quote_exe, data_home=args.home))
             elif args.action == "uninstall":
                 print(service.uninstall())
             else:

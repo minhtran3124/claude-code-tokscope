@@ -126,7 +126,8 @@ class MacIntegration(unittest.TestCase):
     def test_service_command_install_and_uninstall(self):
         r = mac_js("m.serviceCommand({action:'install',root:'/R',home:'/h',env:{PATH:'/usr/bin'}})")
         self.assertEqual(r["cmd"], ["/R/python/bin/python3", "-s", "-m", "tokscope.cli", "service", "install",
-                                    "--python", "/R/python/bin/python3", "--root", "/R"])
+                                    "--python", "/R/python/bin/python3", "--root", "/R",
+                                    "--home", "/h/Library/Application Support/tokscope"])
         self.assertEqual(r["env"]["PYTHONPATH"], "/R")
         r = mac_js("m.serviceCommand({action:'uninstall',root:'/R',home:'/h'})")
         self.assertEqual(r["cmd"][-2:], ["service", "uninstall"])
@@ -141,6 +142,7 @@ class MacIntegration(unittest.TestCase):
             cli.main()
         self.assertIn("--python", out.getvalue())
         self.assertIn("--root", out.getvalue())
+        self.assertIn("--home", out.getvalue())
 
     def test_about_dock_and_path_helpers(self):
         self.assertEqual(mac_js("m.aboutOptions({version:'1.2.3'})")["applicationVersion"], "1.2.3")

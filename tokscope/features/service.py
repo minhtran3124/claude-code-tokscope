@@ -35,13 +35,17 @@ def _uid(uid):
     return os.getuid() if uid is None else uid
 
 
-def plist_bytes(python, root, port=PORT, log=None):
-    """The launchd agent: `python -m tokscope.cli serve` with PYTHONPATH at the folder that holds the tokscope package."""
+def plist_bytes(python, root, port=PORT, log=None, data_home=None):
+    """The launchd agent: `python -m tokscope.cli serve` with PYTHONPATH at the folder that holds the tokscope package.
+    `data_home` (the app passes its data folder) pins TOKSCOPE_HOME and isolates the user site like the app launch."""
     log = str(log or Path.home() / "Library" / "Logs" / "tokscope.log")
+    env = {"PYTHONPATH": str(root)}
+    if data_home:
+        env.update(TOKSCOPE_HOME=str(data_home), PYTHONNOUSERSITE="1")
     return plistlib.dumps({
         "Label": LABEL,
-        "ProgramArguments": [str(python), "-m", "tokscope.cli", "serve", "--no-open", "--port", str(port)],
-        "EnvironmentVariables": {"PYTHONPATH": str(root)},
+        "ProgramArguments": [str(python), *(["-s"] if data_home else []), "-m", "tokscope.cli", "serve", "--no-open", "--port", str(port)],
+        "EnvironmentVariables": env,
         "RunAtLoad": True, "KeepAlive": True, "StandardOutPath": log, "StandardErrorPath": log})
 
 
@@ -54,13 +58,13 @@ def unit_text(exe, port=PORT, quote=False):
 
 
 def install(python=None, root=None, exe=None, port=PORT, runner=run, mac=None, home=None, config=None, unit_file=None,
-            enable=True, quote=False, uid=None):
+            enable=True, quote=False, uid=None, data_home=None):
     """Write the service file and start it. Returns a one-line message; raises RuntimeError when the manager refuses."""
     mac = is_mac() if mac is None else mac
     if mac:
         path = plist_path(home)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(plist_bytes(python or sys.executable, root or CHECKOUT, port))
+        path.write_bytes(plist_bytes(python or sys.executable, root or CHECKOUT, port, data_home=data_home))
         domain = f"gui/{_uid(uid)}"
         runner(["launchctl", "bootout", domain, str(path)])  # replace a loaded copy; fails harmlessly when none is loaded
         if runner(["launchctl", "bootstrap", domain, str(path)]) != 0:

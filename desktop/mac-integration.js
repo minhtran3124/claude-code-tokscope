@@ -30,7 +30,7 @@ function serviceCommand({ action, root, home = "", env = {} }) {
   const python = path.join(root, "python", "bin", "python3");
   const run = serverCommand({ platform: "darwin", root, port: 0, env, home });
   const args = ["-s", "-m", "tokscope.cli", "service", action];
-  if (action === "install") args.push("--python", python, "--root", root);
+  if (action === "install") args.push("--python", python, "--root", root, "--home", run.env.TOKSCOPE_HOME);
   return { cmd: [python, ...args], env: run.env };
 }
 
