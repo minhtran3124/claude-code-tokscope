@@ -9,15 +9,16 @@ updated_by: claude   # claude | manual
 # claude-code-tokscope — Status
 
 ## Summary
-Skill bugs #117-#123 are fixed on fix/skill-bugs-2 (PRs 124-130 merged into it); 479 tests pass; final PR to main open.
+Skill features #132-#136 are combined on feat/skill-features (PRs 137-141 merged into it); 535 tests pass; final PR to main open.
 
 ## Next step
-Point Claude Code's statusLine at `tokscope statusline`; publish the #110 screenshots to pr-assets.
+Review and merge the skill-features PR into main.
 
 ## Blockers
 - GitHub Actions jobs do not start: account payment or spending limit (Settings > Billing).
 
 ## Recent
+- 2026-10-25: skill features #132-#136 combined on feat/skill-features (PRs 137-141), final PR to main; 535 tests pass; screenshots are in the sub-PRs.
 - 2026-10-25: skill bugs #117-#123 combined on fix/skill-bugs-2 (PRs 124-130), final PR to main; 479 tests pass; no UI change.
 - 2026-10-25: skill bugs #106-#110 combined on fix/skill-bugs (PRs 111-115), final PR to main; 455 tests pass; #110 lacks hosted screenshots.
 - 2026-10-25: analytics #54-#57 combined on feat/analytics-54-57 (PRs 100-103), final PR to main; 430 tests pass; #54 official miss_causes need statusline snapshots, not stored yet.
@@ -27,4 +28,3 @@ Point Claude Code's statusLine at `tokscope statusline`; publish the #110 screen
 - 2026-10-24: merged #94 (Time zone setting), service restarted, desktop app reinstalled; desktop window did not open because the Overview takes about 2.7 s on this database and `desktop/main.js` probed it with a 2 s timeout (then started a second server and retried forever); it now probes `/api/version`; PR open.
 - 2026-10-24: times follow a Time zone setting (Local default, UTC; sidebar control, saved in localStorage `tokscope-tz`): session rows, day groups, session detail, Latest session, skill change notes, optimize start and report stamp use `<time data-ts>` rewritten by `tzSync`; 384 tests pass; not yet checked in a browser.
 - 2026-10-24: #89 summary export (`core/summary.py` rows for `tokscope summary --format table|json|csv`, `/api/summary`, a Summary section with Download CSV/JSON and Copy) and #90 always-on baseline (`core/baseline.py`, `mcp_defs` table, parser v15, session-start line on Overview, Projects and the report) merged on feat/summary-export-baseline, final PR #93 to main; review of #93 fixed: `starts()` one grouped query and skips sessions whose first request left the database (forks, filtered copies; `sessions.first_req_ts`, parser v16), cost priced at the real size, CSV/Copy cells that start with = + - @ get a quote; 383 tests pass.
-- 2026-10-24: ingest hardening (#47, #48, #49) combined on feat/ingest-hardening, final PR to main; 345 tests pass; #48 chip lacks screenshots.
