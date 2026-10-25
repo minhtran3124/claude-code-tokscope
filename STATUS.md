@@ -9,15 +9,16 @@ updated_by: claude   # claude | manual
 # claude-code-tokscope — Status
 
 ## Summary
-macOS app issues #144-#148 are done on `feat/macos-app` (final PR to main): data home, tool lookup, `tokscope service`, arm64 `.app` build config and Mac menu behaviour; 575 tests pass. Nothing could be run on macOS.
+#50 OTel receiver is done on `feat/otel-receiver` (final PR to main): `tokscope otel-receiver`, size caps, loopback only, README says nothing reads the data yet; 590 tests pass. macOS app #144-#148 is on `feat/macos-app`, unverified without a Mac.
 
 ## Next step
-On the M2: `cd desktop && npm run dist:mac`, open the app, report what fails.
+Review the #50 PR; on the M2: `cd desktop && npm run dist:mac`, open the app, report what fails. Then #58 (read data/otel).
 
 ## Blockers
 - GitHub Actions jobs did not start on 2026-10-25 (annotation: payment failed or spending limit; the runs on 2026-10-22 passed). Settings > Billing. Until then the new `lint` job and the 3.11 leg have not run on GitHub; both pass locally.
 
 ## Recent
+- 2026-10-25: #50 OTel receiver moved into the package (`tokscope otel-receiver`, `integrations/otel_receiver.py`), body and gzip size caps, loopback-only unless `--allow-remote`, README section says no view reads it yet (#58); 590 tests pass; no UI change.
 - 2026-10-25: macOS app #144-#148 combined on feat/macos-app (PRs 149-153), final PR to main; 575 tests pass; no UI change; build and menus unverified without a Mac.
 - 2026-10-25: #51 CI matrix adds 3.11, new ruff lint job, 10 ruff findings fixed (unused imports, shadowed names); the STATUS blocker stays because Actions still fail to start on billing.
 - 2026-10-25: skill features #132-#136 combined on feat/skill-features (PRs 137-141), final PR to main; 535 tests pass; screenshots are in the sub-PRs.

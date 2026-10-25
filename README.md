@@ -198,6 +198,22 @@ from Terminal and from Claude Code's statusline.
 - **Benchmarks and replays cost money or plan usage**: they start new `claude -p` sessions. Set `--runs` and `--budget`.
 - **Transcripts expire** after Claude Code's `cleanupPeriodDays`. Set it high (for example 365) to keep history.
 
+## Optional: the OTel receiver
+
+`tokscope otel-receiver` saves the OpenTelemetry export of Claude Code to `data/otel/<signal>-YYYY-MM-DD.jsonl`
+in the data home (`TOKSCOPE_DATA_DIR` replaces that whole `data/otel` folder: the files go straight into it). **It only collects data: no report, dashboard page or
+number reads these files yet** (reading them is planned, issue #58). Skip it unless you want the raw events.
+
+```sh
+tokscope otel-receiver       # listens on 127.0.0.1:4318
+# in the shell that starts Claude Code:
+export CLAUDE_CODE_ENABLE_TELEMETRY=1 OTEL_LOGS_EXPORTER=otlp OTEL_EXPORTER_OTLP_PROTOCOL=http/json \
+       OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
+```
+
+Options: `--host`, `--port` (or `TOKSCOPE_HOST`, `TOKSCOPE_PORT`), `--max-body BYTES` (default 8 MiB; bigger bodies,
+also after gzip, get a 413). It has no authentication, so it refuses a non-loopback `--host` unless you pass `--allow-remote`.
+
 ## Development
 
 ```sh
