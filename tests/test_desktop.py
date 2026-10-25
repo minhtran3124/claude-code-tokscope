@@ -170,9 +170,16 @@ class MacIntegration(unittest.TestCase):
         self.assertTrue(mac_js("m.onPath('/h/.local/bin','/usr/bin:/h/.local/bin')"))
         self.assertFalse(mac_js("m.onPath('/h/.local/bin','/usr/bin')"))
 
+    def test_last_window_close_keeps_the_mac_app_running(self):
+        self.assertFalse(mac_js("m.quitOnLastClose({platform:'darwin'})"))
+        self.assertTrue(mac_js("m.quitOnLastClose({platform:'linux'})"))
+        self.assertTrue(mac_js("m.quitOnLastClose({platform:'win32'})"))
+        self.assertTrue(mac_js("m.shouldReopen({windowCount:0})"))
+        self.assertFalse(mac_js("m.shouldReopen({windowCount:1})"))
+
     def test_main_js_wires_the_handlers(self):
         src = (DESKTOP / "main.js").read_text()
-        for needle in ('app.on("activate"', "setAboutPanelOptions", "Start at login", "Install command line tool", "window-all-closed"):
+        for needle in ('app.on("activate"', "setAboutPanelOptions", "Start at login", "Install command line tool", "window-all-closed", "quitOnLastClose"):
             self.assertIn(needle, src)
         self.assertIn("mac-integration.js", json.loads((DESKTOP / "package.json").read_text())["build"]["files"])
         subprocess.run([NODE, "--check", str(DESKTOP / "main.js")], check=True)

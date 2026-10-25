@@ -257,7 +257,7 @@ if (!app.requestSingleInstanceLock()) {
     }
     return start();
   }).catch((e) => showFailure(e.message));
-  app.on("window-all-closed", () => app.quit());
+  app.on("window-all-closed", () => { if (mac.quitOnLastClose({ platform: process.platform })) app.quit(); });
   // every way out stops the server: a normal quit, app.exit() on a failed start, and a signal (not SIGKILL)
   process.on("exit", () => { if (server) server.kill(); });
   for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"]) process.on(sig, () => app.quit());

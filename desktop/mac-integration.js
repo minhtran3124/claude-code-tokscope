@@ -76,4 +76,9 @@ function shouldReopen({ windowCount }) {
   return windowCount === 0;
 }
 
-module.exports = { wrapperScript, serviceCommand, installCli, onPath, aboutOptions, shouldReopen, MARK };
+// Last window closed: a Mac app keeps running (the Dock icon reopens it, Cmd+Q quits); elsewhere the app quits
+function quitOnLastClose({ platform }) {
+  return platform !== "darwin";
+}
+
+module.exports = { wrapperScript, serviceCommand, installCli, onPath, aboutOptions, shouldReopen, quitOnLastClose, MARK };

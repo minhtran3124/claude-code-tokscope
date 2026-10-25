@@ -161,7 +161,7 @@ The background server is off by default; the window starts its own and stops it 
   the SessionEnd hook work from a terminal. It asks before replacing a file it did not write, and says if
   `~/.local/bin` is not on your PATH.
 - The app menu has **About tokscope**. A Dock click with no window opens the dashboard again. Closing the last window
-  quits the app.
+  keeps the app and its server running until you quit with Cmd+Q.
 
 **Only you can check these on the Mac** (the logic is tested on Linux, the macOS behavior is not): the Dock click, the
 About panel, that the launchd agent starts after a login, that the checkbox state is right, and that the wrapper runs
