@@ -100,6 +100,18 @@ class OtelTest(unittest.TestCase):
         self.assertEqual(otel.ingest(conn, self.dir), 0)
         self.assertEqual(conn.execute("SELECT count(*) FROM otel_requests WHERE session_id = 's1'").fetchone()[0], 1)
 
+    def test_a_huge_time_unix_nano_does_not_stop_ingest(self):
+        def rec(nano):
+            e = event("s2", "", "m", 1, 1, 0, 0, 0.0)
+            e["resourceLogs"][0]["scopeLogs"][0]["logRecords"][0]["timeUnixNano"] = nano
+            return e
+        good = event("s1", "2026-10-20T12:00:00.000Z", "claude-opus-4-8", 10, 5, 0, 0, 0.01)
+        text = "".join(line(rec(n)) for n in ("1e22", "1e26", "1e30", "-1e26")) + line(good)
+        (self.dir / "logs-1.jsonl").write_text(text)
+        otel.ingest(self.conn, self.dir)
+        self.assertEqual(self.conn.execute("SELECT count(*) FROM otel_requests WHERE session_id = 's1'").fetchone()[0], 1)
+        self.assertEqual(otel.ingest(self.conn, self.dir), 0)  # the offset moved past every line
+
     def test_a_transient_db_error_propagates_and_the_offset_stays_put(self):
         import sqlite3
         from unittest import mock

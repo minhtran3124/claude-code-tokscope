@@ -51,7 +51,10 @@ def _ts(attrs, rec):
     nano = _num(rec.get("timeUnixNano"))
     if not nano:
         return None
-    return datetime.fromtimestamp(nano / 1e9, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    try:
+        return datetime.fromtimestamp(nano / 1e9, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    except (OSError, OverflowError, ValueError):  # a time_t out of range raises OSError or OverflowError, a year out of range ValueError
+        return None
 
 
 def events(body):
