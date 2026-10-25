@@ -187,10 +187,12 @@ class OtelTest(unittest.TestCase):
         from tokscope.features.changes import BENCH_PROJECT
         self.assertEqual(otel.BENCH_LIKE, BENCH_PROJECT)
         self.conn.execute("INSERT INTO sessions (session_id, project) VALUES ('b1', '-x-tokscope-bench-t1')")
+        self.conn.execute("INSERT INTO sessions (session_id, project) VALUES ('b2', '-x-tokscope-bench-t2')")  # no requests
         self.req("a", "2026-10-20T10:00:00.000Z", "claude-sonnet-4-6", 1000, 500, 0, 0)
         self.req("k", "2026-10-20T10:00:00.000Z", "claude-sonnet-4-6", 7, 7, 0, 0, session="b1")
         self.write(line(event("s1", "2026-10-20T10:00:00.000Z", "claude-sonnet-4-6", 1000, 500, 0, 0, 0.5))
                    + line(event("b1", "2026-10-20T10:05:00.000Z", "claude-sonnet-4-6", 9, 9, 0, 0, 4.0))  # unmatched, bench
+                   + line(event("b2", "2026-10-20T10:06:00.000Z", "claude-sonnet-4-6", 5, 5, 0, 0, 3.0))  # telemetry only, bench
                    + line(event("gone", "2026-10-20T09:00:00.000Z", "claude-sonnet-4-6", 40, 20, 100, 0, 2.0)))
         self.ingest()
         c = otel.cost_check(self.conn, COND, ())
