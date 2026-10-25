@@ -5,6 +5,8 @@ package (pipx, uv tool) has no repo around it and uses $TOKSCOPE_HOME, else $XDG
 without those, a new install uses ~/Library/Application Support/tokscope; an existing ~/.local/share/tokscope stays."""
 
 import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -65,3 +67,31 @@ def phases():
     """A phases.json in the data home overrides the one shipped with the package."""
     own = home() / "phases.json"
     return own if own.exists() else ASSETS / "phases.json"
+
+
+# A Finder-launched app (or a systemd user service) gets PATH=/usr/bin:/bin:/usr/sbin:/sbin: look where installers put tools
+TOOL_DIRS = ("/opt/homebrew/bin", "/usr/local/bin", "~/.local/bin", "~/bin")
+CLAUDE_FIRST = ("~/.local/bin",)  # where claude's installer puts it
+
+
+def _is_git_stub(exe, run):
+    """On macOS /usr/bin/git is a stub that opens the developer-tools install dialog until `xcode-select -p` succeeds."""
+    if exe != "/usr/bin/git":
+        return False
+    try:
+        return run(["xcode-select", "-p"], capture_output=True, timeout=5).returncode != 0
+    except (OSError, subprocess.TimeoutExpired):
+        return True
+
+
+def tool(name, platform=None, run=subprocess.run, first=()):
+    """Path of an executable: on PATH, else in TOOL_DIRS; None when neither has it. On darwin git is skipped while only
+    Apple's stub is present, so nothing triggers the install dialog. `first` lists folders tried before PATH (claude's own installer folder wins, as it always did).
+    `platform` and `run` are injected by tests."""
+    if first and (exe := shutil.which(name, path=os.pathsep.join(os.path.expanduser(d) for d in first))):
+        return exe
+    extra = os.pathsep.join(os.path.expanduser(d) for d in TOOL_DIRS)
+    exe = shutil.which(name)
+    if exe and name == "git" and (platform or sys.platform) == "darwin" and _is_git_stub(exe, run):
+        exe = None
+    return exe or shutil.which(name, path=extra)

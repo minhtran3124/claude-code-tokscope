@@ -369,8 +369,12 @@ def rekey(conn):
 
 def _git_date(folder):
     """The last commit that touched the folder, when git tracks it and it has no uncommitted edits."""
+    exe = paths.tool("git")
+    if not exe:  # none installed, or only Apple's stub: never open the developer-tools dialog
+        return None
+
     def git(*args):
-        out = subprocess.run(["git", "-C", str(folder), *args, "--", "."], capture_output=True, text=True, timeout=10)
+        out = subprocess.run([exe, "-C", str(folder), *args, "--", "."], capture_output=True, text=True, timeout=10)
         return out.stdout.strip() if out.returncode == 0 else None
     try:
         if not git("ls-files") or git("status", "--porcelain") != "":
