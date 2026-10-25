@@ -21,13 +21,20 @@ def _ste_counts(findings):
     return f'<span class="ste-n" title="STE check: {h} hard findings, {len(findings) - h} hints">STE {h} · {len(findings) - h} hints</span>'
 
 
-def _skill_card(k, used, lint=None, rng=""):
+def _skill_card(k, used, lint=None, rng="", state=None):
     loads, last = used.get(k["id"], (0, None))
     findings = (lint or {}).get(k["folder"] / "SKILL.md")
     meta = (f"{loads:,} load{'s' * (loads != 1)}{rng}" + (f" · last {last[:10]}" if last else "")
             + (f" · {_ste_counts(findings)}" if findings is not None else ""))
-    keys = f' data-loads="{loads}" data-ste="{library.hard(findings) if findings is not None else -1}"' 
-    badge = f'<span class="badge inst" title="{html.escape(k["reason"])}">installed</span>' if k["origin"] == "installed" else ""
+    st = (state or {}).get(k["id"], "used")
+    nbytes, ntok = library.prefix(k)
+    meta += f' · <span title="{html.escape(library.PREFIX_METHOD)}">~{ntok:,} tok in every session ({nbytes:,} B)</span>'
+    keys = (f' data-loads="{loads}" data-ste="{library.hard(findings) if findings is not None else -1}"'
+            f' data-unused="{int(st != "used")}" data-prefix="{ntok}"')
+    idle = {"never": ("never used", "No load of this skill in any session the database holds."),
+            "unused": (f"unused {library.IDLE_DAYS}+ days", f"Last load more than {library.IDLE_DAYS} days ago, whatever the range.")}.get(st)
+    badge = f'<span class="badge flag" title="{idle[1]}">{idle[0]}</span>' if idle else ""
+    badge += f'<span class="badge inst" title="{html.escape(k["reason"])}">installed</span>' if k["origin"] == "installed" else ""
     hide = " hidden" if k["origin"] == "installed" else ""
     return (f'<a class="sk" href="/library?skill={k["id"]}" data-dir="{html.escape(k["dir"])}" data-origin="{k["origin"]}"{keys} '
             f'data-find="{html.escape((k["name"] + " " + k["description"]).lower())}"{hide}>'
@@ -35,7 +42,7 @@ def _skill_card(k, used, lint=None, rng=""):
             f'<span class="meta">{meta}</span></a>')
 
 
-def _library_list(found, used, lint=None, lint_note="", project="", rng=""):
+def _library_list(found, used, lint=None, lint_note="", project="", rng="", state=None):
     if project and all(k["scope"] == "personal" for k in found):
         lint_note += " This project has no .claude/skills folder; your personal skills load in it."
     if not found:
@@ -44,8 +51,13 @@ def _library_list(found, used, lint=None, lint_note="", project="", rng=""):
     installed = sum(k["origin"] == "installed" for k in found)
     tools = ('<div class="tools libtools"><input type="search" id="lib-find" placeholder="Find a skill" aria-label="Find a skill">'
              + (f'<label class="chip"><input type="checkbox" id="lib-inst"> Show installed ({installed})</label>' if installed else "")
+             + '<label class="chip"><input type="checkbox" id="lib-dead"> Unused only</label>'
              + '<select id="lib-sort" aria-label="Sort skills"><option value="">By name</option><option value="loads">Most loads</option>'
+             + '<option value="unused">Unused first</option><option value="prefix">Heaviest description</option>'
              + ('<option value="ste">Most STE findings</option>' if lint else "") + '</select></div>')
+    n_dead, tok_dead = library.dead_cost(found, state or {})
+    finding = (f'<p class="note finding"><b>{n_dead} skill{"s" * (n_dead != 1)} unused for {library.IDLE_DAYS} days</b> add '
+               f'<span title="{html.escape(library.PREFIX_METHOD)}">~{tok_dead:,} tokens</span> to every session.</p>' if n_dead else "")
     groups = []
     for scope in dict.fromkeys(k["scope"] for k in found):
         ks = [k for k in found if k["scope"] == scope]
@@ -53,9 +65,9 @@ def _library_list(found, used, lint=None, lint_note="", project="", rng=""):
         title = "Personal · ~/.claude/skills" if scope == "personal" else f"Project · {scope}"
         groups.append(f'<section class="libgroup"><h2 class="sec">{html.escape(title)} <span class="note">{mine} yours'
                       f'{f", {len(ks) - mine} installed" if len(ks) > mine else ""}</span></h2>'
-                      f'<div class="libgrid">{"".join(_skill_card(k, used, lint, rng) for k in ks)}</div></section>')
+                      f'<div class="libgrid">{"".join(_skill_card(k, used, lint, rng, state) for k in ks)}</div></section>')
     return (f'<p class="note">Skills you wrote, to read. Installed ones (npx skills, a lock file, an installer) are hidden; '
-            f'<code>library.json</code> in the data folder corrects a wrong guess.{lint_note}</p>{tools}{"".join(groups)}'
+            f'<code>library.json</code> in the data folder corrects a wrong guess.{lint_note}</p>{finding}{tools}{"".join(groups)}'
             '<div class="empty" id="lib-none" hidden><b>No skill matches</b>Try another word.</div>')
 
 
@@ -403,6 +415,7 @@ def _library_skill(k, qs, used, conn, linter=None, found=(), back="/library", rn
     facts = [("Where", f"<code>{html.escape(library._tilde(k['folder']))}</code>"),
              ("Origin", "yours" if k["origin"] == "mine" else f"installed: {html.escape(k['reason'])}"),
              ("Version", f"<code>{skills.fingerprint(k['folder'])}</code>" + (f" · v{html.escape(k['label'])}" if k["label"] else "")),
+             ("Description", f'<span title="{html.escape(library.PREFIX_METHOD)}">~{library.prefix(k)[1]:,} tokens ({library.prefix(k)[0]:,} B)</span> in every session prefix'),
              ("Loads", f"{loads:,}{rng}" + (f", last {last[:10]}" if last else "")
               + (f' · <a href="#v-{html.escape(k["dir"])}">{tracked} tracked versions</a>' if tracked > 1  # only a changed skill has a card
                  else " · 1 tracked version" if tracked else ""))]
@@ -443,4 +456,4 @@ def page_library(conn, f, qs, level):
             lint = library.ste_lint(linter, [k["folder"] / "SKILL.md" for k in found])
         except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as e:
             note = f" The STE check failed: {html.escape(str(e))}"
-    return _library_list(found, used, lint, note, f.project, rng)
+    return _library_list(found, used, lint, note, f.project, rng, library.idle(conn, found, f.project or None, f.now))

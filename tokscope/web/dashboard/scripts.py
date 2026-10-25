@@ -32,14 +32,14 @@ table.sbs th{font:500 11px/1.45 var(--mono)}
 
 LIB_JS = """
 // library: find by name or description, show installed skills on request, rendered or source view
-const libFind=document.getElementById('lib-find'),libInst=document.getElementById('lib-inst');
+const libFind=document.getElementById('lib-find'),libInst=document.getElementById('lib-inst'),libDead=document.getElementById('lib-dead');
 function libFilter(){const q=(libFind?.value||'').trim().toLowerCase(),all=libInst?.checked;let shown=0;
-  document.querySelectorAll('a.sk').forEach(a=>{const ok=(all||a.dataset.origin==='mine')&&(!q||a.dataset.find.includes(q));a.hidden=!ok;shown+=ok});
+  document.querySelectorAll('a.sk').forEach(a=>{const ok=(all||a.dataset.origin==='mine')&&(!libDead?.checked||a.dataset.unused==='1')&&(!q||a.dataset.find.includes(q));a.hidden=!ok;shown+=ok});
   document.querySelectorAll('.libgroup').forEach(g=>g.hidden=!g.querySelector('a.sk:not([hidden])'));
   const none=document.getElementById('lib-none');if(none)none.hidden=shown>0}
 let vHash=null;try{vHash=location.hash.startsWith('#v-')&&document.querySelector(`a.sk[data-dir="${CSS.escape(decodeURIComponent(location.hash.slice(3)))}"]`)}catch(_){}  // a malformed hash: stay on the list
 if(vHash)location.replace(vHash.href+location.hash);
-libFind?.addEventListener('input',libFilter);libInst?.addEventListener('change',libFilter);if(libFind)libFilter();
+libFind?.addEventListener('input',libFilter);libInst?.addEventListener('change',libFilter);libDead?.addEventListener('change',libFilter);if(libFind)libFilter();
 document.getElementById('lib-sort')?.addEventListener('change',e=>{const by=e.target.value;
   document.querySelectorAll('.libgrid').forEach(g=>[...g.children].sort((a,b)=>by?(+b.dataset[by])-(+a.dataset[by])||a.dataset.find.localeCompare(b.dataset.find)
     :a.dataset.find.localeCompare(b.dataset.find)).forEach(a=>g.append(a)))});
