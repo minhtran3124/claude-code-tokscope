@@ -41,6 +41,17 @@ class SkillsTest(unittest.TestCase):
                           "cache_read, cache_write_5m, cache_write_1h, cost_usd) VALUES ('s1', ?, ?, 'm', ?, 'review', 'review', "
                           "?, 0, 0, 0, 0, 0)", (f"r{prompt}", ts, prompt, tokens))
 
+    def test_partial_snapshot_is_repaired_on_next_record(self):
+        write_skill(self.skill, "# v1\n", {"ref/a.md": "A", "ref/b.md": "B"})
+        v = skills.record(self.conn, "review", self.skill, "2026-01-01T00:00:00+00:00", "scan")
+        dest = self.tmp / "data-home" / "data" / "skills" / "review" / v
+        self.assertEqual(skills.fingerprint(dest), v)
+        (dest / "ref" / "b.md").unlink()  # a crash left a short copy
+        self.assertNotEqual(skills.fingerprint(dest), v)
+        skills.record(self.conn, "review", self.skill, "2026-01-02T00:00:00+00:00", "scan")
+        self.assertEqual(skills.fingerprint(dest), v)
+        self.assertFalse(list(dest.parent.glob(".*.tmp")))
+
     def test_ordinary_skill_keeps_its_hash(self):
         self.assertEqual(skills.body_hash(self.skill), "b9f04a790a4a")  # pinned: a parser change must not move it
 
