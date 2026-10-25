@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-10-25 · macOS app is a personal arm64 build with bundled Python (issue #147)
+
+| Decision | Why | Rejected |
+| --- | --- | --- |
+| `npm run dist:mac` builds an arm64 `.dmg` and `.zip` with electron-builder. `scripts/fetch-python.sh` downloads a pinned python-build-standalone (3.12.15, sha256 checked) into `desktop/python/`, which becomes `Resources/python`. On darwin `main.js` runs `python/bin/python3 -s -m tokscope.cli serve` with `PYTHONPATH`, `PYTHONNOUSERSITE=1`, `TOKSCOPE_HOME` (the env value, else an existing `~/.local/share/tokscope`, else Application Support) and a PATH that adds Homebrew and `~/.local/bin`. No signing, notarization, auto-update, Mac CI or Homebrew tap; the background server is opt-in. (Owner, 2026-10-25.) | Personal use on an M2. Finder gives an app a minimal PATH and Apple's `python3` is 3.9, below `requires-python`. | Relying on the system Python; universal or x64 builds; a signed, notarized release; a Mac CI job (Actions billing is blocked). |
+
 ## 2026-10-24 · A request copied into a fork is kept by one session (issue #46)
 
 | Decision | Why | Rejected |
@@ -56,3 +62,9 @@
 | Decision | Why | Rejected |
 | --- | --- | --- |
 | A `Skill` tool call whose result has `is_error` or starts with `Unknown skill` is a failed load: `skill_calls.failed` is 1, and it gives back the skill and phase it took, so its own request, its tool calls and later requests keep the skill that was active before (unless a later Skill call in the same turn already replaced it). Failed loads are left out of loads, versions, scan and library use; they show per skill in the Versions card and in `summary --by skill --errors` (`failed_loads`). Per-session totals do not change, only the split. `PARSER_VERSION` is 24. | An unknown skill loads nothing, so charging later work to it hides the real skill's cost and counts a load that never happened. | Dropping the failed row (loses the count); keeping the failed skill active (what it was). |
+
+## 2026-10-25 · Mac behaviour of the desktop app (issue #148)
+
+| Decision | Why | Rejected |
+| --- | --- | --- |
+| The Mac logic lives in `desktop/mac-integration.js` (no Electron import): wrapper text, `service` command, CLI install, About options, Dock rule. `main.js` only wires it. Start at login and Install command line tool are File-menu items shown on macOS only; the service stays opt-in. The wrapper sets `TOKSCOPE_HOME` by the same rule as the app: the env value, else an existing `~/.local/share/tokscope`, else Application Support. A wrapper not written by tokscope is replaced only after a confirm. | Tests run on Linux with a fake platform; only the wiring needs the Mac. The terminal and the hook must read the app's database. | Logic inline in `main.js` (untestable); always overwriting `~/.local/bin/tokscope`; a service on by default. |

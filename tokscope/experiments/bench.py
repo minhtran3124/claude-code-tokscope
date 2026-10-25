@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from statistics import median
 
+from .. import paths
 from ..core import errors
 from ..core.ingest import connect, ingest_session
 
@@ -46,7 +47,7 @@ def snapshot_dir(root, sha):
 
 def prepare(root, task):
     """Export the task's paths at its commit into a snapshot dir (no git state touched). Returns (dir, sha)."""
-    sha = subprocess.run(["git", "-C", task["repo"], "rev-parse", task["commit"]], check=True,
+    sha = subprocess.run([paths.tool("git") or "git", "-C", task["repo"], "rev-parse", task["commit"]], check=True,
                          capture_output=True, text=True).stdout.strip()
     dest = snapshot_dir(root, sha)
     stamp = dest / ".bench-commit"
@@ -55,7 +56,7 @@ def prepare(root, task):
     if dest.exists():
         shutil.rmtree(dest)
     dest.mkdir(parents=True)
-    archive = subprocess.run(["git", "-C", task["repo"], "archive", sha, *task["paths"]], check=True,
+    archive = subprocess.run([paths.tool("git") or "git", "-C", task["repo"], "archive", sha, *task["paths"]], check=True,
                              capture_output=True).stdout
     with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
         tar.extractall(dest)
@@ -87,8 +88,7 @@ def schedule(variants, runs):
 
 
 def _claude_bin():
-    local = Path.home() / ".local" / "bin" / "claude"
-    return str(local) if local.exists() else shutil.which("claude")
+    return paths.tool("claude", first=paths.CLAUDE_FIRST)
 
 
 def version_dir(snapshot, skill, version):

@@ -132,10 +132,46 @@ Things to know:
 - To update, install the new `.deb` the same way, then run `systemctl --user restart tokscope`.
 - To remove: `sudo apt remove tokscope`. Your data in `~/.local/share/tokscope` stays.
 
+## Desktop app (macOS, personal build)
+
+An Apple Silicon (arm64) `.app` for your own Mac. It bundles its own Python (python-build-standalone 3.12), because a
+Finder-launched app gets `PATH=/usr/bin:/bin:/usr/sbin:/sbin` and Apple's `python3` is 3.9. It is not signed,
+notarized or updated automatically, and there is no CI job for it: build it on the Mac.
+
+```sh
+cd desktop
+npm install
+npm run dist:mac    # fetches and checks the pinned Python (scripts/fetch-python.sh), then builds
+```
+
+`desktop/dist/` gets `tokscope-<version>-arm64.dmg` and a `.zip`. `sh scripts/fetch-python.sh --dry-run` shows the
+download and its sha256 without fetching. Data lives in `~/Library/Application Support/tokscope`.
+
+**Open an unsigned app.** Move it to Applications. The first time, macOS blocks it: open System Settings, Privacy &
+Security, and choose **Open Anyway**. Or run `xattr -dr com.apple.quarantine /Applications/tokscope.app`.
+
+**Documents folder prompt.** If your repos are under `~/Documents`, macOS asks once whether tokscope may read that
+folder. Allow it. The prompt can come back after a rebuild, because an ad-hoc signature changes with the build.
+
+The background server is off by default; the window starts its own and stops it on close. Menu items (File):
+
+- **Start at login** (off by default) runs `tokscope service install` or `uninstall` (launchd) through the bundled
+  Python. The box follows `tokscope service status`.
+- **Install command line tool** writes `~/.local/bin/tokscope`, a wrapper for the bundled Python, so the statusline and
+  the SessionEnd hook work from a terminal. It asks before replacing a file it did not write, and says if
+  `~/.local/bin` is not on your PATH.
+- The app menu has **About tokscope**. A Dock click with no window opens the dashboard again. Closing the last window
+  keeps the app and its server running until you quit with Cmd+Q.
+
+**Only you can check these on the Mac** (the logic is tested on Linux, the macOS behavior is not): the Dock click, the
+About panel, that the launchd agent starts after a login, that the checkbox state is right, and that the wrapper runs
+from Terminal and from Claude Code's statusline.
+
 ## Important information
 
 - **Where data lives**: `$TOKSCOPE_HOME` if set; else the clone when you run `bin/tokscope`; else
-  `~/.local/share/tokscope` (or `$XDG_DATA_HOME/tokscope`). It holds `data/tokscope.db`, the marks, the skill
+  `~/.local/share/tokscope` (or `$XDG_DATA_HOME/tokscope`). On macOS a new install uses
+  `~/Library/Application Support/tokscope`; an existing `~/.local/share/tokscope` is kept. It holds `data/tokscope.db`, the marks, the skill
   versions, the reports, the benchmarks and `privacy.key`. Git ignores all of it.
 - **Reports hold private text.** The default report and the `full` dashboard show your prompts, titles and paths.
   Before you share a report, make it with `tokscope report --privacy redacted` (or `numbers`).

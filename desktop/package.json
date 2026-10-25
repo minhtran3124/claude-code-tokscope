@@ -6,7 +6,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --linux deb"
+    "dist": "electron-builder --linux deb",
+    "dist:mac": "sh scripts/fetch-python.sh && electron-builder --mac dmg zip --arm64"
   },
   "devDependencies": {
     "electron": "^33.2.0",
@@ -24,6 +25,8 @@
     "files": [
       "main.js",
       "loading.js",
+      "server-command.js",
+      "mac-integration.js",
       "package.json"
     ],
     "extraResources": [
@@ -45,6 +48,33 @@
         "to": "LICENSE"
       }
     ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.developer-tools",
+      "icon": "icon.png",
+      "hardenedRuntime": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extraResources": [
+        {
+          "from": "python",
+          "to": "python"
+        }
+      ]
+    },
     "linux": {
       "target": [
         "deb"

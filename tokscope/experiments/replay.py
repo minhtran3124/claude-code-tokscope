@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from statistics import median
 
+from .. import paths
 from ..core import errors
 from ..core.ingest import COMMAND_RE, find_transcripts, _is_human_prompt, _text, BUILTIN_COMMANDS, connect, ingest_session
 
@@ -105,12 +106,12 @@ def extract_prompts(path):
 
 
 def commit_at(repo, ts, ref="github/main"):
-    out = subprocess.run(["git", "-C", repo, "rev-list", "-1", f"--before={ts}", ref], capture_output=True, text=True, check=True)
+    out = subprocess.run([paths.tool("git") or "git", "-C", repo, "rev-list", "-1", f"--before={ts}", ref], capture_output=True, text=True, check=True)
     return out.stdout.strip()
 
 
 def make_worktree(repo, sha, dest):
-    subprocess.run(["git", "-C", repo, "worktree", "add", "--detach", str(dest), sha], capture_output=True, check=True)
+    subprocess.run([paths.tool("git") or "git", "-C", repo, "worktree", "add", "--detach", str(dest), sha], capture_output=True, check=True)
     # today's harness: link what git does not carry (local-only skills, agents, settings, plans)
     for rel in ("CLAUDE.local.md", "specs"):
         if (Path(repo) / rel).exists() and not (dest / rel).exists():
@@ -126,7 +127,7 @@ def make_worktree(repo, sha, dest):
 
 
 def remove_worktree(repo, dest):
-    subprocess.run(["git", "-C", repo, "worktree", "remove", "--force", str(dest)], capture_output=True)
+    subprocess.run([paths.tool("git") or "git", "-C", repo, "worktree", "remove", "--force", str(dest)], capture_output=True)
 
 
 def build_cmd(claude, prompt, session_id, first, model=None, budget=3.0):
@@ -139,8 +140,7 @@ def build_cmd(claude, prompt, session_id, first, model=None, budget=3.0):
 
 
 def _claude_bin():
-    local = Path.home() / ".local" / "bin" / "claude"
-    return str(local) if local.exists() else "claude"
+    return paths.tool("claude", first=paths.CLAUDE_FIRST) or "claude"
 
 
 def run(root, db_path, phases_path, source_session, runs=2, budget_total=6.0, model=None, skill=None, versions=None,
@@ -154,7 +154,7 @@ def run(root, db_path, phases_path, source_session, runs=2, budget_total=6.0, mo
     path = find_transcript(source_session)
     groups, cwd, first_ts = extract_prompts(path)
     prompts = [g["text"] for g in groups]
-    repo = subprocess.run(["git", "-C", cwd, "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True).stdout.strip()
+    repo = subprocess.run([paths.tool("git") or "git", "-C", cwd, "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True).stdout.strip()
     sha = commit_at(repo, first_ts)
     log(f"replaying {len(prompts)} prompts of {source_session[:8]} at {sha[:10]}, {runs} runs, budget ${budget_total}")
     conn = connect(db_path)

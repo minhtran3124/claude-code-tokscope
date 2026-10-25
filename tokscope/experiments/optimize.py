@@ -51,8 +51,7 @@ def _now():
 def _claude():
     if env := os.environ.get("TOKSCOPE_CLAUDE"):
         return env
-    local = Path.home() / ".local" / "bin" / "claude"
-    return str(local) if local.exists() else shutil.which("claude") or "claude"
+    return paths.tool("claude", first=paths.CLAUDE_FIRST) or "claude"
 
 
 def _copy(src, dest):

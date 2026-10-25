@@ -24,6 +24,33 @@ class PathsTest(unittest.TestCase):
             os.environ.pop("TOKSCOPE_HOME", None)
             self.assertEqual(paths.home(), Path("/tmp/xdg/tokscope"))
 
+    def _installed(self, platform, home, env=None):
+        with mock.patch.object(paths, "SRC", Path(home) / "nosrc"), mock.patch.object(Path, "home", return_value=Path(home)), \
+                mock.patch.object(paths.sys, "platform", platform), mock.patch.dict(os.environ, env or {}):
+            os.environ.pop("TOKSCOPE_HOME", None)
+            if not env:
+                os.environ.pop("XDG_DATA_HOME", None)
+            return paths.home()
+
+    def test_macos_new_install_uses_application_support(self):
+        with tempfile.TemporaryDirectory() as h:
+            self.assertEqual(self._installed("darwin", h), Path(h) / "Library/Application Support/tokscope")
+
+    def test_macos_keeps_an_existing_local_share_folder(self):
+        with tempfile.TemporaryDirectory() as h:
+            (Path(h) / ".local/share/tokscope").mkdir(parents=True)
+            self.assertEqual(self._installed("darwin", h), Path(h) / ".local/share/tokscope")
+
+    def test_linux_is_unchanged(self):
+        with tempfile.TemporaryDirectory() as h:
+            self.assertEqual(self._installed("linux", h), Path(h) / ".local/share/tokscope")
+
+    def test_xdg_and_tokscope_home_still_win_on_macos(self):
+        with tempfile.TemporaryDirectory() as h:
+            self.assertEqual(self._installed("darwin", h, {"XDG_DATA_HOME": "/tmp/xdg"}), Path("/tmp/xdg/tokscope"))
+            with mock.patch.dict(os.environ, {"TOKSCOPE_HOME": "/tmp/tk"}), mock.patch.object(paths.sys, "platform", "darwin"):
+                self.assertEqual(paths.home(), Path("/tmp/tk"))
+
     def test_a_phases_file_in_the_data_home_overrides_the_shipped_one(self):
         with tempfile.TemporaryDirectory() as h, mock.patch.dict(os.environ, {"TOKSCOPE_HOME": h}):
             self.assertEqual(paths.phases(), paths.ASSETS / "phases.json")
@@ -51,6 +78,74 @@ class PathsTest(unittest.TestCase):
             self.assertEqual(paths.projects_dirs(), [Path(h) / ".config/claude/projects"])
             (Path(h) / ".claude/projects").mkdir(parents=True)
             self.assertEqual(paths.projects_dirs(), [Path(h) / ".config/claude/projects", Path(h) / ".claude/projects"])
+
+
+class ToolTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.home, self.empty = Path(tmp.name) / "home", Path(tmp.name) / "path"  # an empty PATH: nothing else is found
+        self.empty.mkdir()
+        self.env = mock.patch.dict(os.environ, {"HOME": str(self.home), "PATH": str(self.empty)})
+        self.env.start()
+        self.addCleanup(self.env.stop)
+
+    def exe(self, folder, name):
+        path = Path(folder) / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("#!/bin/sh\n")
+        path.chmod(0o755)
+        return str(path)
+
+    def test_a_tool_in_a_user_bin_folder_is_found_without_it_on_path(self):
+        self.assertIsNone(paths.tool("claude"))
+        for folder in (".local/bin", "bin"):
+            exe = self.exe(self.home / folder, "claude")
+            self.assertEqual(paths.tool("claude"), exe)
+            os.unlink(exe)
+
+    def test_a_tool_on_path_wins_over_the_extra_folders(self):
+        self.exe(self.home / ".local/bin", "ant")
+        on_path = self.exe(self.empty, "ant")
+        self.assertEqual(paths.tool("ant"), on_path)
+
+    def test_first_folders_win_over_path(self):
+        self.exe(self.empty, "claude")
+        own = self.exe(self.home / ".local/bin", "claude")
+        self.assertEqual(paths.tool("claude", first=paths.CLAUDE_FIRST), own)
+
+    def test_homebrew_and_usr_local_style_folders_are_searched(self):
+        with mock.patch.object(paths, "TOOL_DIRS", (str(self.home / "opt/homebrew/bin"), str(self.home / "usr/local/bin"))):
+            exe = self.exe(self.home / "usr/local/bin", "ant")
+            self.assertEqual(paths.tool("ant"), exe)
+
+    def test_on_darwin_apples_git_stub_is_skipped_when_xcode_select_fails(self):
+        calls = []
+        fail = lambda cmd, **kw: calls.append(cmd) or mock.Mock(returncode=2)  # noqa: E731
+        with mock.patch.object(paths.shutil, "which", lambda n, path=None: "/usr/bin/git" if path is None else None):
+            self.assertIsNone(paths.tool("git", platform="darwin", run=fail))
+            self.assertEqual(calls, [["xcode-select", "-p"]])
+            ok = lambda cmd, **kw: mock.Mock(returncode=0)  # noqa: E731
+            self.assertEqual(paths.tool("git", platform="darwin", run=ok), "/usr/bin/git")
+            self.assertIsNone(paths.tool("git", platform="darwin", run=mock.Mock(side_effect=FileNotFoundError)))
+
+    def test_a_real_git_in_a_extra_folder_replaces_the_stub(self):
+        which = lambda n, path=None: "/usr/bin/git" if path is None else "/opt/homebrew/bin/git"  # noqa: E731
+        with mock.patch.object(paths.shutil, "which", which):
+            got = paths.tool("git", platform="darwin", run=lambda *a, **k: mock.Mock(returncode=2))
+        self.assertEqual(got, "/opt/homebrew/bin/git")
+
+    def test_linux_and_other_tools_never_run_xcode_select(self):
+        run = mock.Mock()
+        with mock.patch.object(paths.shutil, "which", lambda n, path=None: f"/usr/bin/{n}"):
+            self.assertEqual(paths.tool("git", platform="linux", run=run), "/usr/bin/git")
+            self.assertEqual(paths.tool("claude", platform="darwin", run=run), "/usr/bin/claude")
+        run.assert_not_called()
+
+    def test_no_git_date_when_git_is_unavailable(self):
+        from tokscope.core import skills
+        with mock.patch.object(skills.paths, "tool", return_value=None):
+            self.assertIsNone(skills._git_date(self.home))
 
 
 if __name__ == "__main__":
