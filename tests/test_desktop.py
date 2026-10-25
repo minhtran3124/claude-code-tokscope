@@ -60,6 +60,94 @@ class ServerCommand(unittest.TestCase):
         self.assertEqual(r, {"cmd": ["/opt/tokscope/resources/bin/tokscope", "serve", "--no-open", "--port", "9"], "env": {}})
 
 
+def mac_js(expr):
+    js = "const m=require('./mac-integration');console.log(JSON.stringify(%s))" % expr
+    return json.loads(subprocess.run([NODE, "-e", js], cwd=DESKTOP, capture_output=True, text=True, check=True).stdout)
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class MacIntegration(unittest.TestCase):
+    def test_wrapper_script_runs_bundled_python(self):
+        text = mac_js("m.wrapperScript('/Applications/tokscope.app/Contents/Resources')")
+        self.assertTrue(text.startswith("#!/bin/sh\n"))
+        self.assertIn("exec '/Applications/tokscope.app/Contents/Resources/python/bin/python3' -s -m tokscope.cli \"$@\"", text)
+        self.assertIn("PYTHONPATH='/Applications/tokscope.app/Contents/Resources'", text)
+        self.assertIn("Library/Application Support/tokscope", text)
+
+    def test_wrapper_quotes_a_path_with_a_quote(self):
+        text = mac_js("m.wrapperScript(\"/a b/it's\")")
+        self.assertIn("'/a b/it'\\''s'", text)
+
+    def test_wrapper_script_is_valid_sh_and_runs(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            py = Path(d) / "python" / "bin"
+            py.mkdir(parents=True)
+            (py / "python3").write_text('#!/bin/sh\necho "py:$PYTHONPATH:$*"\n')
+            (py / "python3").chmod(0o755)
+            w = Path(d) / "tokscope"
+            w.write_text(mac_js("m.wrapperScript(%s)" % json.dumps(d)))
+            subprocess.run(["sh", "-n", str(w)], check=True)
+            out = subprocess.run(["sh", str(w), "statusline"], capture_output=True, text=True, check=True).stdout
+            self.assertEqual(out.strip(), "py:%s:-s -m tokscope.cli statusline" % d)
+
+    def test_install_cli_writes_executable_wrapper(self):
+        import os
+        import tempfile
+        with tempfile.TemporaryDirectory() as home:
+            r = mac_js("m.installCli({root:'/R',home:%s})" % json.dumps(home))
+            self.assertEqual(r["status"], "installed")
+            p = Path(r["path"])
+            self.assertEqual(p, Path(home) / ".local" / "bin" / "tokscope")
+            self.assertTrue(os.access(p, os.X_OK))
+            self.assertEqual(mac_js("m.installCli({root:'/R2',home:%s})" % json.dumps(home))["status"], "updated")
+            self.assertIn("/R2/python", p.read_text())
+
+    def test_install_cli_keeps_a_foreign_file_unless_forced(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as home:
+            p = Path(home) / ".local" / "bin" / "tokscope"
+            p.parent.mkdir(parents=True)
+            p.write_text("#!/bin/sh\necho mine\n")
+            self.assertEqual(mac_js("m.installCli({root:'/R',home:%s})" % json.dumps(home))["status"], "exists")
+            self.assertEqual(p.read_text(), "#!/bin/sh\necho mine\n")
+            self.assertEqual(mac_js("m.installCli({root:'/R',home:%s,force:true})" % json.dumps(home))["status"], "updated")
+            self.assertIn("/R/python", p.read_text())
+
+    def test_service_command_install_and_uninstall(self):
+        r = mac_js("m.serviceCommand({action:'install',root:'/R',home:'/h',env:{PATH:'/usr/bin'}})")
+        self.assertEqual(r["cmd"], ["/R/python/bin/python3", "-s", "-m", "tokscope.cli", "service", "install",
+                                    "--python", "/R/python/bin/python3", "--root", "/R"])
+        self.assertEqual(r["env"]["PYTHONPATH"], "/R")
+        r = mac_js("m.serviceCommand({action:'uninstall',root:'/R',home:'/h'})")
+        self.assertEqual(r["cmd"][-2:], ["service", "uninstall"])
+
+    def test_service_flags_exist_in_the_cli(self):
+        import io
+        import contextlib
+        from tokscope import cli
+        from unittest import mock
+        with contextlib.redirect_stdout(io.StringIO()) as out, mock.patch("sys.argv", ["tokscope", "service", "install", "--help"]), \
+                self.assertRaises(SystemExit):
+            cli.main()
+        self.assertIn("--python", out.getvalue())
+        self.assertIn("--root", out.getvalue())
+
+    def test_about_dock_and_path_helpers(self):
+        self.assertEqual(mac_js("m.aboutOptions({version:'1.2.3'})")["applicationVersion"], "1.2.3")
+        self.assertTrue(mac_js("m.shouldReopen({windowCount:0})"))
+        self.assertFalse(mac_js("m.shouldReopen({windowCount:1})"))
+        self.assertTrue(mac_js("m.onPath('/h/.local/bin','/usr/bin:/h/.local/bin')"))
+        self.assertFalse(mac_js("m.onPath('/h/.local/bin','/usr/bin')"))
+
+    def test_main_js_wires_the_handlers(self):
+        src = (DESKTOP / "main.js").read_text()
+        for needle in ('app.on("activate"', "setAboutPanelOptions", "Start at login", "Install command line tool", "window-all-closed"):
+            self.assertIn(needle, src)
+        self.assertIn("mac-integration.js", json.loads((DESKTOP / "package.json").read_text())["build"]["files"])
+        subprocess.run([NODE, "--check", str(DESKTOP / "main.js")], check=True)
+
+
 class FetchPython(unittest.TestCase):
     def test_dry_run_downloads_nothing(self):
         script = DESKTOP / "scripts" / "fetch-python.sh"

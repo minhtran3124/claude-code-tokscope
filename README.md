@@ -153,8 +153,19 @@ Security, and choose **Open Anyway**. Or run `xattr -dr com.apple.quarantine /Ap
 **Documents folder prompt.** If your repos are under `~/Documents`, macOS asks once whether tokscope may read that
 folder. Allow it. The prompt can come back after a rebuild, because an ad-hoc signature changes with the build.
 
-The background server is off by default; the window starts its own and stops it on close. For a server at login, use
-`tokscope service install` (launchd) as on Linux.
+The background server is off by default; the window starts its own and stops it on close. Menu items (File):
+
+- **Start at login** (off by default) runs `tokscope service install` or `uninstall` (launchd) through the bundled
+  Python. The box follows `tokscope service status`.
+- **Install command line tool** writes `~/.local/bin/tokscope`, a wrapper for the bundled Python, so the statusline and
+  the SessionEnd hook work from a terminal. It asks before replacing a file it did not write, and says if
+  `~/.local/bin` is not on your PATH.
+- The app menu has **About tokscope**. A Dock click with no window opens the dashboard again. Closing the last window
+  quits the app.
+
+**Only you can check these on the Mac** (the logic is tested on Linux, the macOS behavior is not): the Dock click, the
+About panel, that the launchd agent starts after a login, that the checkbox state is right, and that the wrapper runs
+from Terminal and from Claude Code's statusline.
 
 ## Important information
 
