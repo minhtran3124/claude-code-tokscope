@@ -86,6 +86,47 @@ class LibraryTest(unittest.TestCase):
         self.assertEqual(library.usage(self.conn, found, days=30)[mine][0], 1)
         self.assertNotIn(mine, library.usage(self.conn, found, project="-other"))
 
+    def _idle_states(self):
+        from datetime import datetime, timedelta, timezone
+        ago = lambda d: (datetime.now(timezone.utc) - timedelta(days=d)).strftime("%Y-%m-%dT%H:%M:%S.000Z")  # noqa: E731
+        self._calls([("s1", ago(10), "mine-a"), ("s1", ago(200), "proj-own")])
+        found = library.discover(self.conn)
+        state = library.idle(self.conn, found)
+        return found, {(k["scope"], k["dir"]): state[k["id"]] for k in found}
+
+    def test_idle_tells_used_unused_and_never_used_skills_whatever_the_range(self):
+        _, st = self._idle_states()
+        self.assertEqual((st[("personal", "mine-a")], st[("~/work/app", "proj-own")], st[("personal", "tool-made")]),
+                         ("used", "unused", "never"))
+
+    def test_description_size_is_an_estimate_at_four_chars_per_token_and_dead_cost_sums_it(self):
+        found, _ = self._idle_states()
+        k = next(k for k in found if k["dir"] == "mine-a")
+        n = len(k["description"].encode())
+        self.assertEqual(library.prefix(k), (n, round(n / 4)))
+        want = sum(library.prefix(x)[1] for x in found if x["dir"] in ("mine-a", "tool-made"))
+        n, tok = library.dead_cost(found, {x["id"]: "unused" if x["dir"] in ("mine-a", "tool-made") else "used" for x in found})
+        self.assertEqual((n, tok), (2, want))
+
+    def test_the_list_flags_dead_skills_with_the_estimate_mark_and_tooltip(self):
+        self._idle_states()
+        page = dashboard.page_library(self.conn, dashboard.Filters({"range": ["7d"]}), {}, "full")  # a short range does not change it
+        self.assertIn("never used", page)
+        self.assertIn("unused 90+ days", page)
+        self.assertRegex(page, r'\d+ skills? unused for 90 days</b> add <span title="Estimate[^"]*">~[\d,]+ tokens</span>')
+        self.assertRegex(page, r'data-unused="0" data-prefix="\d+"')
+        self.assertRegex(page, r'data-unused="1" data-prefix="\d+"')
+        self.assertIn('id="lib-dead"', page)
+        self.assertIn("Heaviest description", page)
+
+    def test_a_skill_page_and_the_api_carry_the_description_estimate(self):
+        from tokscope.web.dashboard import server
+        k = next(k for k in library.discover(self.conn) if k["dir"] == "mine-a")
+        page = dashboard.page_library(self.conn, dashboard.Filters({}), {"skill": [k["id"]]}, "full")
+        self.assertIn(f"~{library.prefix(k)[1]:,} tokens ({library.prefix(k)[0]:,} B)", page)
+        rows = {r["name"]: r for r in server.api(self.conn, "library", {}, "")}
+        self.assertEqual((rows["mine-a"]["status"], rows["mine-a"]["prefix_tokens_est"]), ("never", library.prefix(k)[1]))
+
     def test_the_page_names_the_range_its_load_counts_cover(self):
         for qs, label in (({}, "last 30 days"), ({"range": ["all"]}, "all time")):
             page = dashboard.page_library(self.conn, dashboard.Filters(qs), {}, "full")
