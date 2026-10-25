@@ -7,7 +7,7 @@ over 1 h = ttl_expired_1h, over 5 min = ttl_expired_5m, shorter = prefix_changed
 the transcript cannot say which). Rows are read as `r` and sessions as `s`, so the filters of cli._filters apply."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 from . import errors, pricing
 
@@ -133,3 +133,68 @@ def official(conn, where="", params=()):
         for k, n in (mc.items() if isinstance(mc, dict) else ()):
             out["causes"][k] = out["causes"].get(k, 0) + int(n or 0)
     return out if out["sessions"] else None
+
+
+def record_snapshot(conn, data):
+    """Store the `prompt_cache` object of one statusline payload (Claude Code pipes it to the statusLine command). Only the
+    counters are kept (misses, miss_recache_tokens, hit_ratio, miss_causes as cause: count), never tool names. A snapshot
+    equal to the session's latest is not stored again. Returns True when a row was written."""
+    pc = data.get("prompt_cache") if isinstance(data, dict) else None
+    sid = data.get("session_id") if isinstance(data, dict) else None
+    if not sid or not isinstance(pc, dict):
+        return False
+    causes = pc.get("miss_causes")
+    keep = {"misses": int(pc.get("misses") or 0), "miss_recache_tokens": int(pc.get("miss_recache_tokens") or 0),
+            "hit_ratio": pc.get("hit_ratio") if isinstance(pc.get("hit_ratio"), (int, float)) else None,
+            "miss_causes": {str(k): int(n or 0) for k, n in causes.items()} if isinstance(causes, dict) else {}}
+    blob = json.dumps(keep, sort_keys=True)
+    last = conn.execute("SELECT prompt_cache FROM statusline_snapshots WHERE session_id = ? ORDER BY ts DESC LIMIT 1",
+                        (sid,)).fetchone()
+    if last and last[0] == blob:
+        return False
+    conn.execute("INSERT INTO statusline_snapshots VALUES (?,?,?)",
+                 (sid, datetime.now(timezone.utc).isoformat(timespec="seconds"), blob))
+    conn.commit()
+    return True
+
+
+def official_by(conn, by, where="", params=()):
+    """Official misses grouped by the skill or phase that was running: each snapshot's growth over the session's previous
+    snapshot goes to the skill/phase of the latest main-thread request at or before it. Returns
+    [{key, misses, recache_tokens, causes}] biggest first, or None without snapshots."""
+    if by not in ("skill", "phase"):
+        raise ValueError(by)
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'statusline_snapshots'").fetchone():
+        return None
+    where, params = errors.for_calls(where, params)
+    snaps = conn.execute(
+        "SELECT r.session_id, r.ts, r.prompt_cache FROM statusline_snapshots r JOIN sessions s USING (session_id) "
+        f"{where} ORDER BY r.session_id, r.ts", params).fetchall()
+    out, prev, sid = {}, {}, None
+    for session, ts, blob in snaps:
+        if session != sid:
+            sid, prev = session, {"misses": 0, "tokens": 0, "causes": {}}
+        try:
+            pc = json.loads(blob or "{}")
+        except ValueError:
+            continue
+        if not isinstance(pc, dict):
+            continue
+        cur = {"misses": int(pc.get("misses") or 0), "tokens": int(pc.get("miss_recache_tokens") or 0),
+               "causes": pc.get("miss_causes") if isinstance(pc.get("miss_causes"), dict) else {}}
+        reset = cur["misses"] < prev["misses"]  # the counters restarted: count the whole snapshot
+        base = {"misses": 0, "tokens": 0, "causes": {}} if reset else prev
+        d = {"misses": cur["misses"] - base["misses"], "tokens": max(cur["tokens"] - base["tokens"], 0),
+             "causes": {k: int(n or 0) - int(base["causes"].get(k, 0) or 0) for k, n in cur["causes"].items()}}
+        prev = cur
+        if d["misses"] <= 0:
+            continue
+        row = conn.execute(f"SELECT {by} FROM requests WHERE session_id = ? AND ts <= ? AND COALESCE(agent_id, '') = '' "
+                           "ORDER BY ts DESC LIMIT 1", (session, ts)).fetchone()
+        o = out.setdefault((row[0] if row and row[0] else "(none)"), {"misses": 0, "recache_tokens": 0, "causes": {}})
+        o["misses"] += d["misses"]
+        o["recache_tokens"] += d["tokens"]
+        for k, n in d["causes"].items():
+            if n > 0:
+                o["causes"][k] = o["causes"].get(k, 0) + n
+    return sorted(({"key": k, **v} for k, v in out.items()), key=lambda d: (-d["misses"], d["key"])) or None

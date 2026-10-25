@@ -99,6 +99,9 @@ CREATE TABLE IF NOT EXISTS headless_calls (
 CREATE TABLE IF NOT EXISTS mcp_defs (
     session_id TEXT, server TEXT, tools INTEGER, chars INTEGER, PRIMARY KEY (session_id, server)
 );
+CREATE TABLE IF NOT EXISTS statusline_snapshots (
+    session_id TEXT, ts TEXT, prompt_cache TEXT
+);
 CREATE TABLE IF NOT EXISTS ingest_state (session_id TEXT PRIMARY KEY, state TEXT);
 CREATE INDEX IF NOT EXISTS idx_requests_ts ON requests (ts);
 """

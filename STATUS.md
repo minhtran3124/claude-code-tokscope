@@ -9,16 +9,16 @@ updated_by: claude   # claude | manual
 # claude-code-tokscope — Status
 
 ## Summary
-Analytics issues #54-#57 (prompt cache, budgets, fat tools and context, errors) are merged on feat/analytics-54-57 with a final PR to main; 430 tests pass.
+Analytics #55-#57 are merged (PR #104). #54 is finished on feat/54-official-miss-causes: `tokscope statusline` stores the `prompt_cache` counters and Breakdowns groups official misses by skill and phase; 450 tests pass.
 
 ## Next step
-Review and merge the analytics PR (feat/analytics-54-57 to main); #54 stays open until statusline snapshots exist.
+Review and merge the #54 PR; then point Claude Code's statusLine at `tokscope statusline` to collect snapshots.
 
 ## Blockers
 - GitHub Actions jobs do not start: account payment or spending limit (Settings > Billing).
 
 ## Recent
-- 2026-10-25: analytics #54-#57 combined on feat/analytics-54-57 (PRs 100-103), final PR to main; 430 tests pass; #54 official miss_causes need statusline snapshots, not stored yet.
+- 2026-10-25: #54 official miss_causes: `statusline_snapshots` table, `cache.record_snapshot` (counters only), `cache.official_by` (skill/phase), Breakdowns tables; 450 tests pass; no screenshots yet; analytics #54-#57 combined on feat/analytics-54-57 (PRs 100-103), final PR to main; 430 tests pass; #54 official miss_causes need statusline snapshots, not stored yet.
 - 2026-10-24: #97 `tokscope serve --projects-dir PATH` (a UAT server with a throwaway home no longer ingests every transcript: 40 sample files gave 40 sessions and a 1.9 MB database, against 44 MB); `uat.md` builds a sample and notes the `python -m` cwd and port-kill pitfalls from PR 94/96; PR #98 open (issue #97).
 - 2026-10-24: merged #95; first open showed a white window and the Overview took 2.8 s: `tz.local_day` now caches per minute (the SQL function ran strptime 144k times; Overview 2.8 s to 0.9 s on a 64 MB database), the desktop window opens at once with a loading page and the paper colour, and the dashboard shows a top bar and dims the page while the next page loads; PR open.
 - 2026-10-24: merged #94 (Time zone setting), service restarted, desktop app reinstalled; desktop window did not open because the Overview takes about 2.7 s on this database and `desktop/main.js` probed it with a 2 s timeout (then started a second server and retried forever); it now probes `/api/version`; PR open.

@@ -87,12 +87,21 @@ def check(args):
 
 
 def statusline(args):
-    """One line for Claude Code's statusLine: green when budgets.json is met, yellow near, red over. Never fails."""
-    from .core import budgets
+    """One line for Claude Code's statusLine: green when budgets.json is met, yellow near, red over. Also stores the
+    payload's prompt_cache counters (core/cache.py). Never fails."""
+    from .core import budgets, cache
 
+    snapshot = None
     if not sys.stdin.isatty():
-        sys.stdin.read()  # Claude Code pipes its session JSON; nothing in it is needed here
+        try:
+            snapshot = json.loads(sys.stdin.read() or "null")  # Claude Code pipes its session JSON
+        except ValueError:
+            pass
     colour = {"near": "33", "over": "31", "ok": "32"}
+    try:
+        cache.record_snapshot(connect(DB), snapshot)  # the official prompt_cache counters, for Breakdowns
+    except Exception:
+        pass
     try:
         result = budgets.check(connect(DB), budgets.load())
     except budgets.BudgetError:

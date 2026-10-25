@@ -86,7 +86,6 @@ class CacheTest(unittest.TestCase):
     def test_official_miss_causes_need_snapshots_and_are_labelled_official(self):
         self.fixture()
         self.assertIsNone(cache.official(self.conn, COND, PARAMS))
-        self.conn.execute("CREATE TABLE statusline_snapshots (session_id TEXT, ts TEXT, prompt_cache TEXT)")
         pc = {"misses": 7, "miss_recache_tokens": 310000, "miss_causes": {"tools_changed": 5, "ttl_expired_5m": 2}}
         self.conn.execute("INSERT INTO statusline_snapshots VALUES ('s1', '2026-10-20T13:00:00+00:00', ?)", (json.dumps(pc),))
         self.assertEqual(cache.official(self.conn, COND, PARAMS),
@@ -94,6 +93,36 @@ class CacheTest(unittest.TestCase):
         page = _breakdowns(self.conn, COND, PARAMS)
         self.assertIn("official: Claude Code statusline prompt_cache", page)
         self.assertIn("tools_changed", page)
+
+    def snap(self, secs, misses, tokens, causes):
+        pc = {"misses": misses, "miss_recache_tokens": tokens, "miss_causes": causes}
+        self.conn.execute("INSERT INTO statusline_snapshots VALUES ('s1', ?, ?)",
+                          ((T0 + timedelta(seconds=secs)).isoformat(), json.dumps(pc)))
+
+    def test_official_misses_are_grouped_by_the_skill_running_when_they_grew(self):
+        self.fixture()
+        self.req(550, 100, 0, cw5=9000, skill="b")
+        self.snap(100, 2, 100000, {"ttl_expired_5m": 2})                       # skill a was running
+        self.snap(600, 7, 310000, {"ttl_expired_5m": 2, "tools_changed": 5})  # +5 while skill b ran
+        self.assertEqual(cache.official_by(self.conn, "skill", COND, PARAMS), [
+            {"key": "b", "misses": 5, "recache_tokens": 210000, "causes": {"tools_changed": 5}},
+            {"key": "a", "misses": 2, "recache_tokens": 100000, "causes": {"ttl_expired_5m": 2}}])
+        self.assertEqual(cache.official(self.conn, COND, PARAMS)["misses"], 7)  # the latest snapshot still totals
+        self.assertIn("Official misses by skill", _breakdowns(self.conn, COND, PARAMS))
+        self.conn.execute("DELETE FROM statusline_snapshots")
+        self.assertIsNone(cache.official_by(self.conn, "skill", COND, PARAMS))
+
+    def test_record_snapshot_keeps_counters_only_and_skips_an_unchanged_one(self):
+        data = {"session_id": "s1", "prompt_cache": {"misses": 3, "miss_recache_tokens": 900, "hit_ratio": 0.8,
+                                                     "miss_causes": {"tools_changed": 3}, "tools_added": ["mcp__secret__x"]}}
+        self.assertTrue(cache.record_snapshot(self.conn, data))
+        self.assertFalse(cache.record_snapshot(self.conn, data))
+        blob = self.conn.execute("SELECT prompt_cache FROM statusline_snapshots").fetchone()[0]
+        self.assertNotIn("secret", blob)
+        self.assertEqual(json.loads(blob)["miss_causes"], {"tools_changed": 3})
+        for bad in (None, {}, {"session_id": "s1"}, {"prompt_cache": {}}, {"session_id": "s1", "prompt_cache": "x"}):
+            self.assertFalse(cache.record_snapshot(self.conn, bad))
+        self.assertEqual(self.conn.execute("SELECT count(*) FROM statusline_snapshots").fetchone()[0], 1)
 
     def test_the_section_states_the_finding_and_has_an_empty_state(self):
         page = _breakdowns(self.conn, COND, PARAMS)
