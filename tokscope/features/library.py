@@ -150,7 +150,7 @@ def usage(conn, found, days=None, project=None, now=None):
         params.append(project)
     try:
         rows = conn.execute("SELECT k.skill, s.cwd, count(*), max(k.ts) FROM skill_calls k JOIN sessions s USING (session_id) "
-                            f"WHERE {' AND '.join(where)} GROUP BY 1, 2", params).fetchall()
+                            f"WHERE COALESCE(k.failed, 0) = 0 AND {' AND '.join(where)} GROUP BY 1, 2", params).fetchall()
     except sqlite3.OperationalError:
         return {}
     by_folder, by_name = {}, {}

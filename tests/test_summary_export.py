@@ -63,6 +63,18 @@ class CliTest(unittest.TestCase):
         table, _ = self.run_cli(format="table", errors=True)
         self.assertIn("33.3%", table)
 
+    def test_errors_count_failed_skill_loads_per_skill(self):
+        self.seed_calls()
+        conn = connect(self.db)
+        conn.executemany("INSERT INTO skill_calls (session_id, ts, skill, source, failed) VALUES ('s1', ?, ?, 'tool', ?)",
+                         [(ts(1), "nonexistent", 1), (ts(1), "nonexistent", 1), (ts(1), "xia2", 0)])
+        conn.commit()
+        text, _ = self.run_cli(format="csv", errors=True)
+        rows = {r["key"]: r for r in csv.DictReader(io.StringIO(text))}
+        self.assertEqual({k: r["failed_loads"] for k, r in rows.items()}, {"xia2": "0", "(none)": "0", "nonexistent": "2"})
+        table, _ = self.run_cli(format="table", errors=True)
+        self.assertIn("failed loads", table)
+
     def test_errors_follow_the_date_filter_and_refuse_a_cost_only_grouping(self):
         self.seed_calls()
         args = cli.argparse.Namespace(by="skill", since=None, until=None, project=None, limit=25, format="json", errors=True)

@@ -243,6 +243,18 @@ class SkillsTest(unittest.TestCase):
         self.assertEqual(self.conn.execute("SELECT skill, version, first_seen FROM skill_versions").fetchall(),
                          [("ce:review", v1, "2026-10-10T00:00:00+00:00")])
 
+    def test_failed_loads_are_counted_per_skill_and_are_not_loads(self):
+        self.load("2026-10-10T00:00:00Z", 1, "t1")
+        v1 = skills.record_load(self.conn, "s1", "t1", "review", str(self.repo / "src"), "2026-10-10T00:00:00Z")
+        for tid, sk in (("t2", "review"), ("t3", "nonexistent")):
+            self.conn.execute("INSERT INTO skill_calls (session_id, ts, skill, phase, source, prompt_idx, tool_use_id, failed) "
+                              "VALUES ('s1', '2026-10-11T00:00:00Z', ?, NULL, 'tool', 2, ?, 1)", (sk, tid))
+        rows = {(r["skill"], r["version"]): r for r in skills.versions(self.conn)}
+        self.assertEqual((rows[("review", v1)]["loads"], rows[("review", v1)]["failed_loads"]), (1, 1))
+        self.assertEqual((rows[("nonexistent", None)]["loads"], rows[("nonexistent", None)]["failed_loads"]), (0, 1))
+        self.assertEqual(skills.load_versions(self.conn)[0][2], "review")
+        self.assertEqual(len(skills.load_versions(self.conn)), 1)
+
     def test_a_versions_error_rate_counts_failed_calls_and_interrupts_of_its_loads(self):
         self.load("2026-10-01T00:00:00Z", 1, tokens=900)
         self.load("2026-10-10T00:00:00Z", 2, "t2", tokens=100)

@@ -9,7 +9,7 @@ KEYS = {
     "skill": ("COALESCE(r.skill, '(none)')", ""),
     "agent": ("COALESCE(a.agent_type, 'main')", "LEFT JOIN subagents a ON a.session_id = r.session_id AND a.agent_id = r.agent_id"),
 }
-FIELDS = ("key", "calls", "errors", "repeats", "interrupts", "api_errors", "retries")
+FIELDS = ("key", "calls", "errors", "repeats", "interrupts", "api_errors", "retries", "failed_loads")
 EVENT_FIELDS = {"interrupt": "interrupts", "api_error": "api_errors", "retry": "retries"}
 
 
@@ -36,6 +36,10 @@ def pct(errors, calls):
     return "–" if r is None else f"{r:.1%}"
 
 
+def _empty(k):
+    return dict(zip(FIELDS, (k, 0, 0, 0, 0, 0, 0, 0)))
+
+
 def rows(conn, by, where="", params=(), limit=25):
     """One dict (FIELDS) per skill, agent type or phase, most failed calls first. `where` filters tool calls and
     events as r and sessions as s."""
@@ -45,12 +49,16 @@ def rows(conn, by, where="", params=(), limit=25):
     for k, calls, errors, repeats in conn.execute(
             f"SELECT {key}, count(*), sum(COALESCE(r.is_error, 0)), sum(COALESCE(r.repeat, 0)) FROM tool_calls r "
             f"JOIN sessions s USING (session_id) {join} {where} GROUP BY 1", params):
-        out[k] = dict(zip(FIELDS, (k, calls, errors or 0, repeats or 0, 0, 0, 0)))
+        out[k] = dict(zip(FIELDS, (k, calls, errors or 0, repeats or 0, 0, 0, 0, 0)))
     for k, kind, n in conn.execute(
             f"SELECT {key}, r.kind, count(*) FROM turn_events r JOIN sessions s USING (session_id) {join} {where} "
             f"GROUP BY 1, 2", params):
         if kind in EVENT_FIELDS:  # a compaction is context, not an error
-            out.setdefault(k, dict(zip(FIELDS, (k, 0, 0, 0, 0, 0, 0))))[EVENT_FIELDS[kind]] = n
+            out.setdefault(k, _empty(k))[EVENT_FIELDS[kind]] = n
+    for k, n in conn.execute(  # Skill loads that failed (unknown skill, error result), by the skill they named
+            f"SELECT {key}, count(*) FROM skill_calls r JOIN sessions s USING (session_id) {join} {where} "
+            f"{'AND' if where else 'WHERE'} r.failed = 1 GROUP BY 1", params):
+        out.setdefault(k, _empty(k))["failed_loads"] = n
     found = sorted(out.values(), key=lambda d: (-d["errors"], -d["interrupts"], -d["calls"], d["key"]))[:limit]
     for d in found:
         d["error_rate"] = rate(d["errors"], d["calls"])
