@@ -110,10 +110,10 @@ class BudgetsTest(unittest.TestCase):
         seed(self.conn, 0.1, session="tiny", key="c")
         self.assertEqual(budgets.crossed(self.conn, {"daily_usd": 10}, "tiny"), [])  # 9.0 without it: still near, nothing crossed
 
-    def run_cli(self, argv):
+    def run_cli(self, argv, stdin="{}"):
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), mock.patch.object(cli, "DB", self.db), \
-                mock.patch("sys.argv", ["tokscope", *argv]), mock.patch("sys.stdin", io.StringIO("{}")):
+                mock.patch("sys.argv", ["tokscope", *argv]), mock.patch("sys.stdin", io.StringIO(stdin)):
             try:
                 cli.main()
                 code = 0
@@ -159,6 +159,14 @@ class BudgetsTest(unittest.TestCase):
         out = self.run_cli(["statusline"])
         self.assertEqual(out[0], 0)
         self.assertIn("budgets.json is invalid", out[1])
+
+    def test_statusline_stores_the_prompt_cache_counters_and_never_fails_on_bad_input(self):
+        payload = json.dumps({"session_id": "s1", "prompt_cache": {"misses": 2, "miss_recache_tokens": 5000,
+                                                                    "miss_causes": {"ttl_expired_5m": 2}}})
+        self.assertEqual(self.run_cli(["statusline"], payload)[0], 0)
+        self.assertEqual(self.conn.execute("SELECT count(*) FROM statusline_snapshots WHERE session_id = 's1'").fetchone()[0], 1)
+        for bad in ("not json", "", "[]", "null"):
+            self.assertEqual(self.run_cli(["statusline"], bad)[0], 0)
 
     def test_session_json_carries_the_warnings_for_the_pane(self):
         seed(self.conn, 1.0)

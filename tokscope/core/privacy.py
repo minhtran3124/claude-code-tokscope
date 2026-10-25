@@ -55,6 +55,7 @@ COLUMNS = {
                    "phase": PHASE, "ts": KEEP, "model": KEEP},
     "turn_events": {"session_id": KEEP, "ts": KEEP, "prompt_idx": KEEP, "agent_id": KEEP, "skill": SKILL, "phase": PHASE,
                     "kind": KEEP},
+    "statusline_snapshots": {"session_id": KEEP, "ts": KEEP, "prompt_cache": KEEP},  # counts only, see cache.record_snapshot
     "mcp_defs": {"session_id": KEEP, "server": "name:mcp", "tools": KEEP, "chars": KEEP},
     "bench_runs": {"run_id": KEEP, "task": TASK, "variant": VARIANT, "run_idx": KEEP, "session_id": KEEP,
                    "started_at": KEEP, "duration_s": KEEP, "exit_code": KEEP, "is_error": KEEP, "reported_cost": KEEP,
@@ -172,7 +173,7 @@ def redacted_copy(db_path, level, where="", params=(), redactor=None):
         # the filter names real projects, so it runs before the names are replaced
         conn.execute(f"DELETE FROM requests WHERE rowid NOT IN (SELECT r.rowid FROM requests r JOIN sessions s USING (session_id) {where})",
                      tuple(params))
-        for table in ("tool_calls", "turn_events"):  # keyed by session: drop the ones the filter left without requests
+        for table in ("tool_calls", "turn_events", "statusline_snapshots"):  # keyed by session: drop the ones the filter left without requests
             conn.execute(f"DELETE FROM {table} WHERE session_id NOT IN (SELECT session_id FROM requests)")
     (redactor or Redactor(level)).apply(conn)
     return conn
