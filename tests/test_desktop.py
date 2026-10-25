@@ -181,11 +181,17 @@ class MacIntegration(unittest.TestCase):
 class FetchPython(unittest.TestCase):
     def test_dry_run_downloads_nothing(self):
         script = DESKTOP / "scripts" / "fetch-python.sh"
+        target = DESKTOP / "python"  # a built Mac already has it, so compare before and after
+
+        def snapshot():
+            return sorted(p.stat().st_mtime_ns for p in [target, *target.rglob("*")]) if target.exists() else None
+
+        before = snapshot()
         out = subprocess.run(["sh", str(script), "--dry-run"], capture_output=True, text=True, check=True).stdout
         self.assertIn("aarch64-apple-darwin", out)
         self.assertRegex(out, r"sha256: [0-9a-f]{64}\n")
         self.assertTrue(out.splitlines()[2].endswith("desktop/python"))
-        self.assertFalse((DESKTOP / "python").exists())
+        self.assertEqual(snapshot(), before)
 
     def test_posix_sh_syntax(self):
         subprocess.run(["sh", "-n", str(DESKTOP / "scripts" / "fetch-python.sh")], check=True)
