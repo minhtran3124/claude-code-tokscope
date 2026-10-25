@@ -373,7 +373,7 @@ def main():
     psv.add_argument("--no-enable", action="store_true", help="Linux: only write the unit")
     pot = sub.add_parser("otel-receiver", help="optional OTLP/HTTP-JSON receiver: saves Claude Code's OTel export to data/otel (no view reads it yet)")
     pot.add_argument("--host", default=os.environ.get("TOKSCOPE_HOST", "127.0.0.1"), help="default 127.0.0.1 (TOKSCOPE_HOST)")
-    pot.add_argument("--port", type=int, default=int(os.environ.get("TOKSCOPE_PORT", "4318")), help="default 4318 (TOKSCOPE_PORT)")
+    pot.add_argument("--port", type=int, default=None, help="default 4318 (TOKSCOPE_PORT)")
     pot.add_argument("--allow-remote", action="store_true", help="allow a non-loopback --host (the receiver has no authentication)")
     pot.add_argument("--max-body", type=int, default=8 * 1024 * 1024, metavar="BYTES", help="refuse bodies over this size, also after gzip (default 8 MiB)")
     pch = sub.add_parser("check", help="compare today's spend with budgets.json; exit 0 ok, 10 near, 11 over, 30 no data")
@@ -428,7 +428,8 @@ def main():
         from .integrations import otel_receiver
 
         try:
-            otel_receiver.serve(args.host, args.port, otel_receiver.default_dir(), args.max_body, args.allow_remote)
+            port = args.port if args.port is not None else int(os.environ.get("TOKSCOPE_PORT") or "4318")
+            otel_receiver.serve(args.host, port, otel_receiver.default_dir(), args.max_body, args.allow_remote)
         except (ValueError, OSError) as e:
             sys.exit(f"tokscope: {e}")
         return

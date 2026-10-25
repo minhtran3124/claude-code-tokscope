@@ -85,3 +85,24 @@ class ReceiverTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BadPortEnvTest(unittest.TestCase):
+    def run_cli(self, *args):
+        import os
+        import subprocess
+        import sys
+
+        root = Path(__file__).resolve().parent.parent
+        env = dict(os.environ, TOKSCOPE_PORT="abc")
+        return subprocess.run([sys.executable, "-m", "tokscope.cli", *args], cwd=root, env=env, capture_output=True, text=True)
+
+    def test_bad_port_env_does_not_break_other_commands(self):
+        p = self.run_cli("--help")
+        self.assertEqual(p.returncode, 0, p.stderr)
+
+    def test_bad_port_env_is_a_message_for_the_receiver(self):
+        p = self.run_cli("otel-receiver")
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("tokscope:", p.stderr)
+        self.assertNotIn("Traceback", p.stderr)
