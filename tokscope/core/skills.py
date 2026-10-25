@@ -2,7 +2,8 @@
 
 A version is the SHA-256 of the skill's folder (relative paths and bytes), so the same content has the same
 version on any machine, and a touch or checkout that changes nothing is no change. Only what the skill can put in
-front of the model counts: hidden files, caches, eval/test folders and files over 1 MB are left out, so an eval run
+front of the model counts: hidden files, caches, the skill's top-level eval/test/results/fixtures folders and files over 1 MB are left out
+(a nested assets/results file counts). CRLF in text files is hashed as LF (a skill with CRLF files got a new version once), so an eval run
 writing results into the folder is not a new version. A skill built into Claude Code has no folder on disk; its
 version is the Claude Code version (cc-2.1.304).
 Versions are recorded two ways:
@@ -41,7 +42,8 @@ TOKENS = "(input + cache_read + cache_write_5m + cache_write_1h + output)"
 FRONTMATTER_VERSION = re.compile(r"^version:\s*['\"]?([^'\"\s]+)", re.MULTILINE)
 
 
-SKIP_DIRS = {"__pycache__", "node_modules", "eval", "evals", "tests", "test", "fixtures", "results"}
+SKIP_DIRS = {"__pycache__", "node_modules"}  # skipped at any depth
+BENCH_DIRS = {"eval", "evals", "tests", "test", "fixtures", "results"}  # skipped only as a skill's top-level folder
 MAX_BYTES = 1_000_000
 BUNDLED_ROOT = Path("/tmp")  # Claude Code unpacks its built-in skills' files under /tmp/claude-<uid>/bundled-skills
 
@@ -50,11 +52,20 @@ def _sha(text):
     return hashlib.sha256(text.encode()).hexdigest()[:12]
 
 
+def _split_front(text):
+    """(frontmatter, rest): the block between a first line that is exactly `---` and the next such line, else
+    (None, text). A `---` inside a value or a leading rule without a closing line is not a delimiter."""
+    lines = text.splitlines(keepends=True)
+    if lines and lines[0].rstrip("\r\n") == "---":
+        for i in range(1, len(lines)):
+            if lines[i].rstrip("\r\n") == "---":
+                return "".join(lines[1:i]), "".join(lines[i + 1:])
+    return None, text
+
+
 def _body(skill_md):
     """SKILL.md as Claude Code puts it in the context: the frontmatter dropped."""
-    if skill_md.startswith("---") and skill_md.count("---") >= 2:
-        skill_md = skill_md.split("---", 2)[2]
-    return skill_md.strip()
+    return _split_front(skill_md)[1].strip()
 
 
 def body_hash(folder):
@@ -118,27 +129,39 @@ def _skipped(rel):
     return any(part.startswith(".") or part in SKIP_DIRS or part.endswith(".pyc") for part in rel.parts)
 
 
+def _in_skill(rel):
+    """Whether a path inside a skill folder is left out: hidden, cache or pyc anywhere, or a benchmarking folder
+    (eval, tests, results...) directly under the skill, so a nested assets/results file still counts."""
+    return _skipped(rel) or (len(rel.parts) > 1 and rel.parts[0] in BENCH_DIRS)
+
+
 def _files(folder):
     return sorted(p for p in folder.rglob("*")
-                  if p.is_file() and not _skipped(p.relative_to(folder)) and p.stat().st_size <= MAX_BYTES)
+                  if p.is_file() and not _in_skill(p.relative_to(folder)) and p.stat().st_size <= MAX_BYTES)
+
+
+def _content(f):
+    """A file's bytes for hashing: text (no NUL in its first 8 KB) has CRLF turned into LF, binary is untouched."""
+    data = f.read_bytes()
+    return data if b"\0" in data[:8192] else data.replace(b"\r\n", b"\n")
 
 
 def fingerprint(folder):
-    """12 hex chars of SHA-256 over every file's relative path and bytes; None when there is no SKILL.md."""
+    """12 hex chars of SHA-256 over every file's relative path and bytes (text with CRLF read as LF, so a Windows
+    checkout has the same version); None when there is no SKILL.md."""
     folder = Path(folder)
     if not (folder / "SKILL.md").is_file():
         return None
     h = hashlib.sha256()
     for f in _files(folder):
-        h.update(f.relative_to(folder).as_posix().encode() + b"\0" + f.read_bytes() + b"\0")
+        h.update(f.relative_to(folder).as_posix().encode() + b"\0" + _content(f) + b"\0")
     return h.hexdigest()[:12]
 
 
 def label(folder):
     """The human version in SKILL.md frontmatter (`version: 1.3.0`), if the author keeps one."""
     text = (Path(folder) / "SKILL.md").read_text(errors="replace")
-    head = text.split("---", 2)[1] if text.startswith("---") and text.count("---") >= 2 else ""
-    m = FRONTMATTER_VERSION.search(head)
+    m = FRONTMATTER_VERSION.search(_split_front(text)[0] or "")
     return m.group(1) if m else None
 
 
@@ -178,17 +201,51 @@ def _installed_plugin_of(skill):
     return owners.pop() if len(owners) == 1 else None
 
 
+def _mtime(path):
+    try:
+        return Path(path).stat().st_mtime_ns
+    except OSError:
+        return 0
+
+
+def _plugins_stamp(name, cwd):
+    """What canonical_name's answer depends on, as mtimes: the install list, each plugin's skills and commands
+    folder, and the project and user command folders. A plugin install or removal changes the stamp."""
+    try:
+        installed = json.loads((Path.home() / ".claude" / "plugins" / "installed_plugins.json").read_text())
+    except (OSError, ValueError):
+        installed = {}
+    roots = [Path(e.get("installPath", "")) for es in installed.get("plugins", {}).values() for e in es]
+    dirs = [Path.home() / ".claude" / "plugins" / "installed_plugins.json", Path.home() / ".claude" / "commands",
+            *(r / "skills" for r in roots), *(r / "skills" / name for r in roots)]
+    for p in ([Path(cwd), *Path(cwd).parents] if cwd else []):
+        dirs += [p / ".claude" / "skills" / name, p / ".claude" / "commands"]
+    dirs += [Path.home() / ".claude" / "skills" / name]
+    return tuple(_mtime(d) for d in dirs)
+
+
 @lru_cache(maxsize=None)
-def canonical_name(name, cwd=None):
-    """plugin:skill for a plugin skill called by its bare name, so one skill is one row; other names as they are."""
-    if not name or ":" in name:
-        return name
+def _canonical(name, cwd, stamp):
     local = [p / ".claude" / "skills" / name for p in ([Path(cwd), *Path(cwd).parents] if cwd else [])]
     local.append(Path.home() / ".claude" / "skills" / name)
-    if any((f / "SKILL.md").is_file() for f in local):
-        return name
-    plugin = _installed_plugin_of(name)
+    cmds = [p / ".claude" / "commands" / f"{name}.md" for p in ([Path(cwd), *Path(cwd).parents] if cwd else [])]
+    cmds.append(Path.home() / ".claude" / "commands" / f"{name}.md")
+    if any((f / "SKILL.md").is_file() for f in local) or any(c.is_file() for c in cmds):
+        return name  # a project or personal skill or command owns the bare name; a plugin does not claim it
+    plugin = _installed_plugin_of(name)  # two plugins with the same skill name: None, the name stays bare
     return f"{plugin}:{name}" if plugin else name
+
+
+def canonical_name(name, cwd=None):
+    """plugin:skill for a plugin skill called by its bare name, so one skill is one row; other names as they are.
+    Cached per plugin-folder mtimes, so a plugin install or removal is seen by a running serve. A bare name is
+    resolved by the disk now: a reingest after removing a plugin leaves its old bare calls bare."""
+    if not name or ":" in name:
+        return name
+    return _canonical(name, cwd, _plugins_stamp(name, cwd))
+
+
+canonical_name.cache_clear = _canonical.cache_clear
 
 
 def command_known(name, cwd=None):
@@ -226,11 +283,22 @@ def skill_dir(name, cwd=None):
 
 
 def _snapshot(skill, version, folder):
+    """Copy the folder to a temp sibling and rename it into place, so a crash never leaves a short snapshot.
+    A snapshot whose fingerprint is not the version (an older partial copy) is replaced, if the folder still is it."""
     dest = paths.home() / "data" / "skills" / skill.replace(":", "__") / version
-    for f in [] if dest.exists() else _files(folder):  # the same files the fingerprint covers
-        target = dest / f.relative_to(folder)
+    if dest.exists() and fingerprint(dest) == version:
+        return
+    if fingerprint(folder) != version:
+        return  # the folder moved on since this version; nothing true to copy
+    tmp = dest.with_name(f".{version}.tmp")
+    shutil.rmtree(tmp, ignore_errors=True)
+    for f in _files(folder):  # the same files the fingerprint covers
+        target = tmp / f.relative_to(folder)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(f, target)
+    if dest.exists():
+        shutil.rmtree(dest)
+    tmp.rename(dest)
 
 
 def _iso(ts):
@@ -243,13 +311,14 @@ def record(conn, skill, folder, seen_at, source, version=None):
     if version is None:
         return None
     _ensure(conn)
-    known = conn.execute("SELECT 1 FROM skill_versions WHERE skill = ? AND version = ?", (skill, version)).fetchone()
+    seen_at = _utc(seen_at)
+    known = conn.execute("SELECT first_seen, last_seen FROM skill_versions WHERE skill = ? AND version = ?", (skill, version)).fetchone()
     if known:
-        conn.execute("UPDATE skill_versions SET last_seen = max(last_seen, ?) WHERE skill = ? AND version = ?",
-                     (seen_at, skill, version))
-        if source == "load":  # a load is proof the version existed then; a scan's date is only an estimate
-            conn.execute("UPDATE skill_versions SET first_seen = min(first_seen, ?) WHERE skill = ? AND version = ?",
-                         (seen_at, skill, version))
+        first = _first(known[0], seen_at) if source == "load" else known[0]  # a load is proof it existed then; a scan's date is an estimate
+        conn.execute("UPDATE skill_versions SET last_seen = ?, first_seen = ? WHERE skill = ? AND version = ?",
+                     (_last(known[1], seen_at), first, skill, version))
+        if folder:
+            _snapshot(skill, version, folder)  # repairs a missing or partial snapshot
     else:
         conn.execute("INSERT INTO skill_versions VALUES (?,?,?,?,?,?,?,?)",
                      (skill, version, str(folder) if folder else None, label(folder) if folder else None, seen_at, seen_at,
@@ -269,6 +338,35 @@ def record_load(conn, session_id, tool_use_id, skill, cwd, ts):
     return version
 
 
+def rekey(conn):
+    """Move load marks and their version rows to the name skill_calls now gives the load (a plugin installed or removed
+    relabels the calls on reingest; this also merges rows an older build split into bare and plugin:skill)."""
+    _ensure(conn)
+    moved = conn.execute("SELECT DISTINCT v.skill, k.skill, v.version FROM skill_load_versions v JOIN skill_calls k "
+                         "ON k.session_id = v.session_id AND k.tool_use_id = v.tool_use_id WHERE v.skill != k.skill").fetchall()
+    conn.execute("UPDATE skill_load_versions SET skill = (SELECT k.skill FROM skill_calls k WHERE k.session_id = "
+                 "skill_load_versions.session_id AND k.tool_use_id = skill_load_versions.tool_use_id) "
+                 "WHERE EXISTS (SELECT 1 FROM skill_calls k WHERE k.session_id = skill_load_versions.session_id "
+                 "AND k.tool_use_id = skill_load_versions.tool_use_id AND k.skill != skill_load_versions.skill)")
+    for old, new, version in moved:
+        row = conn.execute("SELECT path, label, first_seen, last_seen, source, body_hash FROM skill_versions "
+                           "WHERE skill = ? AND version = ?", (old, version)).fetchone()
+        if row:
+            path, lbl, first, last, source, bh = row
+            known = conn.execute("SELECT first_seen, last_seen FROM skill_versions WHERE skill = ? AND version = ?",
+                                 (new, version)).fetchone()
+            if known:
+                conn.execute("UPDATE skill_versions SET first_seen = ?, last_seen = ? WHERE skill = ? AND version = ?",
+                             (_first(known[0], first), _last(known[1], last), new, version))
+            else:
+                conn.execute("INSERT INTO skill_versions VALUES (?,?,?,?,?,?,?,?)", (new, version, path, lbl, first, last, source, bh))
+                src, dest = snapshot_dir(old, version), snapshot_dir(new, version)
+                if src.is_dir() and not dest.exists():
+                    shutil.copytree(src, dest)
+        if not conn.execute("SELECT 1 FROM skill_load_versions WHERE skill = ? AND version = ?", (old, version)).fetchone():
+            conn.execute("DELETE FROM skill_versions WHERE skill = ? AND version = ?", (old, version))
+
+
 def _git_date(folder):
     """The last commit that touched the folder, when git tracks it and it has no uncommitted edits."""
     def git(*args):
@@ -282,8 +380,23 @@ def _git_date(folder):
         return None
 
 
+def _dt(iso):
+    """Any timestamp the tool meets (`...Z`, `+00:00`, fractions, naive = UTC) as an aware UTC datetime."""
+    d = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    return d.replace(tzinfo=timezone.utc) if d.tzinfo is None else d.astimezone(timezone.utc)
+
+
 def _utc(iso):
-    return datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(timezone.utc).isoformat()
+    return _dt(iso).isoformat()
+
+
+def _first(*stamps):
+    """The earliest of the non-empty timestamps, compared as datetimes, as given."""
+    return min((t for t in stamps if t), key=_dt, default=None)
+
+
+def _last(*stamps):
+    return max((t for t in stamps if t), key=_dt, default=None)
 
 
 def _evidence(conn, skill, folder):
@@ -292,33 +405,36 @@ def _evidence(conn, skill, folder):
     git = _git_date(folder)
     if git:
         dates.append(_utc(git))
-    seen = conn.execute("SELECT min(ts) FROM skill_calls WHERE skill = ? AND ' ' || text_hash || ' ' LIKE ?",
-                        (skill, f"% {body_hash(folder)} %")).fetchone()[0]
+    seen = _first(*(t for (t,) in conn.execute("SELECT ts FROM skill_calls WHERE skill = ? AND ' ' || text_hash || ' ' LIKE ?",
+                                               (skill, f"% {body_hash(folder)} %"))))
     if seen:
         dates.append(_utc(seen))
-    return min(dates)
+    return _first(*dates)
 
 
 def scan(conn, now=None):
     """Hash every skill a transcript has loaded, in the folder its latest session would load it from, and date it."""
     _ensure(conn)
     now = now or datetime.now(timezone.utc).isoformat()
-    for skill, cwd in conn.execute(
-            "SELECT k.skill, s.cwd FROM skill_calls k JOIN sessions s USING (session_id) "
-            "WHERE k.ts = (SELECT max(ts) FROM skill_calls WHERE skill = k.skill) GROUP BY k.skill").fetchall():
+    latest = {}  # skill -> (ts, cwd) of its latest load, by time not by string
+    for skill, ts, cwd in conn.execute("SELECT k.skill, k.ts, s.cwd FROM skill_calls k JOIN sessions s USING (session_id)"):
+        if ts and (skill not in latest or _dt(ts) > _dt(latest[skill][0])):
+            latest[skill] = (ts, cwd)
+    for skill, (_, cwd) in latest.items():
         folder = skill_dir(skill, cwd)
         version = fingerprint(folder) if folder else builtin_version(skill)
         if version is None:
             continue
         row = conn.execute("SELECT first_seen, source FROM skill_versions WHERE skill = ? AND version = ?", (skill, version)).fetchone()
         # a version never starts before the one it replaced
-        floor = conn.execute("SELECT max(first_seen) FROM skill_versions WHERE skill = ? AND version != ? AND first_seen < ?",
-                             (skill, version, row[0] if row else "9")).fetchone()[0]
+        mine = _dt(row[0]) if row else None
+        floor = _last(*(f for (f,) in conn.execute("SELECT first_seen FROM skill_versions WHERE skill = ? AND version != ?", (skill, version))
+                        if f and (mine is None or _dt(f) < mine)))
         dated = _evidence(conn, skill, folder) if folder else now
-        dated = dated if not floor or dated > floor else now if not row else row[0]
+        dated = dated if not floor or _dt(dated) > _dt(floor) else now if not row else row[0]
         if row:
-            conn.execute("UPDATE skill_versions SET last_seen = ?, first_seen = min(first_seen, ?) WHERE skill = ? AND version = ?",
-                         (now, dated, skill, version))
+            conn.execute("UPDATE skill_versions SET last_seen = ?, first_seen = ? WHERE skill = ? AND version = ?",
+                         (_utc(now), _first(row[0], dated), skill, version))
         else:
             record(conn, skill, folder, dated, "scan", version)
     conn.commit()
@@ -329,13 +445,15 @@ def load_versions(conn):
     _ensure(conn)
     timeline, body, by_text = {}, {}, {}
     for skill, version, first, bh, source in conn.execute(
-            "SELECT skill, version, first_seen, body_hash, source FROM skill_versions ORDER BY first_seen"):
+            "SELECT skill, version, first_seen, body_hash, source FROM skill_versions"):
         body[(skill, version)] = bh
         if bh:
             by_text.setdefault((skill, bh), version)
         # a version rebuilt from a transcript is known only at the loads that kept its text, not over a span of time
         if source != "transcript":
             timeline.setdefault(skill, []).append((first, version))
+    for rows in timeline.values():
+        rows.sort(key=lambda r: _dt(r[0]))
     out = []
     for sid, i, skill, ts, text, exact in conn.execute(
             "SELECT k.session_id, k.prompt_idx, k.skill, k.ts, k.text_hash, v.version FROM skill_calls k "
@@ -345,10 +463,10 @@ def load_versions(conn):
             # the transcript kept the text this load read: the version with that text is it, whatever the dates say
             version = next((by_text[(skill, h)] for h in text.split() if (skill, h) in by_text), None)
             if version is None:
-                before = [v for first, v in timeline.get(skill, []) if first <= _utc(ts or "1970-01-01T00:00:00Z")]
+                before = [v for first, v in timeline.get(skill, []) if _dt(first) <= _dt(ts or "1970-01-01T00:00:00Z")]
                 version = before[-1] if before and body.get((skill, before[-1])) is None else None
         elif version is None:
-            before = [v for first, v in timeline.get(skill, []) if first <= _utc(ts or "1970-01-01T00:00:00Z")]
+            before = [v for first, v in timeline.get(skill, []) if _dt(first) <= _dt(ts or "1970-01-01T00:00:00Z")]
             version = before[-1] if before else None
         out.append((sid, i, skill, ts, version, exact is not None))
     return out
@@ -365,7 +483,7 @@ def versions(conn, skill=None, bench_project="%tokscope%-bench-%", where=None):
     `where` is a (WHERE clause, params) over requests r and sessions s, such as the dashboard's filters; it replaces
     the bench exclusion, so it must exclude bench sessions itself."""
     # one unit per prompt and skill; a prompt that loaded the skill twice counts the version of its last load
-    units = {(sid, i, sk): (version, exact) for sid, i, sk, _, version, exact in sorted(load_versions(conn), key=lambda r: r[3] or "")}
+    units = {(sid, i, sk): (version, exact) for sid, i, sk, _, version, exact in sorted(load_versions(conn), key=lambda r: _dt(r[3] or "1970-01-01T00:00:00Z"))}
     cond, params = where or ("WHERE s.project NOT LIKE ?", (bench_project,))
     tokens = {(sid, i, sk): t for sid, i, sk, t in conn.execute(
         f"SELECT r.session_id, r.prompt_idx, r.skill, sum({TOKENS}) FROM requests r JOIN sessions s USING (session_id) "
@@ -388,7 +506,7 @@ def versions(conn, skill=None, bench_project="%tokscope%-bench-%", where=None):
                 e[j] += v or 0
     rows = []
     for sk, version, lbl, first, source in conn.execute(
-            "SELECT skill, version, label, first_seen, source FROM skill_versions ORDER BY skill, first_seen"):
+            "SELECT skill, version, label, first_seen, source FROM skill_versions"):
         if skill and sk != skill:
             continue
         us = per.get((sk, version), [])
@@ -401,7 +519,7 @@ def versions(conn, skill=None, bench_project="%tokscope%-bench-%", where=None):
                          "loads": len(us), "exact": 0, "tokens_median": median(t for t, _ in us),
                          **_error_fields(errs.get((sk, version)))})
     # per skill, oldest first; loads from before tracking lead
-    return sorted(rows, key=lambda r: (r["skill"], r["first_seen"] or ""))
+    return sorted(rows, key=lambda r: (r["skill"], _dt(r["first_seen"]) if r["first_seen"] else datetime.min.replace(tzinfo=timezone.utc)))
 
 
 def snapshot_dir(skill, version):
@@ -571,12 +689,12 @@ def import_from_transcripts(conn, projects_dir, skill=None):
             if kept:
                 body = _kept_body(*kept)
                 entry = bodies.setdefault((sk, _sha(body)), [body, ts, 0])
-                entry[1], entry[2] = min(entry[1], ts), entry[2] + 1
+                entry[1], entry[2] = _first(entry[1], ts), entry[2] + 1
     imported = []
-    for (sk, bh), (body, first, n) in sorted(bodies.items(), key=lambda kv: kv[1][1]):
+    for (sk, bh), (body, first, n) in sorted(bodies.items(), key=lambda kv: _dt(kv[1][1])):
         base = snapshot_dir(sk, kept_versions(sk)[0])
         head = (base / "SKILL.md").read_text(errors="replace")
-        rest = head.split("---", 2)[2] if head.startswith("---") and head.count("---") >= 2 else None
+        rest = _split_front(head)[1] if _split_front(head)[0] is not None else None
         # the frontmatter and the whitespace that followed it, so the rebuilt file differs from it only in the body
         front = head[:len(head) - len(rest.lstrip())] if rest is not None else ""
         work = paths.home() / "data" / "skills-import" / sk.replace(":", "__") / bh
@@ -598,7 +716,7 @@ def turn_versions(conn, session_id=None):
     """(session_id, prompt_idx, skill) -> (version, exact) for each prompt that loaded a skill; the last load of a
     skill in a prompt wins. One source for the report's turn rows, the pane and `tokscope session`."""
     out = {}
-    for sid, i, skill, ts, version, exact in sorted(load_versions(conn), key=lambda r: r[3] or ""):
+    for sid, i, skill, ts, version, exact in sorted(load_versions(conn), key=lambda r: _dt(r[3] or "1970-01-01T00:00:00Z")):
         if version and (session_id is None or sid == session_id):
             out[(sid, i, skill)] = (version, exact)
     return out

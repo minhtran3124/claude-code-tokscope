@@ -212,7 +212,7 @@ class IngestTest(Fixture):
         self.run_ingest()
         got = self.rows("SELECT request_key, skill, phase, prompt_idx FROM requests ORDER BY request_key")
         self.assertEqual(got, [
-            ("r1", None, None, 1),  # the request that calls Skill ran before the skill loaded
+            ("r1", "writing-plans", "plan", 1),  # the request that calls Skill pays for the load
             ("r2", "writing-plans", "plan", 1),
             ("r3", "writing-plans", "plan", 1),  # a background notification is not a new human prompt
             ("r4", None, "plan", 2),
@@ -331,6 +331,23 @@ class IngestTest(Fixture):
         self.assertEqual(self.rows("SELECT skill, source FROM skill_calls"), [("mycmd", "command"), ("other", "command")])
         self.assertEqual(self.rows("SELECT prompts FROM sessions"), [(2,)])
 
+    def test_a_request_with_agent_then_skill_blocks_and_its_subagent_agree_and_totals_hold(self):
+        self.write_main([
+            human("go"),
+            assistant("r1", tools=[("t1", "Agent", {"subagent_type": "reviewer"})]),
+            assistant("r1", tools=[("t2", "Skill", {"skill": "writing-plans"})]),
+            assistant("r1", tools=[("t3", "Skill", {"skill": "correctness-review"})]),  # parallel: the last one wins
+            assistant("r2"),
+        ])
+        self.write_agent("a1", {"agentType": "reviewer", "toolUseId": "t1", "spawnDepth": 1}, [assistant("r3")])
+        self.run_ingest()
+        got = self.rows("SELECT request_key, skill, phase FROM requests ORDER BY request_key")
+        self.assertEqual(got, [("r1", "correctness-review", "review"), ("r2", "correctness-review", "review"),
+                               ("r3", "correctness-review", "review")])
+        self.assertEqual(self.rows("SELECT skill FROM subagents"), [("correctness-review",)])
+        self.assertEqual(self.rows("SELECT skill FROM tool_calls WHERE name='Agent'"), [("correctness-review",)])
+        self.assertEqual(self.rows("SELECT sum(output) FROM requests"), [(30,)])
+
     def test_subagent_inherits_context_of_spawning_call_and_nested_agent_its_parent(self):
         self.write_main([
             human("review"),
@@ -436,6 +453,21 @@ class IncrementalTest(Fixture):
         self.append(self.project / SID / "subagents" / "agent-a1.jsonl", [assistant("r5", out=7)])
         self.assertEqual(self.parsed_lines(), len(self.MORE) + 1)
         got = self.dump(self.db)
+        self.db.unlink()
+        for ext in ("-wal", "-shm"):
+            Path(str(self.db) + ext).unlink(missing_ok=True)
+        self.run_ingest()
+        self.assertEqual(got, self.dump(self.db))
+
+    def test_a_skill_block_resumed_after_earlier_lines_of_its_request_retags_them_like_a_full_parse(self):
+        main = self.project / f"{SID}.jsonl"
+        self.write_main([human("go"), assistant("r0", tools=[("t0", "Agent", {})]), assistant("r1", tools=[("t1", "Bash", {"command": "ls"})])])
+        self.write_agent("a0", {"agentType": "Explore", "toolUseId": "t0", "spawnDepth": 1}, [assistant("ra")])
+        self.run_ingest()
+        self.append(main, [assistant("r1", tools=[("t9", "Skill", {"skill": "writing-plans"})])])
+        self.run_ingest()
+        got = self.dump(self.db)
+        self.assertEqual(self.rows("SELECT skill FROM tool_calls WHERE tool_use_id='t1'"), [("writing-plans",)])
         self.db.unlink()
         for ext in ("-wal", "-shm"):
             Path(str(self.db) + ext).unlink(missing_ok=True)

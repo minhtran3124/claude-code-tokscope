@@ -41,6 +41,34 @@ class SkillsTest(unittest.TestCase):
                           "cache_read, cache_write_5m, cache_write_1h, cost_usd) VALUES ('s1', ?, ?, 'm', ?, 'review', 'review', "
                           "?, 0, 0, 0, 0, 0)", (f"r{prompt}", ts, prompt, tokens))
 
+    def test_partial_snapshot_is_repaired_on_next_record(self):
+        write_skill(self.skill, "# v1\n", {"ref/a.md": "A", "ref/b.md": "B"})
+        v = skills.record(self.conn, "review", self.skill, "2026-01-01T00:00:00+00:00", "scan")
+        dest = self.tmp / "data-home" / "data" / "skills" / "review" / v
+        self.assertEqual(skills.fingerprint(dest), v)
+        (dest / "ref" / "b.md").unlink()  # a crash left a short copy
+        self.assertNotEqual(skills.fingerprint(dest), v)
+        skills.record(self.conn, "review", self.skill, "2026-01-02T00:00:00+00:00", "scan")
+        self.assertEqual(skills.fingerprint(dest), v)
+        self.assertFalse(list(dest.parent.glob(".*.tmp")))
+
+    def test_ordinary_skill_keeps_its_hash(self):
+        self.assertEqual(skills.body_hash(self.skill), "b9f04a790a4a")  # pinned: a parser change must not move it
+
+    def test_frontmatter_is_delimited_by_lines_of_exactly_three_dashes(self):
+        both = write_skill(self.tmp / "dash", "---\nname: d\nversion: 2.0\ndescription: a --- b\n---\nBODY\n")
+        self.assertEqual(skills._body((both / "SKILL.md").read_text()), "BODY")
+        self.assertEqual(skills.label(both), "2.0")
+        rule = "---\nNot frontmatter\n"
+        self.assertEqual(skills._body(rule), rule.strip())
+        self.assertIsNone(skills.label(write_skill(self.tmp / "rule", rule)))
+        self.assertEqual(skills._body("---\nname: x\n---\n---\nrule\n"), "---\nrule")
+
+    def test_crlf_frontmatter(self):
+        crlf = write_skill(self.tmp / "crlf", "---\r\nname: c\r\nversion: 3.1\r\n---\r\nBODY\r\n")
+        self.assertEqual(skills._body((crlf / "SKILL.md").read_bytes().decode()), "BODY")
+        self.assertEqual(skills.label(crlf), "3.1")
+
     def test_the_fingerprint_is_the_content_not_the_place_or_the_clock(self):
         twin = write_skill(self.tmp / "elsewhere" / "review", (self.skill / "SKILL.md").read_text())
         self.assertEqual(skills.fingerprint(self.skill), skills.fingerprint(twin))
@@ -59,6 +87,20 @@ class SkillsTest(unittest.TestCase):
         (self.skill / "eval" / "results" / "run1.json").write_text("{}")
         (self.skill / "dataset.jsonl").write_bytes(b"x" * (skills.MAX_BYTES + 1))
         self.assertEqual(skills.fingerprint(self.skill), before)
+
+    def test_only_top_level_bench_folders_are_ignored_and_crlf_is_the_same_as_lf(self):
+        before = skills.fingerprint(self.skill)
+        (self.skill / "assets" / "results").mkdir(parents=True)
+        (self.skill / "assets" / "results" / "r.md").write_text("kept")
+        self.assertNotEqual(skills.fingerprint(self.skill), before)
+        (self.skill / "tests").mkdir()
+        (self.skill / "tests" / "t.md").write_text("ignored")
+        lf = write_skill(self.tmp / "lf" / "review", "a\nb\n")
+        crlf = write_skill(self.tmp / "crlf" / "review", "a\r\nb\r\n")
+        self.assertEqual(skills.fingerprint(lf), skills.fingerprint(crlf))
+        (lf / "x.bin").write_bytes(b"\0a\nb")
+        (crlf / "x.bin").write_bytes(b"\0a\r\nb")
+        self.assertNotEqual(skills.fingerprint(lf), skills.fingerprint(crlf))
 
     def test_a_built_in_skill_takes_the_claude_code_version(self):
         (self.tmp / "claude-1000" / "bundled-skills" / "2.1.304" / "abc" / "dataviz").mkdir(parents=True)
@@ -102,6 +144,41 @@ class SkillsTest(unittest.TestCase):
         self.assertEqual(self.conn.execute("SELECT session_id, tool_use_id, skill, version FROM skill_load_versions").fetchall(),
                          [("s1", "t1", "ce:simplify", v)])
 
+    def install(self, *plugs):
+        plugins = self.home / ".claude" / "plugins"
+        plugins.mkdir(parents=True, exist_ok=True)
+        (plugins / "installed_plugins.json").write_text(json.dumps({"plugins": {
+            f"{p.parent.parent.parent.name}@market": [{"scope": "user", "installPath": str(p.parent.parent)}] for p in plugs}}))
+
+    def test_canonical_name_sees_a_plugin_installed_or_removed_without_a_restart(self):
+        cwd = str(self.repo / "src")
+        self.assertEqual(skills.canonical_name("simplify", cwd), "simplify")
+        plug = write_skill(self.tmp / "cache" / "ce" / "3.9" / "skills" / "simplify")
+        self.install(plug)
+        self.assertEqual(skills.canonical_name("simplify", cwd), "ce:simplify")
+        (plug / "SKILL.md").unlink()
+        os.utime(plug.parent, (1, 1))
+        self.assertEqual(skills.canonical_name("simplify", cwd), "simplify")
+
+    def test_a_project_or_personal_command_or_skill_is_not_claimed_by_a_plugin(self):
+        plug = write_skill(self.tmp / "cache" / "ce" / "3.9" / "skills" / "foo")
+        self.install(plug)
+        cwd = str(self.repo / "src")
+        self.assertEqual(skills.canonical_name("foo", cwd), "ce:foo")
+        (self.repo / ".claude" / "commands").mkdir(parents=True)
+        (self.repo / ".claude" / "commands" / "foo.md").write_text("do foo")
+        self.assertEqual(skills.canonical_name("foo", cwd), "foo")
+        (self.repo / ".claude" / "commands" / "foo.md").unlink()
+        write_skill(self.home / ".claude" / "skills" / "foo")
+        self.assertEqual(skills.canonical_name("foo", cwd), "foo")
+
+    def test_two_plugins_with_the_same_skill_name_leave_the_bare_name_bare(self):
+        a = write_skill(self.tmp / "cache" / "ce" / "3.9" / "skills" / "dup")
+        b = write_skill(self.tmp / "cache" / "other" / "1.0" / "skills" / "dup")
+        self.install(a, b)
+        self.assertEqual(skills.canonical_name("dup", str(self.repo)), "dup")
+        self.assertEqual(skills.canonical_name("ce:dup", str(self.repo)), "ce:dup")
+
     def test_an_edit_seen_at_ingest_is_a_new_version_dated_by_the_file_and_later_loads_take_it(self):
         self.load("2026-10-01T00:00:00Z", 1)                     # before tokscope ever saw the skill
         self.load("2026-10-10T00:00:00Z", 2, "t2")
@@ -119,6 +196,19 @@ class SkillsTest(unittest.TestCase):
         got = {i: (v, exact) for _, i, _, _, v, exact in skills.load_versions(self.conn)}
         self.assertEqual(got, {1: (None, False), 2: (v1, True), 3: (v2, False)})
 
+    def test_a_load_a_fraction_after_a_version_started_lands_on_that_version(self):
+        v1 = skills.record(self.conn, "review", self.skill, "2026-10-01T00:00:00Z", "scan")
+        (self.skill / "SKILL.md").write_text("---\nversion: 1.3.0\n---\n# v2\n")
+        v2 = skills.record(self.conn, "review", self.skill, "2026-10-10T10:00:05+00:00", "scan")
+        self.load("2026-10-10T10:00:05.400Z", 1)    # same second, but 'Z' sorts after '+00:00' as a string
+        self.load("2026-10-10T10:00:04.900Z", 2)
+        got = {i: v for _, i, _, _, v, _ in skills.load_versions(self.conn)}
+        self.assertEqual(got, {1: v2, 2: v1})
+        # a load stamped with a fraction moves first_seen earlier only when it really is earlier
+        skills.record(self.conn, "review", self.skill, "2026-10-10T10:00:05.400Z", "load")
+        self.assertEqual(self.conn.execute("SELECT first_seen FROM skill_versions WHERE version = ?", (v2,)).fetchone()[0],
+                         "2026-10-10T10:00:05+00:00")
+
     def test_versions_give_loads_and_median_tokens_per_version_and_an_untracked_bucket(self):
         self.load("2026-10-01T00:00:00Z", 1, tokens=900)
         self.load("2026-10-10T00:00:00Z", 2, "t2", tokens=100)
@@ -126,6 +216,32 @@ class SkillsTest(unittest.TestCase):
         rows = {r["version"]: r for r in skills.versions(self.conn, "review")}
         self.assertEqual((rows[v1]["loads"], rows[v1]["exact"], rows[v1]["tokens_median"], rows[v1]["label"]), (1, 1, 100, "1.2.0"))
         self.assertEqual((rows[None]["loads"], rows[None]["tokens_median"]), (1, 900))
+
+    def test_a_renamed_skill_keeps_its_loads_and_a_split_pair_is_merged(self):
+        self.load("2026-10-10T00:00:00Z", 1, "t1")
+        v1 = skills.record_load(self.conn, "s1", "t1", "review", str(self.repo / "src"), "2026-10-10T00:00:00Z")
+        before = sum(r["loads"] for r in skills.versions(self.conn, "review"))
+        # a plugin appears: reingest relabels the call and its requests, the mark still names the old skill
+        self.conn.execute("UPDATE skill_calls SET skill = 'ce:review'")
+        self.conn.execute("UPDATE requests SET skill = 'ce:review'")
+        self.assertEqual(sum(r["loads"] for r in skills.versions(self.conn, "ce:review")), 0)  # the bug
+        skills.rekey(self.conn)
+        rows = skills.versions(self.conn, "ce:review")
+        self.assertEqual((before, sum(r["loads"] for r in rows), rows[0]["version"], rows[0]["exact"]), (1, 1, v1, 1))
+        self.assertEqual(self.conn.execute("SELECT skill FROM skill_versions").fetchall(), [("ce:review",)])
+        self.assertEqual(self.conn.execute("SELECT skill FROM skill_load_versions").fetchall(), [("ce:review",)])
+        skills.rekey(self.conn)  # idempotent
+        self.assertEqual(self.conn.execute("SELECT count(*) FROM skill_versions").fetchone(), (1,))
+
+    def test_a_rekey_merges_into_an_existing_row_of_the_new_name(self):
+        self.load("2026-10-10T00:00:00Z", 1, "t1")
+        v1 = skills.record_load(self.conn, "s1", "t1", "review", str(self.repo / "src"), "2026-10-10T00:00:00Z")
+        self.conn.execute("INSERT INTO skill_versions SELECT 'ce:review', version, path, label, '2026-10-12T00:00:00+00:00', "
+                          "'2026-10-12T00:00:00+00:00', source, body_hash FROM skill_versions")
+        self.conn.execute("UPDATE skill_calls SET skill = 'ce:review'")
+        skills.rekey(self.conn)
+        self.assertEqual(self.conn.execute("SELECT skill, version, first_seen FROM skill_versions").fetchall(),
+                         [("ce:review", v1, "2026-10-10T00:00:00+00:00")])
 
     def test_a_versions_error_rate_counts_failed_calls_and_interrupts_of_its_loads(self):
         self.load("2026-10-01T00:00:00Z", 1, tokens=900)
