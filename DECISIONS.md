@@ -44,3 +44,9 @@
 | Decision | Why | Rejected |
 | --- | --- | --- |
 | Child tokens stay on the child row. The parent's totals do not change. | A parent's totals stay comparable with sessions that ran no `claude -p`. Children are shown nested under the parent, so their cost is still visible. | Adding the child tokens to the parent. |
+
+## 2026-10-25 · The request that calls Skill pays for the load (issue #117)
+
+| Decision | Why | Rejected |
+| --- | --- | --- |
+| A request that contains a `Skill` tool call is charged to the skill it loads, with its tool calls and the subagents it spawns, wherever the Skill block sits in the message. Several Skill calls in one request: the last one. Later requests keep the last skill, as before. Totals per session do not change, only the split. `PARSER_VERSION` is 21. | The request's output is the cost of making the load. A subagent in the same message already got the new skill, so its parent must agree. | Charging the previous skill (what it was); splitting a request between skills. |
