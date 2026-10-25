@@ -178,7 +178,7 @@ def cost_check(conn, cond="", params=(), since=None, scoped=False):
         "SELECT count(*), sum(cost_usd) FROM otel_requests o WHERE request_key IS NULL "
         f"AND (session_id IS NULL OR EXISTS (SELECT 1 FROM requests r WHERE r.session_id = o.session_id)) {since_sql}", sp).fetchone()
     out["only"] = conn.execute(
-        "SELECT count(DISTINCT session_id), count(*), sum(input + output + cache_read + cache_write), sum(cost_usd) "
+        "SELECT count(DISTINCT session_id), count(*), total(input + output + cache_read + cache_write), sum(cost_usd) "
         "FROM otel_requests o WHERE session_id IS NOT NULL "
         f"AND NOT EXISTS (SELECT 1 FROM requests r WHERE r.session_id = o.session_id) {since_sql}", sp).fetchone()
     return out

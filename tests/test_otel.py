@@ -100,6 +100,15 @@ class OtelTest(unittest.TestCase):
         self.assertEqual(otel.ingest(conn, self.dir), 0)
         self.assertEqual(conn.execute("SELECT count(*) FROM otel_requests WHERE session_id = 's1'").fetchone()[0], 1)
 
+    def test_clamped_token_counts_from_two_sessions_do_not_break_cost_check_or_the_report(self):
+        from tokscope.web.report import write_report
+        self.write(line(event("a", "2026-10-20T10:00:00.000Z", "m", 1e30, 1, 0, 0, 0.1))
+                   + line(event("b", "2026-10-20T10:00:00.000Z", "m", 1e30, 1, 0, 0, 0.1)))
+        self.assertEqual(self.ingest(), 2)
+        self.conn.commit()
+        self.assertEqual(otel.cost_check(self.conn)["only"][1], 2)  # sum() of two INT64 maxima used to raise "integer overflow"
+        write_report(self.db, self.tmp / "r.html", tasks_dir=self.tmp)
+
     def test_a_missing_folder_is_a_no_op(self):
         gone = self.tmp / "nothing"
         self.assertEqual(otel.ingest(self.conn, gone), 0)
