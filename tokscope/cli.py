@@ -146,10 +146,14 @@ def record_skill_versions(lines):
     conn.commit()
 
 
-def skills_text(skill=None):
-    from .core.skills import versions
+def skills_text(skill=None, fmt="table"):
+    from .core import skills as sk
 
-    rows = versions(connect(DB), skill)
+    rows = sk.versions(connect(DB), skill)
+    if fmt == "json":
+        return json.dumps(sk.export_rows(rows), indent=2)
+    if fmt == "csv":
+        return sk.to_csv(rows).rstrip("\n")
     if not rows:
         return "tokscope: no skill versions yet; run `tokscope ingest` (and load a skill) first."
     # one block per skill, its versions indented under it, oldest first
@@ -363,6 +367,7 @@ def main():
     pk = sub.add_parser("skills", help="each skill's versions (content hash), loads and median tokens per load")
     pk.add_argument("skill", nargs="?", help="only this skill; `import [skill]` keeps older versions transcripts still show")
     pk.add_argument("name", nargs="?", help=argparse.SUPPRESS)
+    pk.add_argument("--format", choices=("table", "json", "csv"), default="table", help="json or csv print only the rows")
     ps = sub.add_parser("summary", help="print a cost table")
     ps.add_argument("--by", choices=SUMMARY_SQL, default="phase")
     ps.add_argument("--errors", action="store_true", help="count failed and repeated tool calls, interrupts, API errors "
@@ -426,7 +431,7 @@ def main():
                 print(f"kept {sk} {version}: SKILL.md from {n} load(s), first {first[:16].replace('T', ' ')}")
             print(f"{len(done)} older version(s) kept" if done else "no older version found in the transcripts")
         else:
-            print(skills_text(args.skill))
+            print(skills_text(args.skill, args.format))
     elif args.cmd == "change":
         from .features.changes import add_change, impact_text, list_changes
 

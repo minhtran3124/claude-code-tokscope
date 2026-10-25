@@ -532,26 +532,50 @@ def versions(conn, skill=None, bench_project="%tokscope%-bench-%", where=None):
             for j, v in enumerate(found.get(key, ())):
                 e[j] += v or 0
     rows = []
-    for sk, version, lbl, first, source in conn.execute(
-            "SELECT skill, version, label, first_seen, source FROM skill_versions"):
+    for sk, version, lbl, first, source, last in conn.execute(
+            "SELECT skill, version, label, first_seen, source, last_seen FROM skill_versions"):
         if skill and sk != skill:
             continue
         us = per.get((sk, version), [])
-        rows.append({"skill": sk, "version": version, "label": lbl, "first_seen": first, "source": source,
+        rows.append({"skill": sk, "version": version, "label": lbl, "first_seen": first, "last_seen": last, "source": source,
                      "loads": len(us), "exact": sum(e for _, e in us), "tokens_median": median(t for t, _ in us) if us else None,
                      **_error_fields(errs.get((sk, version)), fails.get((sk, version), 0))})
     for (sk, version), us in sorted(per.items(), key=lambda kv: kv[0][0]):
         if version is None and (not skill or sk == skill):
-            rows.append({"skill": sk, "version": None, "label": None, "first_seen": None, "source": "before tracking",
+            rows.append({"skill": sk, "version": None, "label": None, "first_seen": None, "last_seen": None, "source": "before tracking",
                          "loads": len(us), "exact": 0, "tokens_median": median(t for t, _ in us),
                          **_error_fields(errs.get((sk, version)), fails.get((sk, version), 0))})
     shown = {(r["skill"], r["version"]) for r in rows}
     for (sk, version), n in sorted(fails.items(), key=lambda kv: kv[0][0]):  # a skill that never loaded has no other row
         if (sk, version) not in shown and (not skill or sk == skill):
-            rows.append({"skill": sk, "version": version, "label": None, "first_seen": None, "source": "failed loads",
+            rows.append({"skill": sk, "version": version, "label": None, "first_seen": None, "last_seen": None, "source": "failed loads",
                          "loads": 0, "exact": 0, "tokens_median": None, **_error_fields(None, n)})
     # per skill, oldest first; loads from before tracking lead
     return sorted(rows, key=lambda r: (r["skill"], _dt(r["first_seen"]) if r["first_seen"] else datetime.min.replace(tzinfo=timezone.utc)))
+
+
+EXPORT = ("skill", "version", "label", "source", "first_seen", "last_seen", "loads", "exact", "tokens_median", "calls", "errors",
+          "repeats", "interrupts", "failed_loads", "regression_pct")
+
+
+def export_rows(rows):
+    """versions() rows as flat dicts (EXPORT): regression_pct is the median change against the skill's previous version
+    with a median, or None."""
+    out, prev, last = [], None, None
+    for r in rows:
+        if r["skill"] != last:
+            prev, last = None, r["skill"]
+        m = r["tokens_median"]
+        out.append({**{k: r.get(k) for k in EXPORT}, "regression_pct":
+                    round(100 * (m / prev - 1), 1) if m is not None and prev else None})
+        prev = m if m is not None else prev
+    return out
+
+
+def to_csv(rows):
+    from .summary import to_csv as csv_of
+
+    return csv_of(export_rows(rows), EXPORT)
 
 
 def snapshot_dir(skill, version):
