@@ -21,10 +21,10 @@ def _ste_counts(findings):
     return f'<span class="ste-n" title="STE check: {h} hard findings, {len(findings) - h} hints">STE {h} · {len(findings) - h} hints</span>'
 
 
-def _skill_card(k, used, lint=None):
-    loads, last = used.get(k["dir"], (0, None))
+def _skill_card(k, used, lint=None, rng=""):
+    loads, last = used.get(k["id"], (0, None))
     findings = (lint or {}).get(k["folder"] / "SKILL.md")
-    meta = (f"{loads:,} load{'s' * (loads != 1)}" + (f" · last {last[:10]}" if last else "")
+    meta = (f"{loads:,} load{'s' * (loads != 1)}{rng}" + (f" · last {last[:10]}" if last else "")
             + (f" · {_ste_counts(findings)}" if findings is not None else ""))
     keys = f' data-loads="{loads}" data-ste="{library.hard(findings) if findings is not None else -1}"' 
     badge = f'<span class="badge inst" title="{html.escape(k["reason"])}">installed</span>' if k["origin"] == "installed" else ""
@@ -35,7 +35,7 @@ def _skill_card(k, used, lint=None):
             f'<span class="meta">{meta}</span></a>')
 
 
-def _library_list(found, used, lint=None, lint_note="", project=""):
+def _library_list(found, used, lint=None, lint_note="", project="", rng=""):
     if project and all(k["scope"] == "personal" for k in found):
         lint_note += " This project has no .claude/skills folder; your personal skills load in it."
     if not found:
@@ -53,7 +53,7 @@ def _library_list(found, used, lint=None, lint_note="", project=""):
         title = "Personal · ~/.claude/skills" if scope == "personal" else f"Project · {scope}"
         groups.append(f'<section class="libgroup"><h2 class="sec">{html.escape(title)} <span class="note">{mine} yours'
                       f'{f", {len(ks) - mine} installed" if len(ks) > mine else ""}</span></h2>'
-                      f'<div class="libgrid">{"".join(_skill_card(k, used, lint) for k in ks)}</div></section>')
+                      f'<div class="libgrid">{"".join(_skill_card(k, used, lint, rng) for k in ks)}</div></section>')
     return (f'<p class="note">Skills you wrote, to read. Installed ones (npx skills, a lock file, an installer) are hidden; '
             f'<code>library.json</code> in the data folder corrects a wrong guess.{lint_note}</p>{tools}{"".join(groups)}'
             '<div class="empty" id="lib-none" hidden><b>No skill matches</b>Try another word.</div>')
@@ -352,7 +352,7 @@ def _job_view(k, job, linter, conn=None):
     return head + outcome + table + acts + '<p class="err" id="opt-err" hidden></p></section>' + diffs + bench_html + report + log + decide
 
 
-def _library_skill(k, qs, used, conn, linter=None, found=(), back="/library"):
+def _library_skill(k, qs, used, conn, linter=None, found=(), back="/library", rng=""):
     listed = library.files(k["folder"])
     names = {rel for rel, _ in listed}
     rel = (qs.get("file") or ["SKILL.md"])[0]
@@ -397,13 +397,13 @@ def _library_skill(k, qs, used, conn, linter=None, found=(), back="/library"):
         view = f'<div class="viewbar"><span class="note">{text.count(chr(10)) + 1:,} lines</span></div>{_source(text)}'
     tree = "".join(f'<a href="{base}&file={html.escape(r)}"{" class=on aria-current=page" if r == rel else ""}>{html.escape(r)}</a>'
                    for r, _ in listed)
-    loads, last = used.get(k["dir"], (0, None))
+    loads, last = used.get(k["id"], (0, None))
     tracked = conn.execute("SELECT count(*) FROM skill_versions WHERE skill = ?", (k["dir"],)).fetchone()[0] if conn.execute(
         "SELECT 1 FROM sqlite_master WHERE name = 'skill_versions'").fetchone() else 0
     facts = [("Where", f"<code>{html.escape(library._tilde(k['folder']))}</code>"),
              ("Origin", "yours" if k["origin"] == "mine" else f"installed: {html.escape(k['reason'])}"),
              ("Version", f"<code>{skills.fingerprint(k['folder'])}</code>" + (f" · v{html.escape(k['label'])}" if k["label"] else "")),
-             ("Loads", f"{loads:,}" + (f", last {last[:10]}" if last else "")
+             ("Loads", f"{loads:,}{rng}" + (f", last {last[:10]}" if last else "")
               + (f' · <a href="#v-{html.escape(k["dir"])}">{tracked} tracked versions</a>' if tracked > 1  # only a changed skill has a card
                  else " · 1 tracked version" if tracked else ""))]
     desc = f'<p>{markdown.inline(k["description"])}</p>' if k["description"] else ""
@@ -429,16 +429,18 @@ def _library_skill(k, qs, used, conn, linter=None, found=(), back="/library"):
 def page_library(conn, f, qs, level):
     if level != "full":
         return f'<div class="empty"><b>Skill text is hidden</b>The library shows file contents at the full level only (now {level}).</div>'
-    found, used = library.discover(conn, f.project or None), library.usage(conn)
+    found = library.discover(conn, f.project or None)
     linter = library.ste_linter(found)
     pick = (qs.get("skill") or [""])[0]
     k = next((k for k in found if k["id"] == pick), None) or next((k for k in library.discover(conn) if k["id"] == pick), None)
+    used = library.usage(conn, found if k in found else [*found, k] if k else found, f.days, f.project or None, f.now)
+    rng = f" in {f.label()}"  # the page has no range select: say which range the counts cover
     if k:
-        return _library_skill(k, qs, used, conn, linter, found, "/library" + (f"?{urlencode({'project': f.project})}" if f.project else ""))
+        return _library_skill(k, qs, used, conn, linter, found, "/library" + (f"?{urlencode({'project': f.project})}" if f.project else ""), rng)
     lint, note = None, " Install the asd-ste100 skill to see STE findings here." if linter is None else ""
     if linter:
         try:
             lint = library.ste_lint(linter, [k["folder"] / "SKILL.md" for k in found])
         except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as e:
             note = f" The STE check failed: {html.escape(str(e))}"
-    return _library_list(found, used, lint, note, f.project)
+    return _library_list(found, used, lint, note, f.project, rng)

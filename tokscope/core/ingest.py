@@ -56,6 +56,7 @@ BUILTIN_COMMANDS = {
     "output-style", "permissions", "plugin", "pr-comments", "release-notes", "reload-plugins", "reload-skills",
     "remote-control", "resume", "rewind",
     "status", "statusline", "terminal-setup", "usage", "vim", "workflows",
+    "rename", "copy", "theme", "skills", "stats", "color", "keybindings", "feedback", "upgrade", "review-pr-comments",
 }
 
 SCHEMA = """
@@ -108,7 +109,7 @@ CREATE INDEX IF NOT EXISTS idx_snapshots_session ON statusline_snapshots (sessio
 """
 TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "turn_events", "headless_calls", "mcp_defs", "ingest_state", "sessions")
 # bump when the parser records something new, so unchanged transcripts are parsed again once
-PARSER_VERSION = 18
+PARSER_VERSION = 20
 TAIL_BYTES = 4096  # the bytes before a stored offset that must be unchanged for a file to count as appended to
 # what a resumed parse restores: the parser's state after the last complete line of every file
 STATE_KEYS = ("requests", "subagents", "skill_calls", "prompts", "tool_ctx", "tool_calls", "result_chars",
@@ -367,7 +368,7 @@ class SessionParser:
                 elif kind == "user":
                     self._on_tool_results(rec)
                     self._on_task_done(rec)
-                    self._on_command_skill_text(rec)
+                    self._on_command_skill_text(rec, agent_id, state if is_main else None)
                     if is_main:
                         self._on_user(rec, state)
 
@@ -419,8 +420,11 @@ class SessionParser:
             return
         match = COMMAND_RE.search(_text(rec.get("message", {}).get("content")))
         command = match.group(1) if match else None
-        if command in BUILTIN_COMMANDS:
+        if command in BUILTIN_COMMANDS:  # any other typed /cmd (skill, command file, MCP prompt, /security-review) is a prompt
             return
+        self._start_prompt(rec, command, state)
+
+    def _start_prompt(self, rec, command, state):
         state["prompt_idx"] += 1
         self.meta["prompts"] += 1
         self.prompts.append((state["prompt_idx"], rec.get("timestamp"), _prompt_text(rec, command)))
@@ -430,12 +434,19 @@ class SessionParser:
             args = COMMAND_ARGS_RE.search(_text(rec.get("message", {}).get("content")))
             self.skill_calls[-1]["args"] = args.group(1) if args else None
 
-    def _on_command_skill_text(self, rec):
-        """A typed /skill puts its SKILL.md in the next meta message; it belongs to the last command load."""
+    def _on_command_skill_text(self, rec, agent_id=None, state=None):
+        """A typed /skill puts its SKILL.md in the next meta message; it belongs to the last command load. A message
+        with a sourceToolUseID belongs to that Skill tool call, and one in a subagent file to no main-thread command."""
         if not rec.get("isMeta"):
             return
         text = _text((rec.get("message") or {}).get("content"))
         if not text.startswith(SKILL_TEXT):
+            return
+        tid = rec.get("sourceToolUseID")
+        if tid:
+            self.skill_texts.setdefault(tid, text)
+            return
+        if agent_id is not None:
             return
         load = next((c for c in reversed(self.skill_calls) if c["source"] == "command"), None)
         if load is not None and "text" not in load:

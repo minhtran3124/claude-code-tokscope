@@ -233,6 +233,18 @@ class IngestTest(Fixture):
         for args in ("ENG-1 creds", "ddtrace 2 to 4"):
             self.assertIn(placeholder, loaded_text_hash(inline.format(args), args).split())
 
+    def test_an_argument_that_also_occurs_elsewhere_in_the_body_still_matches_the_placeholder_body(self):
+        head = "Base directory for this skill: /x\n\n"
+        real = loaded_text_hash(head + "Run $ARGUMENTS on the config; the end")
+        self.assertIn(real, loaded_text_hash(head + "Run the on the config; the end", "the").split())
+
+    def test_positional_placeholders_are_put_back(self):
+        head = "Base directory for this skill: /x\n\n"
+        for body, loaded in (("Move $0 to $1.", "Move a.py to b.py."), ("Move $ARGUMENTS[0] to $ARGUMENTS[1].", "Move a.py to b.py.")):
+            self.assertIn(loaded_text_hash(head + body), loaded_text_hash(head + loaded, "a.py b.py").split())
+        quoted = loaded_text_hash(head + "Say $0 then $1.")
+        self.assertIn(quoted, loaded_text_hash(head + "Say hello world then two.", '"hello world" two').split())
+
     def test_a_short_argument_that_is_also_a_word_of_the_skill_still_matches_the_plain_text(self):
         text = "Base directory for this skill: /x\n\n# Wiki\nRun update when the source changed.\n\n\nARGUMENTS: update"
         plain = loaded_text_hash("Base directory for this skill: /x\n\n# Wiki\nRun update when the source changed.")
@@ -247,6 +259,21 @@ class IngestTest(Fixture):
         (skill, source, text_hash), = self.rows("SELECT skill, source, text_hash FROM skill_calls")
         self.assertEqual((skill, source), ("review", "command"))
         self.assertIn(loaded_text_hash("Base directory for this skill: /x\n\n# Review\nReview $ARGUMENTS."), text_hash.split())
+
+    def test_a_typed_command_and_a_later_skill_call_each_keep_their_own_text_hash(self):
+        cmd = "<command-message>mycmd</command-message>\n<command-name>/mycmd</command-name>"
+        (self.tmp / "home" / ".claude" / "commands").mkdir(parents=True)
+        (self.tmp / "home" / ".claude" / "commands" / "mycmd.md").write_text("x")
+        foo = "Base directory for this skill: /x/foo\n\n# Foo\nDo foo."
+        meta = {"type": "user", "isMeta": True, "sourceToolUseID": "t1",
+                "message": {"role": "user", "content": [{"type": "text", "text": foo}]}}
+        side = {"type": "user", "isMeta": True, "message": {"role": "user", "content": [{"type": "text", "text": "Base directory for this skill: /x/other\n\n# Other"}]}}
+        self.write_main([human(cmd), assistant("r1", tools=[("t1", "Skill", {"skill": "foo"})]), meta, assistant("r2")])
+        self.write_agent("ag1", {"agentType": "Explore", "toolUseId": "t9"}, [side, assistant("r9")])
+        self.run_ingest()
+        got = dict(self.rows("SELECT skill, text_hash FROM skill_calls"))
+        self.assertIsNone(got["mycmd"])
+        self.assertEqual(got["foo"], loaded_text_hash(foo))
 
     def test_a_plugin_skill_called_by_its_bare_name_is_stored_under_its_full_name(self):
         install = self.tmp / "home" / "cache" / "ce"
@@ -271,6 +298,38 @@ class IngestTest(Fixture):
         self.assertEqual(self.rows("SELECT skill, phase, prompt_idx FROM requests"), [("feature-intake", "intake", 1)])
         self.assertEqual(self.rows("SELECT prompts FROM sessions"), [(1,)])
         self.assertEqual(self.rows("SELECT skill, source FROM skill_calls"), [("feature-intake", "command")])
+
+    def test_an_unlisted_builtin_command_keeps_the_phase_and_records_no_skill(self):
+        self.write_main([
+            human("<command-message>feature-intake</command-message>\n<command-name>/feature-intake</command-name>"), assistant("r1"),
+            human("<command-name>/rename</command-name><command-args>x</command-args>"),
+            human("unrelated"), assistant("r2"),
+        ])
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT skill, phase, prompt_idx FROM requests ORDER BY ts, request_key"),
+                         [("feature-intake", "intake", 1), (None, "intake", 2)])
+        self.assertEqual(self.rows("SELECT skill FROM skill_calls"), [("feature-intake",)])
+        self.assertEqual(self.rows("SELECT prompts FROM sessions"), [(2,)])
+
+    def test_a_typed_command_without_a_file_is_still_a_prompt(self):
+        self.write_main([human("<command-name>/security-review</command-name>"), assistant("r1"),
+                         human("<command-name>/mcp__srv__p</command-name>"), assistant("r2")])
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT skill, prompt_idx FROM requests ORDER BY ts, request_key"),
+                         [("security-review", 1), ("mcp__srv__p", 2)])
+        self.assertEqual(self.rows("SELECT prompts FROM sessions"), [(2,)])
+
+    def test_a_typed_command_with_a_command_file_or_a_skill_text_still_loads(self):
+        cmds = self.tmp / "home" / ".claude" / "commands"
+        cmds.mkdir(parents=True)
+        (cmds / "mycmd.md").write_text("do it")
+        text = "Base directory for this skill: /x/other\n\n# Other"
+        meta = {"type": "user", "isMeta": True, "message": {"role": "user", "content": [{"type": "text", "text": text}]}}
+        self.write_main([human("<command-name>/mycmd</command-name>"), assistant("r1"),
+                         human("<command-name>/other</command-name>"), meta, assistant("r2")])
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT skill, source FROM skill_calls"), [("mycmd", "command"), ("other", "command")])
+        self.assertEqual(self.rows("SELECT prompts FROM sessions"), [(2,)])
 
     def test_subagent_inherits_context_of_spawning_call_and_nested_agent_its_parent(self):
         self.write_main([

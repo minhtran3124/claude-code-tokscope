@@ -335,8 +335,12 @@ def _new_versions(conn, f):
         return "<p class='note'>No skill changed in this range.</p>"
     ids = {}
     for k in library.discover(conn, f.project or None):
-        ids.setdefault(k["dir"], k["id"])  # a personal copy wins, as it does when Claude Code loads the skill
-    href = lambda sk: f'/library?skill={ids[sk]}#v-{html.escape(sk)}' if sk in ids else "/library"  # noqa: E731
+        for key in (k["dir"], k["name"]):
+            ids.setdefault(key, k["id"])  # a personal copy wins, as it does when Claude Code loads the skill
+
+    def href(sk):  # a plugin:skill links to the skill of that name, a frontmatter name to its folder
+        i = ids.get(sk) or ids.get(sk.split(":", 1)[-1])
+        return f'/library?skill={i}#v-{html.escape(sk)}' if i else "/library"
     items = "".join(f'<li><a href="{href(sk)}">{html.escape(sk)}</a> <code class="ver">{v[:6]}</code>'
                     f'{" v" + html.escape(lbl) if lbl else ""} <span class="note">{first[:10]}</span></li>' for sk, v, first, lbl in rows)
     return f'<ul class="plain">{items}</ul>'

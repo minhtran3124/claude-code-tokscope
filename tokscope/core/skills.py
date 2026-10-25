@@ -17,6 +17,7 @@ A load takes the version marked for its tool call, else the newest version first
 import hashlib
 import json
 import re
+import shlex
 import shutil
 import subprocess
 from functools import lru_cache
@@ -60,16 +61,50 @@ def body_hash(folder):
     return _sha(_body((Path(folder) / "SKILL.md").read_text(errors="replace")))
 
 
+def _placeholder_forms(body, args):
+    """Every body the call may have had before Claude Code substituted `args`, as a list of texts. Only the
+    placeholder was replaced, so when the argument text also occurs as ordinary words, each subset of its
+    occurrences is tried (all of them when there are over 6). Claude Code's documented positional forms are
+    handled too: arguments are shell-split, `$N` and `$ARGUMENTS[N]` are 0-based, and every occurrence of a
+    token is put back (a token that is also an ordinary word elsewhere is not told apart)."""
+    args = args.strip()
+    forms = []
+    spots, i = [], body.find(args)
+    while i >= 0 and args:
+        spots.append(i)
+        i = body.find(args, i + len(args))
+    chosen = [[s] for s in spots] if len(spots) > 6 else [[s for k, s in enumerate(spots) if m >> k & 1] for m in range(1, 1 << len(spots))]
+    if len(spots) > 6:
+        chosen.append(spots)
+    for pick in chosen:
+        out, last = [], 0
+        for s in pick:
+            out += [body[last:s], "$ARGUMENTS"]
+            last = s + len(args)
+        forms.append("".join(out) + body[last:])
+    try:
+        tokens = shlex.split(args)
+    except ValueError:
+        tokens = []
+    if tokens:
+        for style in ("$%d", "$ARGUMENTS[%d]"):
+            text = body
+            for n, t in sorted(enumerate(tokens), key=lambda x: -len(x[1])):
+                text = text.replace(t, chr(0xE000 + n))
+            forms.append("".join(style % (ord(c) - 0xE000) if 0xE000 <= ord(c) < 0xF900 else c for c in text))
+    return forms
+
+
 def loaded_text_hash(text, args=None):
     """The hashes a load's kept SKILL.md may match, space-separated: 'Base directory for this skill: …', the body,
-    then any ARGUMENTS. Claude Code puts a call's arguments after the body, or where the body says $ARGUMENTS.
-    The second hash puts the placeholder back; the first keeps the text as is, since an argument like "update"
-    may also be an ordinary word of the skill."""
+    then any ARGUMENTS. Claude Code puts a call's arguments after the body, or where the body says $ARGUMENTS
+    (or a positional `$0`, `$ARGUMENTS[0]`). The first hash keeps the text as is, since an argument like "update"
+    may also be an ordinary word of the skill; the others put the placeholder back, see _placeholder_forms."""
     body = text.split("\n\n", 1)[1] if "\n\n" in text else ""
     body = body.split("\n\n\nARGUMENTS: ", 1)[0].strip()
     hashes = [_sha(body)]
-    if args and args.strip() and args.strip() in body:
-        hashes.append(_sha(body.replace(args.strip(), "$ARGUMENTS")))
+    if args and args.strip():
+        hashes += [_sha(f) for f in _placeholder_forms(body, args)]
     return " ".join(dict.fromkeys(hashes))
 
 
@@ -156,6 +191,22 @@ def canonical_name(name, cwd=None):
     return f"{plugin}:{name}" if plugin else name
 
 
+def command_known(name, cwd=None):
+    """True when a SKILL.md or a command file (.claude/commands/<name>.md, project, user or plugin) resolves for `name`."""
+    if skill_dir(name, cwd):
+        return True
+    plugin, _, bare = name.rpartition(":")
+    dirs = [p / ".claude" / "commands" for p in ([Path(cwd), *Path(cwd).parents] if cwd else [])]
+    dirs.append(Path.home() / ".claude" / "commands")
+    try:
+        installed = json.loads((Path.home() / ".claude" / "plugins" / "installed_plugins.json").read_text())
+    except (OSError, ValueError):
+        installed = {}
+    dirs += [Path(e.get("installPath", "")) / "commands" for key, es in installed.get("plugins", {}).items()
+             if not plugin or key.split("@")[0] == plugin for e in es]
+    return any((d / f"{bare}.md").is_file() for d in dirs)
+
+
 def builtin_version(name):
     """cc-<version> for a skill built into Claude Code (unpacked under /tmp/claude-*/bundled-skills/<version>/)."""
     hits = sorted(BUNDLED_ROOT.glob(f"claude-*/bundled-skills/*/*/{name}"), key=lambda p: p.stat().st_mtime)
@@ -210,6 +261,7 @@ def record(conn, skill, folder, seen_at, source, version=None):
 
 def record_load(conn, session_id, tool_use_id, skill, cwd, ts):
     """The exact version one Skill call loaded, hashed while the call is still fresh (the mod's mark)."""
+    skill = canonical_name(skill, cwd)  # as ingest names it, so a bare plugin skill is one row, not two
     folder = skill_dir(skill, cwd)
     version = record(conn, skill, folder, ts, "load", None if folder else builtin_version(skill))
     if version and tool_use_id:
