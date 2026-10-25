@@ -23,7 +23,7 @@ class ReceiverTest(unittest.TestCase):
 
     def post(self, path, body, headers=None):
         c = http.client.HTTPConnection("127.0.0.1", self.srv.server_address[1], timeout=5)
-        c.request("POST", path, body, headers or {})
+        c.request("POST", path, body, {"Content-Type": "application/json", **(headers or {})})
         resp = c.getresponse()
         resp.read()
         c.close()
@@ -60,11 +60,24 @@ class ReceiverTest(unittest.TestCase):
         for value in ("-5", "abc"):
             c = http.client.HTTPConnection("127.0.0.1", self.srv.server_address[1], timeout=5)
             c.putrequest("POST", "/v1/logs")
+            c.putheader("Content-Type", "application/json")
             c.putheader("Content-Length", value)
             c.endheaders()
             self.assertEqual(c.getresponse().status, 400)
             c.close()
         self.assertEqual(self.files(), [])
+
+    def test_browser_and_foreign_host_requests_are_403_and_not_written(self):
+        self.assertEqual(self.post("/v1/logs", json.dumps(SAMPLE), {"Origin": "https://evil.example"}), 403)
+        self.assertEqual(self.post("/v1/logs", json.dumps(SAMPLE), {"Host": "evil.example:4318"}), 403)
+        self.assertEqual(self.post("/v1/logs", json.dumps(SAMPLE), {"Host": "localhost:4318"}), 200)
+        self.assertEqual(self.post("/v1/logs", json.dumps(SAMPLE), {"Host": "[::1]:4318"}), 200)
+        self.assertEqual(len(self.files()[0].read_text().splitlines()), 2)
+
+    def test_non_json_content_type_is_415_and_not_written(self):
+        self.assertEqual(self.post("/v1/logs", json.dumps(SAMPLE), {"Content-Type": "text/plain"}), 415)
+        self.assertEqual(self.post("/v1/logs", json.dumps(SAMPLE), {"Content-Type": "application/json; charset=utf-8"}), 200)
+        self.assertEqual(len(self.files()[0].read_text().splitlines()), 1)
 
     def test_non_json_is_415(self):
         self.assertEqual(self.post("/v1/logs", b"\x0a\x02\x08\x01"), 415)

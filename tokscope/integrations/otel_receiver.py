@@ -37,11 +37,26 @@ def unzip(raw, limit):
     return None if len(out) > limit or d.unconsumed_tail else out
 
 
+def host_name(value):
+    """The host part of a Host header (port and IPv6 brackets removed)."""
+    value = (value or "").strip()
+    if value.startswith("["):
+        return value[1:].split("]")[0]
+    return value.rsplit(":", 1)[0] if value.count(":") == 1 else value
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         signal = SIGNALS.get(self.path)
         if signal is None:
             self.send_error(404)
+            return
+        # Browsers (CORS "simple" POSTs) and DNS rebinding can reach a loopback port; exporters send neither header.
+        if self.headers.get("Origin") is not None or (not self.server.allow_remote and not is_loopback(host_name(self.headers.get("Host")))):
+            self.send_error(403, "browser or non-loopback request")
+            return
+        if self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/json":
+            self.send_error(415, "expected Content-Type application/json")
             return
         try:
             size = int(self.headers.get("Content-Length", ""))
@@ -88,7 +103,7 @@ def make_server(host, port, data_dir, max_body=DEFAULT_MAX_BODY, allow_remote=Fa
     if not allow_remote and not is_loopback(host):
         raise ValueError(f"{host!r} is not a loopback address and the receiver has no authentication; pass --allow-remote to bind it anyway")
     srv = ThreadingHTTPServer((host, port), Handler)
-    srv.data_dir, srv.max_body = Path(data_dir), max_body
+    srv.data_dir, srv.max_body, srv.allow_remote = Path(data_dir), max_body, allow_remote
     return srv
 
 
