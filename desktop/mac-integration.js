@@ -34,20 +34,26 @@ function serviceCommand({ action, root, home = "", env = {} }) {
   return { cmd: [python, ...args], env: run.env };
 }
 
-// Write the wrapper to <home>/.local/bin/tokscope. A file that is not ours is left alone unless force is set.
-// Returns { path, status: "installed" | "updated" | "exists" }.
+// Write the wrapper to <home>/.local/bin/tokscope. A file that is not ours, or a symlink (setup.sh links it to the
+// clone's bin/tokscope), is left alone unless force is set; force replaces the link itself, never what it points to.
+// Returns { path, status: "installed" | "updated" | "exists", symlink? }.
 function installCli({ root, home, force = false, fsApi = fs }) {
   const dir = path.join(home, ".local", "bin");
   const target = path.join(dir, "tokscope");
   let status = "installed";
-  if (fsApi.existsSync(target)) {
-    const ours = String(fsApi.readFileSync(target, "utf8")).includes(MARK);
-    if (!ours && !force) return { path: target, status: "exists" };
+  let st = null;
+  try { st = fsApi.lstatSync(target); } catch (e) { if (e.code !== "ENOENT") throw e; }
+  const symlink = !!st && st.isSymbolicLink();
+  if (st) {
+    const ours = !symlink && String(fsApi.readFileSync(target, "utf8")).includes(MARK);
+    if (!ours && !force) return { path: target, status: "exists", symlink };
     status = "updated";
   }
   fsApi.mkdirSync(dir, { recursive: true });
-  fsApi.writeFileSync(target, wrapperScript(root), { mode: 0o755 });
-  fsApi.chmodSync(target, 0o755);
+  const tmp = `${target}.tmp-${process.pid}`;
+  fsApi.writeFileSync(tmp, wrapperScript(root), { mode: 0o755 });
+  fsApi.chmodSync(tmp, 0o755);
+  fsApi.renameSync(tmp, target); // replaces a symlink itself, not its target
   return { path: target, status };
 }
 

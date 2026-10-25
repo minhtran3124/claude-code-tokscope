@@ -123,6 +123,25 @@ class MacIntegration(unittest.TestCase):
             self.assertEqual(mac_js("m.installCli({root:'/R',home:%s,force:true})" % json.dumps(home))["status"], "updated")
             self.assertIn("/R/python", p.read_text())
 
+    def test_install_cli_never_writes_through_a_symlink(self):
+        import os
+        import tempfile
+        with tempfile.TemporaryDirectory() as home:
+            real = Path(home) / "clone-bin-tokscope"
+            real.write_text("#!/bin/sh\necho tracked\n")
+            p = Path(home) / ".local" / "bin" / "tokscope"
+            p.parent.mkdir(parents=True)
+            p.symlink_to(real)
+            r = mac_js("m.installCli({root:'/R',home:%s})" % json.dumps(home))
+            self.assertEqual((r["status"], r["symlink"]), ("exists", True))
+            self.assertEqual(real.read_text(), "#!/bin/sh\necho tracked\n")
+            r = mac_js("m.installCli({root:'/R',home:%s,force:true})" % json.dumps(home))
+            self.assertEqual(r["status"], "updated")
+            self.assertEqual(real.read_text(), "#!/bin/sh\necho tracked\n")
+            self.assertFalse(p.is_symlink())
+            self.assertIn("/R/python", p.read_text())
+            self.assertTrue(os.access(p, os.X_OK))
+
     def test_service_command_install_and_uninstall(self):
         r = mac_js("m.serviceCommand({action:'install',root:'/R',home:'/h',env:{PATH:'/usr/bin'}})")
         self.assertEqual(r["cmd"], ["/R/python/bin/python3", "-s", "-m", "tokscope.cli", "service", "install",

@@ -196,7 +196,7 @@ async function installCli() {
   try {
     let r = mac.installCli({ root: ROOT, home: os.homedir() });
     if (r.status === "exists") {
-      const { response } = await dialog.showMessageBox({ type: "question", buttons: ["Replace", "Cancel"], defaultId: 1, message: `${r.path} exists and was not written by tokscope.`, detail: "Replace it with the tokscope command line tool?" });
+      const { response } = await dialog.showMessageBox({ type: "question", buttons: ["Replace", "Cancel"], defaultId: 1, message: `${r.path} ${r.symlink ? "is a symbolic link" : "exists"} and was not written by tokscope.`, detail: "Replace it with the tokscope command line tool?" });
       if (response !== 0) return;
       r = mac.installCli({ root: ROOT, home: os.homedir(), force: true });
     }
