@@ -55,22 +55,8 @@ DESKTOP
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APPS" 2>/dev/null || true
 # keep `tokscope serve` running in the background from login, so the data is always fresh and the window opens at once
 if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
-  mkdir -p "$UNITS"
-  cat > "$UNIT" <<UNITFILE
-[Unit]
-Description=tokscope dashboard server (127.0.0.1:$PORT)
-
-[Service]
-ExecStart="$HERE/../bin/tokscope" serve --no-open --port $PORT
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=default.target
-UNITFILE
-  systemctl --user daemon-reload
-  systemctl --user enable --now tokscope.service
-  echo "started tokscope.service on 127.0.0.1:$PORT (stop it with: systemctl --user disable --now tokscope.service)"
+  # writes the unit, then daemon-reload and enable --now (tokscope/features/service.py)
+  "$HERE/../bin/tokscope" service install --exe "$HERE/../bin/tokscope" --quote-exe --port "$PORT"
 else
   echo "no systemd user session: the window will start its own server instead"
 fi
