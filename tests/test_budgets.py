@@ -110,6 +110,72 @@ class BudgetsTest(unittest.TestCase):
         seed(self.conn, 0.1, session="tiny", key="c")
         self.assertEqual(budgets.crossed(self.conn, {"daily_usd": 10}, "tiny"), [])  # 9.0 without it: still near, nothing crossed
 
+    def versions(self, skill, *per_version):
+        """per_version: (version, [tokens of each load]) oldest first; every load is one prompt of its own session."""
+        from tokscope.core import skills
+        skills._ensure(self.conn)
+        for n, (version, loads) in enumerate(per_version):
+            self.conn.execute("INSERT INTO skill_versions (skill, version, first_seen, source) VALUES (?, ?, ?, 'disk')",
+                              (skill, version, f"2026-01-0{n + 1}T00:00:00Z"))
+            for j, tokens in enumerate(loads):
+                sid, key = f"{skill}-{version}-{j}", f"{skill}-{version}-{j}"
+                seed(self.conn, 0.1, session=sid, skill=skill, key=key, tokens=tokens)
+                self.conn.execute("INSERT INTO skill_calls (session_id, ts, skill, prompt_idx, tool_use_id) VALUES (?, ?, ?, 1, ?)",
+                                  (sid, f"2026-01-0{n + 1}T01:00:00Z", skill, key))
+                self.conn.execute("INSERT INTO skill_load_versions (session_id, tool_use_id, skill, version, ts) VALUES (?, ?, ?, ?, ?)",
+                                  (sid, key, skill, version, f"2026-01-0{n + 1}T01:00:00Z"))
+        self.conn.commit()
+
+    def regress(self, cfg=None):
+        r = self.check({"regression": {} if cfg is None else cfg})
+        return {i["key"]: i for i in r["items"] if i["key"].startswith("regression.")}, r
+
+    def test_regression_flags_thirty_percent_with_five_loads_and_not_with_three_loads_a_drop_or_one_version(self):
+        self.versions("up5", ("a", [1000] * 5), ("b", [1300] * 5))
+        self.versions("up3", ("a", [1000] * 3), ("b", [1300] * 3))
+        self.versions("down", ("a", [1000] * 5), ("b", [700] * 5))
+        self.versions("solo", ("a", [1000] * 5))
+        found, r = self.regress()
+        self.assertEqual(list(found), ["regression.down", "regression.up5"])
+        self.assertEqual((found["regression.up5"]["state"], found["regression.down"]["state"]), ("over", "ok"))
+        self.assertIn("+30%", found["regression.up5"]["text"])
+        self.assertEqual((r["state"], r["exit"]), ("over", 11))
+
+    def test_regression_threshold_is_strict_and_configurable_and_off_without_the_key(self):
+        self.versions("x", ("a", [1000] * 5), ("b", [1200] * 5))
+        self.assertEqual(self.regress()[0]["regression.x"]["state"], "ok")  # exactly +20% is not more than 20
+        self.assertEqual(self.regress({"pct": 10})[0]["regression.x"]["state"], "over")
+        self.assertEqual(self.regress({"pct": 10, "min_loads": 6})[0], {})
+        self.assertEqual([i for i in self.check({"daily_usd": 1e9})["items"] if i["key"].startswith("regression.")], [])
+
+    def test_regression_config_is_validated(self):
+        for bad, why in (('{"regression": 5}', "must be an object"), ('{"regression": {"x": 1}}', "unknown key 'x' in 'regression'"),
+                         ('{"regression": {"pct": 0}}', "above 0"), ('{"regression": {"min_loads": 2.5}}', "whole number"),
+                         ('{"regression": {"pct": "20"}}', "must be a number")):
+            self.write(bad)
+            with self.assertRaises(budgets.BudgetError, msg=bad) as cm:
+                budgets.load()
+            self.assertIn(why, str(cm.exception))
+        self.write({"regression": {"pct": 20, "min_loads": 5}})
+        self.assertEqual(budgets.regression_config(budgets.load()), {"pct": 20, "min_loads": 5})
+        self.write({"regression": {}})
+        self.assertEqual(budgets.regression_config(budgets.load()), budgets.REGRESSION)
+
+    def test_the_report_card_warns_only_when_regression_is_configured(self):
+        from tokscope.web.report.sections.skills import _skill_versions
+        self.versions("up5", ("a", [1000] * 5), ("b", [1300] * 5))
+        self.assertNotIn("Regression:", _skill_versions(self.conn)[1])
+        self.write({"regression": {}})
+        self.assertIn("+30% per load", _skill_versions(self.conn)[1])
+
+    def test_regression_exits_11_from_the_cli_and_the_session_end_line_names_it(self):
+        self.versions("up5", ("a", [1000] * 5), ("b", [1300] * 5))
+        self.write({"regression": {}})
+        self.assertEqual(self.run_cli(["check", "--once"])[0], 11)
+        self.assertIn("OVER: skill up5 regression", self.run_cli(["statusline"])[1])
+        self.assertEqual([i["key"] for i in budgets.crossed(self.conn, {"regression": {}}, "up5-b-0")], ["regression.up5"])
+        self.assertEqual(budgets.crossed(self.conn, {"regression": {}}, "other"), [])
+
     def run_cli(self, argv, stdin="{}"):
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), mock.patch.object(cli, "DB", self.db), \

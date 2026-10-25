@@ -5,7 +5,12 @@ tokscope does not store, so they report "no data".
 
     {"daily_usd": 50, "daily_tokens": 5000000, "block_pct": 80, "weekly_pct": 90,
      "skills": {"xia2": {"per_load_tokens": 200000, "daily_usd": 5}},
-     "agents": {"reviewer": {"daily_usd": 10}}}"""
+     "agents": {"reviewer": {"daily_usd": 10}},
+     "regression": {"pct": 20, "min_loads": 5}}
+
+`regression` is optional and off when absent: a skill's newest version is flagged (state "over") when its median tokens per
+load is more than pct % above the previous version's, with at least min_loads loads on both. `{}` turns it on with the
+defaults (20, 5)."""
 
 import json
 from datetime import timezone
@@ -17,9 +22,10 @@ from .skills import versions
 NEAR_PCT = 80
 OK, NEAR, OVER, NODATA = 0, 10, 11, 30  # exit codes of `tokscope check --once`
 STATES = {"ok": OK, "near": NEAR, "over": OVER, "nodata": NODATA}
-_ROOT = {"daily_usd", "daily_tokens", "block_pct", "weekly_pct", "skills", "agents"}
+_ROOT = {"daily_usd", "daily_tokens", "block_pct", "weekly_pct", "skills", "agents", "regression"}
 _SKILL = {"per_load_tokens", "daily_usd", "daily_tokens"}
 _AGENT = {"daily_usd", "daily_tokens"}
+REGRESSION = {"pct": 20, "min_loads": 5}  # defaults of the version regression gate
 _ALL = 10 ** 9  # rows per group: every skill or agent, not the top 25
 
 
@@ -43,6 +49,40 @@ def _group(where, name, spec, allowed):
     return spec
 
 
+def _regression(where, spec):
+    if not isinstance(spec, dict):
+        raise BudgetError(f"{where}: 'regression' must be an object with {', '.join(sorted(REGRESSION))}")
+    for key, value in spec.items():
+        if key not in REGRESSION:
+            raise BudgetError(f"{where}: unknown key {key!r} in 'regression'; allowed: {', '.join(sorted(REGRESSION))}")
+        _number(where, f"regression.{key}", value)
+        if key == "min_loads" and not float(value).is_integer():
+            raise BudgetError(f"{where}: 'regression.min_loads' must be a whole number, got {value!r}")
+    return spec
+
+
+def regression_config(budgets):
+    """{"pct", "min_loads"} with defaults filled in, or None when the gate is off (no budgets or no "regression" key)."""
+    if not budgets or "regression" not in budgets:
+        return None
+    return {**REGRESSION, **budgets["regression"]}
+
+
+def regression(rows, pct, min_loads):
+    """The newest tracked version of one skill (rows from skills.versions, oldest first) against the one before:
+    {"new", "old", "change_pct", "new_loads", "old_loads", "flagged"}, or None with fewer than two tracked versions with
+    loads, or fewer than min_loads loads on either."""
+    rows = [r for r in rows if r["version"] and r["loads"] and r["tokens_median"] is not None]
+    if len(rows) < 2:
+        return None
+    old, new = rows[-2], rows[-1]
+    if old["loads"] < min_loads or new["loads"] < min_loads or old["tokens_median"] <= 0:
+        return None
+    change = 100 * (new["tokens_median"] / old["tokens_median"] - 1)
+    return {"new": new["tokens_median"], "old": old["tokens_median"], "change_pct": change, "new_loads": new["loads"],
+            "old_loads": old["loads"], "flagged": change > pct}
+
+
 def load(path=None):
     """The budgets as a dict, or None when there is no budgets.json. An unreadable or wrong file raises BudgetError."""
     path = path or paths.budgets()
@@ -58,7 +98,9 @@ def load(path=None):
     for key, value in data.items():
         if key not in _ROOT:
             raise BudgetError(f"{where}: unknown key {key!r}; allowed: {', '.join(sorted(_ROOT))}")
-        if key in ("skills", "agents"):
+        if key == "regression":
+            _regression(where, value)
+        elif key in ("skills", "agents"):
             if not isinstance(value, dict):
                 raise BudgetError(f"{where}: {key!r} must be an object of name -> budget")
             for name, spec in value.items():
@@ -124,6 +166,20 @@ def evaluate(conn, budgets, exclude_session=None):
                     items.append({"key": f"{kind}.{name}.per_load_tokens", "label": f"skill {name} per load", "used": None,
                                   "limit": spec["per_load_tokens"], "unit": "tokens", "pct": None, "state": "nodata",
                                   "text": f"skill {name} per load: no loads yet"})
+    cfg = regression_config(budgets)
+    if cfg:
+        by_skill = {}
+        for r in versions(conn):
+            by_skill.setdefault(r["skill"], []).append(r)
+        for name, rows in sorted(by_skill.items()):
+            g = regression(rows, cfg["pct"], cfg["min_loads"])
+            if g:
+                limit = g["old"] * (1 + cfg["pct"] / 100)
+                items.append({"key": f"regression.{name}", "label": f"skill {name} regression", "used": g["new"], "limit": limit,
+                              "unit": "tokens", "pct": round(100 * g["new"] / limit, 1),
+                              "state": "over" if g["flagged"] else "ok",
+                              "text": f"skill {name} regression {g['change_pct']:+.0f}% ({g['new']:,.0f} vs {g['old']:,.0f} tokens "
+                                      f"per load, limit +{cfg['pct']:g}%)"})
     return items
 
 
@@ -146,11 +202,18 @@ def warnings(result):
 
 
 def crossed(conn, budgets, session_id):
-    """Items whose state got worse because of this session (daily budgets; a per-load median is not per session)."""
+    """Items whose state got worse because of this session (daily budgets; a per-load median is not per session), and
+    regressed skills this session loaded."""
     rank = {"ok": 0, "near": 1, "over": 2}
     before = {i["key"]: i["state"] for i in evaluate(conn, budgets, session_id)}
-    return [i for i in evaluate(conn, budgets) if i["state"] in rank and i["key"] in before
-            and not i["key"].endswith("per_load_tokens") and rank[i["state"]] > rank.get(before[i["key"]], 0)]
+    now = evaluate(conn, budgets)
+    hit = [i for i in now if i["state"] in rank and i["key"] in before
+           and not i["key"].endswith("per_load_tokens") and not i["key"].startswith("regression.")
+           and rank[i["state"]] > rank.get(before[i["key"]], 0)]
+    # a regressed skill version is reported when this session loaded that skill
+    used = {r[0] for r in conn.execute("SELECT DISTINCT skill FROM requests WHERE session_id = ? AND skill IS NOT NULL", (session_id,))}
+    return hit + [i for i in now if i["key"].startswith("regression.") and i["state"] == "over"
+                  and i["key"][len("regression."):] in used]
 
 
 def text(result):
