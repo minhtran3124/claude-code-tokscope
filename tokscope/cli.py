@@ -29,10 +29,10 @@ def summary_errors(conn, args, where, params, fmt):
     elif fmt == "csv":
         print(summary_csv(found, errors.FIELDS), end="")
     else:
-        print(f"{args.by:<40} {'calls':>8} {'errors':>7} {'err %':>6} {'repeats':>8} {'interrupts':>10} {'api errors':>10} {'retries':>8}")
+        print(f"{args.by:<40} {'calls':>8} {'errors':>7} {'err %':>6} {'repeats':>8} {'interrupts':>10} {'api errors':>10} {'retries':>8} {'failed loads':>12}")
         for r in found:
             print(f"{r['key'][:40]:<40} {r['calls']:>8,} {r['errors']:>7,} {errors.pct(r['errors'], r['calls']):>6} "
-                  f"{r['repeats']:>8,} {r['interrupts']:>10,} {r['api_errors']:>10,} {r['retries']:>8,}")
+                  f"{r['repeats']:>8,} {r['interrupts']:>10,} {r['api_errors']:>10,} {r['retries']:>8,} {r['failed_loads']:>12,}")
     kinds = errors.classes(conn, where, params)
     if kinds:
         print("error classes: " + ", ".join(f"{k} {n}" for k, n in kinds), file=sys.stdout if fmt == "table" else sys.stderr)

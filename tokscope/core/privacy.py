@@ -42,7 +42,7 @@ COLUMNS = {
     "subagents": {"session_id": KEEP, "agent_id": KEEP, "agent_type": AGENT, "description": DESC, "tool_use_id": KEEP,
                   "spawn_depth": KEEP, "parent_agent_id": KEEP, "prompt_idx": KEEP, "skill": SKILL, "phase": PHASE},
     "skill_calls": {"session_id": KEEP, "ts": KEEP, "skill": SKILL, "phase": PHASE, "source": KEEP, "agent_id": KEEP,
-                    "prompt_idx": KEEP, "tool_use_id": KEEP, "text_hash": KEEP},
+                    "prompt_idx": KEEP, "tool_use_id": KEEP, "text_hash": KEEP, "failed": KEEP},
     "skill_versions": {"skill": SKILL, "version": KEEP, "path": CWD, "label": KEEP, "first_seen": KEEP, "last_seen": KEEP,
                        "source": KEEP, "body_hash": KEEP},
     "skill_load_versions": {"session_id": KEEP, "tool_use_id": KEEP, "skill": SKILL, "version": KEEP, "ts": KEEP},

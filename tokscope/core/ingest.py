@@ -51,6 +51,7 @@ def _input_hash(inp):
 
 
 SKILL_TEXT = "Base directory for this skill:"
+UNKNOWN_SKILL = "Unknown skill"  # the result text of a Skill call that names no skill
 # built-in CLI commands, not skills; they do not start a new prompt either
 BUILTIN_COMMANDS = {
     "add-dir", "agents", "artifacts", "bug", "clear", "compact", "config", "context", "cost", "doctor", "effort",
@@ -82,7 +83,7 @@ CREATE TABLE IF NOT EXISTS subagents (
 );
 CREATE TABLE IF NOT EXISTS skill_calls (
     session_id TEXT, ts TEXT, skill TEXT, phase TEXT, source TEXT, agent_id TEXT, prompt_idx INTEGER, tool_use_id TEXT,
-    text_hash TEXT
+    text_hash TEXT, failed INTEGER
 );
 CREATE TABLE IF NOT EXISTS prompts (
     session_id TEXT, prompt_idx INTEGER, ts TEXT, text TEXT, PRIMARY KEY (session_id, prompt_idx)
@@ -111,7 +112,7 @@ CREATE INDEX IF NOT EXISTS idx_snapshots_session ON statusline_snapshots (sessio
 """
 TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "turn_events", "headless_calls", "mcp_defs", "ingest_state", "sessions")
 # bump when the parser records something new, so unchanged transcripts are parsed again once
-PARSER_VERSION = 23
+PARSER_VERSION = 24
 TAIL_BYTES = 4096  # the bytes before a stored offset that must be unchanged for a file to count as appended to
 # what a resumed parse restores: the parser's state after the last complete line of every file
 STATE_KEYS = ("requests", "subagents", "skill_calls", "prompts", "tool_ctx", "tool_calls", "result_chars",
@@ -369,7 +370,7 @@ class SessionParser:
                 if kind == "assistant":
                     self._on_assistant(rec, agent_id, agent_type, state)
                 elif kind == "user":
-                    self._on_tool_results(rec)
+                    self._on_tool_results(rec, state)
                     self._on_task_done(rec)
                     self._on_command_skill_text(rec, agent_id, state if is_main else None)
                     if is_main:
@@ -455,11 +456,12 @@ class SessionParser:
         if load is not None and "text" not in load:
             load["text"] = text
 
-    def _on_tool_results(self, rec):
+    def _on_tool_results(self, rec, state):
         content = (rec.get("message") or {}).get("content")
         for block in content if isinstance(content, list) else []:
             if isinstance(block, dict) and block.get("type") == "tool_result" and block.get("tool_use_id"):
                 self.result_chars[block["tool_use_id"]] = len(_text(block.get("content")))
+                self._on_skill_result(block, state)
                 if block.get("is_error"):
                     call = self.tool_calls.get(block["tool_use_id"])
                     self.tool_err[block["tool_use_id"]] = error_class(call[2] if call else None, _text(block.get("content")))
@@ -468,6 +470,19 @@ class SessionParser:
                     # a background run returns at once; its end is the task notification (_on_task_done)
                     call["end_ts"] = None if call["background"] else rec.get("timestamp")
                     call["child_ids"] = " ".join(dict.fromkeys(SESSION_ID_RE.findall(_text(block.get("content")))))
+
+    def _on_skill_result(self, block, state):
+        """A Skill call that errored or named an unknown skill is a failed load: it gives back the skill and phase it
+        took, so later requests are not charged to a skill that never loaded (DECISIONS.md)."""
+        load = next((c for c in reversed(self.skill_calls) if c["tool_use_id"] == block["tool_use_id"]), None)
+        if load is None or load["source"] != "tool":
+            return
+        if not (block.get("is_error") or _text(block.get("content")).startswith(UNKNOWN_SKILL)):
+            return
+        load["failed"] = 1
+        if state["skill"] == load["skill"]:  # a later load in the same turn already replaced it: leave that one
+            state["skill"], state["phase"] = load["prev"]
+            self._retag(state)
 
     def _on_task_done(self, rec):
         content = (rec.get("message") or {}).get("content")
@@ -491,11 +506,13 @@ class SessionParser:
 
     def _load_skill(self, skill, source, rec, agent_id, state, tool_use_id=None):
         skill = canonical_name(skill, self.meta["cwd"] or rec.get("cwd"))
+        prev = (state["skill"], state["phase"])
         state["skill"] = skill
         state["phase"] = phase_of(skill, self.phases)
         self.skill_calls.append({
             "ts": rec.get("timestamp"), "skill": skill, "phase": state["phase"], "source": source,
             "agent_id": agent_id, "prompt_idx": state["prompt_idx"], "tool_use_id": tool_use_id, "_f": self._f,
+            "prev": prev,
         })
 
     def _on_assistant(self, rec, agent_id, agent_type, state):
@@ -610,6 +627,8 @@ def connect(db_path):
         conn.execute("ALTER TABLE skill_calls ADD COLUMN tool_use_id TEXT")  # joins a load to its version mark
     if "text_hash" not in {c[1] for c in conn.execute("PRAGMA table_info(skill_calls)")}:
         conn.execute("ALTER TABLE skill_calls ADD COLUMN text_hash TEXT")  # the SKILL.md text that load put in the context
+    if "failed" not in {c[1] for c in conn.execute("PRAGMA table_info(skill_calls)")}:
+        conn.execute("ALTER TABLE skill_calls ADD COLUMN failed INTEGER")  # refilled by the PARSER_VERSION bump
     have = {c[1] for c in conn.execute("PRAGMA table_info(requests)")}
     for name, typ in (("web_search_requests", "INTEGER"), ("web_fetch_requests", "INTEGER"), ("speed", "TEXT"),
                       ("inference_geo", "TEXT")):  # refilled by the PARSER_VERSION bump
@@ -735,10 +754,10 @@ def store(conn, project, parser, signature):
                      [(sid, server, n, chars) for server, (n, chars) in (parser.mcp_defs or {}).items()])
     conn.executemany("INSERT INTO prompts VALUES (?,?,?,?)", [(sid, i, ts, text) for i, ts, text in parser.prompts])
     conn.executemany(
-        "INSERT INTO skill_calls (session_id, ts, skill, phase, source, agent_id, prompt_idx, tool_use_id, text_hash) "
-        "VALUES (?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO skill_calls (session_id, ts, skill, phase, source, agent_id, prompt_idx, tool_use_id, text_hash, failed) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?)",
         [(sid, c["ts"], c["skill"], c["phase"], c["source"], c["agent_id"], c["prompt_idx"], c["tool_use_id"],
-          _load_text_hash(parser, c)) for c in parser.skill_calls],
+          _load_text_hash(parser, c), c.get("failed", 0)) for c in parser.skill_calls],
     )
 
 

@@ -417,7 +417,8 @@ def scan(conn, now=None):
     _ensure(conn)
     now = now or datetime.now(timezone.utc).isoformat()
     latest = {}  # skill -> (ts, cwd) of its latest load, by time not by string
-    for skill, ts, cwd in conn.execute("SELECT k.skill, k.ts, s.cwd FROM skill_calls k JOIN sessions s USING (session_id)"):
+    for skill, ts, cwd in conn.execute("SELECT k.skill, k.ts, s.cwd FROM skill_calls k JOIN sessions s USING (session_id) "
+                                           "WHERE COALESCE(k.failed, 0) = 0"):
         if ts and (skill not in latest or _dt(ts) > _dt(latest[skill][0])):
             latest[skill] = (ts, cwd)
     for skill, (_, cwd) in latest.items():
@@ -440,8 +441,9 @@ def scan(conn, now=None):
     conn.commit()
 
 
-def load_versions(conn):
-    """Every skill load with its version: (session_id, prompt_idx, skill, ts, version or None, exact)."""
+def load_versions(conn, failed=False):
+    """Every skill load with its version: (session_id, prompt_idx, skill, ts, version or None, exact). A load that
+    failed (unknown skill, error result) is no load: `failed=True` gives only those."""
     _ensure(conn)
     timeline, body, by_text = {}, {}, {}
     for skill, version, first, bh, source in conn.execute(
@@ -457,7 +459,8 @@ def load_versions(conn):
     out = []
     for sid, i, skill, ts, text, exact in conn.execute(
             "SELECT k.session_id, k.prompt_idx, k.skill, k.ts, k.text_hash, v.version FROM skill_calls k "
-            "LEFT JOIN skill_load_versions v ON v.session_id = k.session_id AND v.tool_use_id = k.tool_use_id"):
+            "LEFT JOIN skill_load_versions v ON v.session_id = k.session_id AND v.tool_use_id = k.tool_use_id "
+            f"WHERE COALESCE(k.failed, 0) = {int(failed)}"):
         version = exact
         if version is None and text:
             # the transcript kept the text this load read: the version with that text is it, whatever the dates say
@@ -472,9 +475,9 @@ def load_versions(conn):
     return out
 
 
-def _error_fields(e):
+def _error_fields(e, failed=0):
     calls, errors, repeats, interrupts = e or (0, 0, 0, 0)
-    return {"calls": calls, "errors": errors, "repeats": repeats, "interrupts": interrupts,
+    return {"calls": calls, "errors": errors, "repeats": repeats, "interrupts": interrupts, "failed_loads": failed,
             "error_rate": errors / calls if calls else None}
 
 
@@ -498,6 +501,9 @@ def versions(conn, skill=None, bench_project="%tokscope%-bench-%", where=None):
             f"SELECT r.session_id, r.prompt_idx, r.skill, count(*) FROM turn_events r JOIN sessions s USING (session_id) "
             f"{call_cond} AND r.skill IS NOT NULL AND r.kind = 'interrupt' GROUP BY 1, 2, 3", call_params):
         found.setdefault((sid, i, sk), [0, 0, 0, 0])[3] = n
+    fails = {}  # (skill, version) -> loads that failed
+    for _, _, sk, _, version, _ in load_versions(conn, failed=True):
+        fails[(sk, version)] = fails.get((sk, version), 0) + 1
     for key, (version, exact) in units.items():
         if key in tokens:
             per.setdefault((key[2], version), []).append((tokens[key], exact))
@@ -512,12 +518,17 @@ def versions(conn, skill=None, bench_project="%tokscope%-bench-%", where=None):
         us = per.get((sk, version), [])
         rows.append({"skill": sk, "version": version, "label": lbl, "first_seen": first, "source": source,
                      "loads": len(us), "exact": sum(e for _, e in us), "tokens_median": median(t for t, _ in us) if us else None,
-                     **_error_fields(errs.get((sk, version)))})
+                     **_error_fields(errs.get((sk, version)), fails.get((sk, version), 0))})
     for (sk, version), us in sorted(per.items(), key=lambda kv: kv[0][0]):
         if version is None and (not skill or sk == skill):
             rows.append({"skill": sk, "version": None, "label": None, "first_seen": None, "source": "before tracking",
                          "loads": len(us), "exact": 0, "tokens_median": median(t for t, _ in us),
-                         **_error_fields(errs.get((sk, version)))})
+                         **_error_fields(errs.get((sk, version)), fails.get((sk, version), 0))})
+    shown = {(r["skill"], r["version"]) for r in rows}
+    for (sk, version), n in sorted(fails.items(), key=lambda kv: kv[0][0]):  # a skill that never loaded has no other row
+        if (sk, version) not in shown and (not skill or sk == skill):
+            rows.append({"skill": sk, "version": version, "label": None, "first_seen": None, "source": "failed loads",
+                         "loads": 0, "exact": 0, "tokens_median": None, **_error_fields(None, n)})
     # per skill, oldest first; loads from before tracking lead
     return sorted(rows, key=lambda r: (r["skill"], _dt(r["first_seen"]) if r["first_seen"] else datetime.min.replace(tzinfo=timezone.utc)))
 

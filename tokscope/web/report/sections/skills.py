@@ -27,7 +27,7 @@ def _skill_versions(conn, level="full", where=None, skill=None):
     `where` (the dashboard's filters) counts only the loads it matches and drops versions with none."""
     by_skill = {}
     for r in skills.versions(conn, skill, where=where):
-        if r["loads"] or (r["version"] and not where):
+        if r["loads"] or r["failed_loads"] or (r["version"] and not where):
             by_skill.setdefault(r["skill"], []).append(r)
     if not by_skill and where:
         return 0, "<p class='note'>No skill loads match these filters.</p>"
@@ -52,7 +52,7 @@ def _skill_versions(conn, level="full", where=None, skill=None):
             label = f" v{v['label']}" if v["label"] else ""
             rows.append(((f"<code>{html.escape(v['version'] or 'before tracking')}</code>{html.escape(label)}", "raw"),
                          (v["first_seen"] or "")[:10] or "–", _loads(v["loads"]), v["exact"], v["tokens_median"] or 0,
-                         _vs(prev, v["tokens_median"]), _err(v["calls"], v["errors"]), v["repeats"], v["interrupts"]))
+                         _vs(prev, v["tokens_median"]), _err(v["calls"], v["errors"]), v["repeats"], v["interrupts"], v["failed_loads"]))
             prev = v["tokens_median"] if v["tokens_median"] is not None else prev
         diffs = []
         versions = [v["version"] for v in tracked(vs)]
@@ -70,7 +70,7 @@ def _skill_versions(conn, level="full", where=None, skill=None):
                 f'(limit +{cfg["pct"]:g}% with {cfg["min_loads"]}+ loads on both).</p>' if g and g["flagged"] else "")
         cards.append(f'<section class="card" id="v-{html.escape(name)}"><h3>{html.escape(name)}</h3>{warn}'
                      + _table(["version", "first seen", "loads", "exact", "median tokens / load", "vs before", "tool errors",
-                                       "repeats", "interrupts"], rows, 4)
+                                       "repeats", "interrupts", "failed loads"], rows, 4)
                      + "".join(diffs) + "</section>")
     parts = ["<h3>Changed</h3>" + "".join(cards) if cards else
              "<p class='note'>No skill has changed since tracking began. Edit one and its next load shows here, with the diff.</p>"]
@@ -91,6 +91,13 @@ def _skill_versions(conn, level="full", where=None, skill=None):
     if unknown:
         parts.append(f"<p class='note'>No folder found, so no version (built into Claude Code and not unpacked, or deleted): "
                      f"{html.escape(', '.join(unknown))}.</p>")
+    failed = {}
+    for k, vs in by_skill.items():
+        if sum(v["failed_loads"] for v in vs):
+            failed[k] = sum(v["failed_loads"] for v in vs)
+    if failed:
+        parts.append("<p class='note'>Failed loads (unknown skill or an error result; not counted as loads): "
+                     + html.escape(", ".join(f"{k} {n}" for k, n in sorted(failed.items()))) + ".</p>")
     return len(changed), f'<div class="versions">{"".join(parts)}</div>'
 
 
