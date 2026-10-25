@@ -262,6 +262,8 @@ class IngestTest(Fixture):
 
     def test_a_typed_command_and_a_later_skill_call_each_keep_their_own_text_hash(self):
         cmd = "<command-message>mycmd</command-message>\n<command-name>/mycmd</command-name>"
+        (self.tmp / "home" / ".claude" / "commands").mkdir(parents=True)
+        (self.tmp / "home" / ".claude" / "commands" / "mycmd.md").write_text("x")
         foo = "Base directory for this skill: /x/foo\n\n# Foo\nDo foo."
         meta = {"type": "user", "isMeta": True, "sourceToolUseID": "t1",
                 "message": {"role": "user", "content": [{"type": "text", "text": foo}]}}
@@ -296,6 +298,30 @@ class IngestTest(Fixture):
         self.assertEqual(self.rows("SELECT skill, phase, prompt_idx FROM requests"), [("feature-intake", "intake", 1)])
         self.assertEqual(self.rows("SELECT prompts FROM sessions"), [(1,)])
         self.assertEqual(self.rows("SELECT skill, source FROM skill_calls"), [("feature-intake", "command")])
+
+    def test_an_unlisted_builtin_command_keeps_the_phase_and_records_no_skill(self):
+        self.write_main([
+            human("<command-message>feature-intake</command-message>\n<command-name>/feature-intake</command-name>"), assistant("r1"),
+            human("<command-name>/rename</command-name><command-args>x</command-args>"),
+            human("unrelated"), assistant("r2"),
+        ])
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT skill, phase, prompt_idx FROM requests ORDER BY ts, request_key"),
+                         [("feature-intake", "intake", 1), (None, "intake", 2)])
+        self.assertEqual(self.rows("SELECT skill FROM skill_calls"), [("feature-intake",)])
+        self.assertEqual(self.rows("SELECT prompts FROM sessions"), [(2,)])
+
+    def test_a_typed_command_with_a_command_file_or_a_skill_text_still_loads(self):
+        cmds = self.tmp / "home" / ".claude" / "commands"
+        cmds.mkdir(parents=True)
+        (cmds / "mycmd.md").write_text("do it")
+        text = "Base directory for this skill: /x/other\n\n# Other"
+        meta = {"type": "user", "isMeta": True, "message": {"role": "user", "content": [{"type": "text", "text": text}]}}
+        self.write_main([human("<command-name>/mycmd</command-name>"), assistant("r1"),
+                         human("<command-name>/other</command-name>"), meta, assistant("r2")])
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT skill, source FROM skill_calls"), [("mycmd", "command"), ("other", "command")])
+        self.assertEqual(self.rows("SELECT prompts FROM sessions"), [(2,)])
 
     def test_subagent_inherits_context_of_spawning_call_and_nested_agent_its_parent(self):
         self.write_main([
