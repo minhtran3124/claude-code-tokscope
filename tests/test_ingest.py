@@ -311,6 +311,14 @@ class IngestTest(Fixture):
         self.assertEqual(self.rows("SELECT skill FROM skill_calls"), [("feature-intake",)])
         self.assertEqual(self.rows("SELECT prompts FROM sessions"), [(2,)])
 
+    def test_a_typed_command_without_a_file_is_still_a_prompt(self):
+        self.write_main([human("<command-name>/security-review</command-name>"), assistant("r1"),
+                         human("<command-name>/mcp__srv__p</command-name>"), assistant("r2")])
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT skill, prompt_idx FROM requests ORDER BY ts, request_key"),
+                         [("security-review", 1), ("mcp__srv__p", 2)])
+        self.assertEqual(self.rows("SELECT prompts FROM sessions"), [(2,)])
+
     def test_a_typed_command_with_a_command_file_or_a_skill_text_still_loads(self):
         cmds = self.tmp / "home" / ".claude" / "commands"
         cmds.mkdir(parents=True)

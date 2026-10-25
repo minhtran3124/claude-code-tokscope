@@ -21,7 +21,7 @@ from pathlib import Path
 from .. import paths
 from . import tz
 from .pricing import cost_usd, refresh_costs
-from .skills import canonical_name, command_known, loaded_text_hash
+from .skills import canonical_name, loaded_text_hash
 
 # a phase inherited from an earlier prompt: no skill ran in this request's prompt (follow-ups like "ok, continue")
 CARRIED = "(r.skill IS NULL AND r.phase IS NOT NULL)"
@@ -56,6 +56,7 @@ BUILTIN_COMMANDS = {
     "output-style", "permissions", "plugin", "pr-comments", "release-notes", "reload-plugins", "reload-skills",
     "remote-control", "resume", "rewind",
     "status", "statusline", "terminal-setup", "usage", "vim", "workflows",
+    "rename", "copy", "theme", "skills", "stats", "color", "keybindings", "feedback", "upgrade", "review-pr-comments",
 }
 
 SCHEMA = """
@@ -415,18 +416,9 @@ class SessionParser:
             return
         match = COMMAND_RE.search(_text(rec.get("message", {}).get("content")))
         command = match.group(1) if match else None
-        state.pop("pending", None)
-        if command in BUILTIN_COMMANDS:
-            return
-        if command and not self._is_skill_command(command, rec):
-            state["pending"] = rec  # a skill text in the next meta message makes it a skill after all
+        if command in BUILTIN_COMMANDS:  # any other typed /cmd (skill, command file, MCP prompt, /security-review) is a prompt
             return
         self._start_prompt(rec, command, state)
-
-    def _is_skill_command(self, command, rec):
-        """A typed /cmd is a skill only when a SKILL.md or command file resolves for it or phases.json lists it;
-        any other (/rename, /copy...) is a built-in that changes nothing about the prompt, phase or skill."""
-        return command.split(":")[-1] in self.phases or command_known(command, self.meta["cwd"] or rec.get("cwd"))
 
     def _start_prompt(self, rec, command, state):
         state["prompt_idx"] += 1
@@ -452,10 +444,6 @@ class SessionParser:
             return
         if agent_id is not None:
             return
-        pending = state.pop("pending", None) if state is not None else None
-        if pending:
-            match = COMMAND_RE.search(_text(pending.get("message", {}).get("content")))
-            self._start_prompt(pending, match.group(1), state)
         load = next((c for c in reversed(self.skill_calls) if c["source"] == "command"), None)
         if load is not None and "text" not in load:
             load["text"] = text
