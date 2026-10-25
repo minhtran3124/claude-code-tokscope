@@ -112,11 +112,30 @@ class CacheTest(unittest.TestCase):
         self.conn.execute("DELETE FROM statusline_snapshots")
         self.assertIsNone(cache.official_by(self.conn, "skill", COND, PARAMS))
 
+    def test_a_snapshot_in_the_same_second_as_a_request_counts_the_request(self):
+        self.req(1, 100, 0, cw5=100, skill="foo")
+        self.conn.execute("UPDATE requests SET ts = '2026-10-25T10:00:01.000Z'")
+        self.req(2, 100, 0, cw5=100, skill="bar")
+        self.conn.execute("UPDATE requests SET ts = '2026-10-25T10:00:05.400Z' WHERE skill = 'bar'")
+        pc = json.dumps({"misses": 1, "miss_recache_tokens": 10, "miss_causes": {"tools_changed": 1}})
+        self.conn.execute("INSERT INTO statusline_snapshots VALUES ('s1', '2026-10-25T10:00:05.900000+00:00', ?)", (pc,))
+        self.assertEqual([d["key"] for d in cache.official_by(self.conn, "skill", COND, PARAMS)], ["bar"])
+
     def test_record_snapshot_keeps_counters_only_and_skips_an_unchanged_one(self):
         data = {"session_id": "s1", "prompt_cache": {"misses": 3, "miss_recache_tokens": 900, "hit_ratio": 0.8,
                                                      "miss_causes": {"tools_changed": 3}, "tools_added": ["mcp__secret__x"]}}
         self.assertTrue(cache.record_snapshot(self.conn, data))
         self.assertFalse(cache.record_snapshot(self.conn, data))
+        data["prompt_cache"]["hit_ratio"] = 0.9  # only the hit ratio moved: not a new snapshot
+        self.assertFalse(cache.record_snapshot(self.conn, data))
+        data["prompt_cache"]["miss_causes"] = {"x" * 500: 1, **{f"c{i}": 1 for i in range(40)}}
+        self.assertTrue(cache.record_snapshot(self.conn, data))
+        stored = json.loads(self.conn.execute("SELECT prompt_cache FROM statusline_snapshots ORDER BY rowid DESC LIMIT 1").fetchone()[0])
+        self.assertEqual((len(stored["miss_causes"]), max(map(len, stored["miss_causes"]))), (20, 64))
+        self.conn.execute("DELETE FROM statusline_snapshots")
+        data["prompt_cache"]["miss_causes"] = {"tools_changed": 3}
+        data["prompt_cache"]["hit_ratio"] = 0.8
+        cache.record_snapshot(self.conn, data)
         blob = self.conn.execute("SELECT prompt_cache FROM statusline_snapshots").fetchone()[0]
         self.assertNotIn("secret", blob)
         self.assertEqual(json.loads(blob)["miss_causes"], {"tools_changed": 3})

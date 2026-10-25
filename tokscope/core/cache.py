@@ -146,14 +146,15 @@ def record_snapshot(conn, data):
     causes = pc.get("miss_causes")
     keep = {"misses": int(pc.get("misses") or 0), "miss_recache_tokens": int(pc.get("miss_recache_tokens") or 0),
             "hit_ratio": pc.get("hit_ratio") if isinstance(pc.get("hit_ratio"), (int, float)) else None,
-            "miss_causes": {str(k): int(n or 0) for k, n in causes.items()} if isinstance(causes, dict) else {}}
+            "miss_causes": {str(k)[:64]: int(n or 0) for k, n in list(causes.items())[:20]} if isinstance(causes, dict) else {}}
     blob = json.dumps(keep, sort_keys=True)
-    last = conn.execute("SELECT prompt_cache FROM statusline_snapshots WHERE session_id = ? ORDER BY ts DESC LIMIT 1",
+    last = conn.execute("SELECT prompt_cache FROM statusline_snapshots WHERE session_id = ? ORDER BY ts DESC, rowid DESC LIMIT 1",
                         (sid,)).fetchone()
-    if last and last[0] == blob:
+    # hit_ratio moves with every request, so only the miss counters decide whether the snapshot is new
+    if last and {k: v for k, v in json.loads(last[0]).items() if k != "hit_ratio"} == {k: v for k, v in keep.items() if k != "hit_ratio"}:
         return False
     conn.execute("INSERT INTO statusline_snapshots VALUES (?,?,?)",
-                 (sid, datetime.now(timezone.utc).isoformat(timespec="seconds"), blob))
+                 (sid, datetime.now(timezone.utc).isoformat(timespec="microseconds"), blob))
     conn.commit()
     return True
 
@@ -189,7 +190,7 @@ def official_by(conn, by, where="", params=()):
         prev = cur
         if d["misses"] <= 0:
             continue
-        row = conn.execute(f"SELECT {by} FROM requests WHERE session_id = ? AND ts <= ? AND COALESCE(agent_id, '') = '' "
+        row = conn.execute(f"SELECT {by} FROM requests WHERE session_id = ? AND substr(ts, 1, 19) <= substr(?, 1, 19) AND COALESCE(agent_id, '') = '' "
                            "ORDER BY ts DESC LIMIT 1", (session, ts)).fetchone()
         o = out.setdefault((row[0] if row and row[0] else "(none)"), {"misses": 0, "recache_tokens": 0, "causes": {}})
         o["misses"] += d["misses"]

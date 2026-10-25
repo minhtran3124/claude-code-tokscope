@@ -173,7 +173,7 @@ def redacted_copy(db_path, level, where="", params=(), redactor=None):
         # the filter names real projects, so it runs before the names are replaced
         conn.execute(f"DELETE FROM requests WHERE rowid NOT IN (SELECT r.rowid FROM requests r JOIN sessions s USING (session_id) {where})",
                      tuple(params))
-        for table in ("tool_calls", "turn_events"):  # keyed by session: drop the ones the filter left without requests
+        for table in ("tool_calls", "turn_events", "statusline_snapshots"):  # keyed by session: drop the ones the filter left without requests
             conn.execute(f"DELETE FROM {table} WHERE session_id NOT IN (SELECT session_id FROM requests)")
     (redactor or Redactor(level)).apply(conn)
     return conn
