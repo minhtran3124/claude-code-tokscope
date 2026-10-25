@@ -255,6 +255,17 @@ class SkillsTest(unittest.TestCase):
         self.assertEqual(skills.load_versions(self.conn)[0][2], "review")
         self.assertEqual(len(skills.load_versions(self.conn)), 1)
 
+    def test_failed_loads_follow_the_filters_and_skip_bench_sessions(self):
+        for sid, project in (("s1", "p"), ("s2", "b"), ("sb", "x-tokscope-bench-1")):
+            self.conn.execute("INSERT OR IGNORE INTO sessions (session_id, project) VALUES (?, ?)", (sid, project))
+            self.conn.execute("INSERT INTO skill_calls (session_id, ts, skill, phase, source, prompt_idx, tool_use_id, failed) "
+                              "VALUES (?, '2026-10-11T00:00:00Z', 'nonexistent', NULL, 'tool', 1, 't', 1)", (sid,))
+        n = lambda **k: sum(r["failed_loads"] for r in skills.versions(self.conn, **k))  # noqa: E731
+        self.assertEqual(n(), 2)  # bench excluded
+        self.assertEqual(n(where=("WHERE s.project = ?", ("p",))), 1)
+        self.assertEqual(n(where=("WHERE s.project = ? AND r.model = ?", ("p", "m"))), 1)
+        self.assertEqual(n(where=("WHERE s.project = ?", ("none",))), 0)
+
     def test_a_versions_error_rate_counts_failed_calls_and_interrupts_of_its_loads(self):
         self.load("2026-10-01T00:00:00Z", 1, tokens=900)
         self.load("2026-10-10T00:00:00Z", 2, "t2", tokens=100)

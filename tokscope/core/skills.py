@@ -522,8 +522,13 @@ def versions(conn, skill=None, bench_project="%tokscope%-bench-%", where=None):
             f"SELECT r.session_id, r.prompt_idx, r.skill, count(*) FROM turn_events r JOIN sessions s USING (session_id) "
             f"{call_cond} AND r.skill IS NOT NULL AND r.kind = 'interrupt' GROUP BY 1, 2, 3", call_params):
         found.setdefault((sid, i, sk), [0, 0, 0, 0])[3] = n
-    fails = {}  # (skill, version) -> loads that failed
-    for _, _, sk, _, version, _ in load_versions(conn, failed=True):
+    fails = {}  # (skill, version) -> loads that failed, under the same filters (the model filter has no column here)
+    shown_fails = {(sid, i, sk) for sid, i, sk in conn.execute(
+        f"SELECT r.session_id, r.prompt_idx, r.skill FROM skill_calls r JOIN sessions s USING (session_id) {call_cond} "
+        f"AND COALESCE(r.failed, 0) = 1", call_params)}
+    for sid, i, sk, _, version, _ in load_versions(conn, failed=True):
+        if (sid, i, sk) not in shown_fails:
+            continue
         fails[(sk, version)] = fails.get((sk, version), 0) + 1
     for key, (version, exact) in units.items():
         if key in tokens:
