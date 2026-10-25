@@ -268,11 +268,22 @@ def skill_dir(name, cwd=None):
 
 
 def _snapshot(skill, version, folder):
+    """Copy the folder to a temp sibling and rename it into place, so a crash never leaves a short snapshot.
+    A snapshot whose fingerprint is not the version (an older partial copy) is replaced, if the folder still is it."""
     dest = paths.home() / "data" / "skills" / skill.replace(":", "__") / version
-    for f in [] if dest.exists() else _files(folder):  # the same files the fingerprint covers
-        target = dest / f.relative_to(folder)
+    if dest.exists() and fingerprint(dest) == version:
+        return
+    if fingerprint(folder) != version:
+        return  # the folder moved on since this version; nothing true to copy
+    tmp = dest.with_name(f".{version}.tmp")
+    shutil.rmtree(tmp, ignore_errors=True)
+    for f in _files(folder):  # the same files the fingerprint covers
+        target = tmp / f.relative_to(folder)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(f, target)
+    if dest.exists():
+        shutil.rmtree(dest)
+    tmp.rename(dest)
 
 
 def _iso(ts):
@@ -291,6 +302,8 @@ def record(conn, skill, folder, seen_at, source, version=None):
         first = _first(known[0], seen_at) if source == "load" else known[0]  # a load is proof it existed then; a scan's date is an estimate
         conn.execute("UPDATE skill_versions SET last_seen = ?, first_seen = ? WHERE skill = ? AND version = ?",
                      (_last(known[1], seen_at), first, skill, version))
+        if folder:
+            _snapshot(skill, version, folder)  # repairs a missing or partial snapshot
     else:
         conn.execute("INSERT INTO skill_versions VALUES (?,?,?,?,?,?,?,?)",
                      (skill, version, str(folder) if folder else None, label(folder) if folder else None, seen_at, seen_at,
