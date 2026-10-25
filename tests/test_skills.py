@@ -379,3 +379,45 @@ class SkillsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SkillsExportTest(SkillsTest):
+    def seed(self):
+        self.load("2026-10-01T00:00:00Z", 1, "t1", tokens=100)
+        skills.record_load(self.conn, "s1", "t1", "review", str(self.repo / "src"), "2026-10-01T00:00:00Z")
+        write_skill(self.skill, "---\nname: review\nversion: 1.3.0\n---\n# v2\n")
+        self.load("2026-10-10T00:00:00Z", 2, "t2", tokens=150)
+        skills.record_load(self.conn, "s1", "t2", "review", str(self.repo / "src"), "2026-10-10T00:00:00Z")
+        self.conn.commit()
+
+    def out(self, fmt):
+        from tokscope.cli import skills_text
+        with mock.patch("tokscope.cli.DB", self.tmp / "t.db"):
+            return skills_text(None, fmt)
+
+    def test_json_rows_carry_usage_and_regression(self):
+        self.seed()
+        rows = json.loads(self.out("json"))
+        self.assertEqual([r["loads"] for r in rows], [1, 1])
+        self.assertEqual([r["tokens_median"] for r in rows], [100, 150])
+        self.assertEqual([r["regression_pct"] for r in rows], [None, 50.0])
+        self.assertTrue(rows[0]["last_seen"])
+        self.assertEqual(set(rows[0]), set(skills.EXPORT))
+
+    def test_csv_has_header_and_one_row_per_version(self):
+        import csv
+        import io
+        self.seed()
+        got = list(csv.DictReader(io.StringIO(self.out("csv"))))
+        self.assertEqual(tuple(got[0]), skills.EXPORT)
+        self.assertEqual([r["tokens_median"] for r in got], ["100", "150"])
+
+    def test_table_stays_the_default(self):
+        self.seed()
+        self.assertTrue(self.out("table").startswith("skill / version"))
+
+    def test_csv_quotes_formula_cells(self):
+        row = {"skill": "=cmd", "version": "+x", "label": "-1", "source": "@s", "first_seen": None, "last_seen": None,
+               "loads": 1, "exact": 0, "tokens_median": 5, "calls": 0, "errors": 0, "repeats": 0, "interrupts": 0, "failed_loads": 0}
+        cells = skills.to_csv([row]).splitlines()[1].split(",")
+        self.assertEqual(cells[:4], ["'=cmd", "'+x", "'-1", "'@s"])
