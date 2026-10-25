@@ -3,6 +3,7 @@
 import json
 import shutil
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -49,6 +50,14 @@ class ServerCommand(unittest.TestCase):
         self.assertEqual(path[:2], ["/usr/bin", "/bin"])
         self.assertIn("/opt/homebrew/bin", path)
         self.assertIn("/Users/m/.local/bin", path)
+
+    def test_darwin_data_folder_follows_paths_home(self):
+        r = server_command(platform="darwin", root="/r", port=1, env={"TOKSCOPE_HOME": "/custom"}, home="/nohome")
+        self.assertEqual(r["env"]["TOKSCOPE_HOME"], "/custom")
+        with tempfile.TemporaryDirectory() as h:
+            (Path(h) / ".local" / "share" / "tokscope").mkdir(parents=True)
+            r = server_command(platform="darwin", root="/r", port=1, env={}, home=h)
+            self.assertEqual(r["env"]["TOKSCOPE_HOME"], h + "/.local/share/tokscope")
 
     def test_darwin_path_has_no_duplicates(self):
         r = server_command(platform="darwin", root="/r", port=1, env={"PATH": "/opt/homebrew/bin:/usr/bin"}, home="/h")

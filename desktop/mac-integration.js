@@ -16,7 +16,10 @@ function wrapperScript(root) {
   return [
     "#!/bin/sh",
     MARK,
-    `PYTHONPATH=${q(root)} PYTHONNOUSERSITE=1 TOKSCOPE_HOME="\${TOKSCOPE_HOME:-$HOME/Library/Application Support/tokscope}" \\`,
+    'if [ -z "$TOKSCOPE_HOME" ]; then',
+    '  if [ -d "$HOME/.local/share/tokscope" ]; then TOKSCOPE_HOME="$HOME/.local/share/tokscope"; else TOKSCOPE_HOME="$HOME/Library/Application Support/tokscope"; fi',
+    "fi",
+    `PYTHONPATH=${q(root)} PYTHONNOUSERSITE=1 TOKSCOPE_HOME="$TOKSCOPE_HOME" \\`,
     `  exec ${q(path.join(root, "python", "bin", "python3"))} -s -m tokscope.cli "$@"`,
     "",
   ].join("\n");
