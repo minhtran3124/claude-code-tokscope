@@ -1,9 +1,10 @@
 // A window around `tokscope serve`: start the server on a free port, show it, stop it on quit.
-const { app, BrowserWindow, Menu, WebContentsView, nativeTheme, shell } = require("electron");
+const { app, BrowserWindow, Menu, WebContentsView, dialog, nativeTheme, shell } = require("electron");
 const { statusPage } = require("./loading");
 const { serverCommand } = require("./server-command");
+const mac = require("./mac-integration");
 const os = require("os");
-const { spawn } = require("child_process");
+const { spawn, execFile } = require("child_process");
 const net = require("net");
 const http = require("http");
 const path = require("path");
@@ -170,11 +171,54 @@ function reloadDashboard() {
 
 // The default menu's Reload would reload the dashboard with no loading page, so the menu gets our own Reload items
 // (on Linux the menu sees Ctrl+R before the page does, so a key handler on the page would never run).
+// Start at login: the service is opt-in, so the box starts empty and follows `tokscope service status`.
+let loginOn = false;
+
+function runService(action) {
+  const run = mac.serviceCommand({ action, root: ROOT, home: os.homedir(), env: process.env });
+  return new Promise((resolve) => {
+    execFile(run.cmd[0], run.cmd.slice(1), { env: { ...process.env, ...run.env } }, (err, out, errOut) => resolve({ ok: !err, text: String(out || errOut || (err && err.message) || "").trim() }));
+  });
+}
+
+async function refreshLogin() {
+  loginOn = (await runService("status")).ok;
+  Menu.setApplicationMenu(appMenu());
+}
+
+async function toggleLogin() {
+  const r = await runService(loginOn ? "uninstall" : "install");
+  if (!r.ok) dialog.showErrorBox("Start at login", r.text || "the service command failed");
+  await refreshLogin();
+}
+
+async function installCli() {
+  try {
+    let r = mac.installCli({ root: ROOT, home: os.homedir() });
+    if (r.status === "exists") {
+      const { response } = await dialog.showMessageBox({ type: "question", buttons: ["Replace", "Cancel"], defaultId: 1, message: `${r.path} exists and was not written by tokscope.`, detail: "Replace it with the tokscope command line tool?" });
+      if (response !== 0) return;
+      r = mac.installCli({ root: ROOT, home: os.homedir(), force: true });
+    }
+    const dir = path.dirname(r.path);
+    const note = mac.onPath(dir, process.env.PATH) ? "" : `\n\n${dir} is not on the PATH of this app; add it to your shell profile (export PATH="$HOME/.local/bin:$PATH") to run tokscope from a terminal.`;
+    dialog.showMessageBox({ message: `Command line tool ${r.status}: ${r.path}`, detail: "The statusline and the SessionEnd hook can call tokscope now." + note });
+  } catch (e) {
+    dialog.showErrorBox("Install command line tool", e.message);
+  }
+}
+
 function appMenu() {
-  const mac = process.platform === "darwin" ? [{ role: "appMenu" }] : [];
+  const isMac = process.platform === "darwin";
+  const macMenu = isMac ? [{ role: "appMenu" }] : [];
+  const macFile = isMac ? [
+    { type: "separator" },
+    { label: "Start at login", type: "checkbox", checked: loginOn, click: toggleLogin },
+    { label: "Install command line tool", click: installCli },
+  ] : [];
   return Menu.buildFromTemplate([
-    ...mac,
-    { role: "fileMenu" },
+    ...macMenu,
+    { label: "File", submenu: [{ role: "close" }, ...macFile] },
     { role: "editMenu" },
     { label: "View", submenu: [
       { label: "Reload", accelerator: "CmdOrCtrl+R", click: reloadDashboard },
@@ -193,11 +237,26 @@ function showDashboard(url) {
   win.webContents.loadURL(url).catch(() => {});  // a failure arrives as did-fail-load; the cover goes when it has loaded
 }
 
+// a Dock click with no window: show the dashboard again
+function reopen() {
+  if (!base) return;
+  createWindow();
+  showDashboard(base);
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
-  app.whenReady().then(() => { Menu.setApplicationMenu(appMenu()); return start(); }).catch((e) => showFailure(e.message));
+  app.on("activate", () => { if (mac.shouldReopen({ windowCount: BrowserWindow.getAllWindows().length })) reopen(); });
+  app.whenReady().then(() => {
+    Menu.setApplicationMenu(appMenu());
+    if (process.platform === "darwin") {
+      app.setAboutPanelOptions(mac.aboutOptions({ version: app.getVersion() }));
+      refreshLogin();
+    }
+    return start();
+  }).catch((e) => showFailure(e.message));
   app.on("window-all-closed", () => app.quit());
   // every way out stops the server: a normal quit, app.exit() on a failed start, and a signal (not SIGKILL)
   process.on("exit", () => { if (server) server.kill(); });
