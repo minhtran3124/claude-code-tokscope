@@ -17,10 +17,13 @@ import sqlite3
 import subprocess
 import sys
 import threading
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .. import paths
+from ..core import skills
 from ..core.markdown import frontmatter
+from .changes import BENCH_PROJECT
 
 HIDDEN = {"__pycache__", "node_modules"}
 MAX_VIEW = 512_000
@@ -132,12 +135,38 @@ def read(skill, rel):
         return None, f"a binary file ({len(data):,} bytes)"
 
 
-def usage(conn):
-    """{skill name: (loads, last load ts)} from the Skill calls transcripts recorded."""
+def usage(conn, found, days=None, project=None, now=None):
+    """{skill id: (loads, last load ts)} from the Skill calls of real sessions (bench ones left out, as versions() does),
+    in the days and project given. A load counts for the skill folder Claude Code loaded it from in that session, so two
+    skills of one name in different scopes keep their own counts; a name that matches no folder (a frontmatter name
+    unlike its folder) falls back to the skill with that name."""
+    where, params = ["s.project NOT LIKE ?"], [BENCH_PROJECT]
+    if days:
+        where.append("k.ts >= ?")
+        since = (now or datetime.now(timezone.utc)) - timedelta(days=days)
+        params.append(since.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"))
+    if project:
+        where.append("s.project = ?")
+        params.append(project)
     try:
-        return {k: (n, last) for k, n, last in conn.execute("SELECT skill, count(*), max(ts) FROM skill_calls GROUP BY skill")}
+        rows = conn.execute("SELECT k.skill, s.cwd, count(*), max(k.ts) FROM skill_calls k JOIN sessions s USING (session_id) "
+                            f"WHERE {' AND '.join(where)} GROUP BY 1, 2", params).fetchall()
     except sqlite3.OperationalError:
         return {}
+    by_folder, by_name = {}, {}
+    for k in found:
+        by_folder.setdefault(k["folder"].resolve(), k)
+        by_name.setdefault(k["name"], k)
+        by_name.setdefault(k["dir"], k)
+    out = {}
+    for name, cwd, n, last in rows:
+        folder = skills.skill_dir(name, cwd)
+        k = by_folder.get(folder) if folder else None
+        k = k or by_name.get(name)
+        if k:
+            n0, last0 = out.get(k["id"], (0, None))
+            out[k["id"]] = (n0 + n, max(last0 or "", last or "") or None)
+    return out
 
 
 def ste_linter(found):
