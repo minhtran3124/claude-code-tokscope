@@ -2,7 +2,8 @@
 
 A version is the SHA-256 of the skill's folder (relative paths and bytes), so the same content has the same
 version on any machine, and a touch or checkout that changes nothing is no change. Only what the skill can put in
-front of the model counts: hidden files, caches, eval/test folders and files over 1 MB are left out, so an eval run
+front of the model counts: hidden files, caches, the skill's top-level eval/test/results/fixtures folders and files over 1 MB are left out
+(a nested assets/results file counts). CRLF in text files is hashed as LF (a skill with CRLF files got a new version once), so an eval run
 writing results into the folder is not a new version. A skill built into Claude Code has no folder on disk; its
 version is the Claude Code version (cc-2.1.304).
 Versions are recorded two ways:
@@ -41,7 +42,8 @@ TOKENS = "(input + cache_read + cache_write_5m + cache_write_1h + output)"
 FRONTMATTER_VERSION = re.compile(r"^version:\s*['\"]?([^'\"\s]+)", re.MULTILINE)
 
 
-SKIP_DIRS = {"__pycache__", "node_modules", "eval", "evals", "tests", "test", "fixtures", "results"}
+SKIP_DIRS = {"__pycache__", "node_modules"}  # skipped at any depth
+BENCH_DIRS = {"eval", "evals", "tests", "test", "fixtures", "results"}  # skipped only as a skill's top-level folder
 MAX_BYTES = 1_000_000
 BUNDLED_ROOT = Path("/tmp")  # Claude Code unpacks its built-in skills' files under /tmp/claude-<uid>/bundled-skills
 
@@ -127,19 +129,32 @@ def _skipped(rel):
     return any(part.startswith(".") or part in SKIP_DIRS or part.endswith(".pyc") for part in rel.parts)
 
 
+def _in_skill(rel):
+    """Whether a path inside a skill folder is left out: hidden, cache or pyc anywhere, or a benchmarking folder
+    (eval, tests, results...) directly under the skill, so a nested assets/results file still counts."""
+    return _skipped(rel) or (len(rel.parts) > 1 and rel.parts[0] in BENCH_DIRS)
+
+
 def _files(folder):
     return sorted(p for p in folder.rglob("*")
-                  if p.is_file() and not _skipped(p.relative_to(folder)) and p.stat().st_size <= MAX_BYTES)
+                  if p.is_file() and not _in_skill(p.relative_to(folder)) and p.stat().st_size <= MAX_BYTES)
+
+
+def _content(f):
+    """A file's bytes for hashing: text (no NUL in its first 8 KB) has CRLF turned into LF, binary is untouched."""
+    data = f.read_bytes()
+    return data if b"\0" in data[:8192] else data.replace(b"\r\n", b"\n")
 
 
 def fingerprint(folder):
-    """12 hex chars of SHA-256 over every file's relative path and bytes; None when there is no SKILL.md."""
+    """12 hex chars of SHA-256 over every file's relative path and bytes (text with CRLF read as LF, so a Windows
+    checkout has the same version); None when there is no SKILL.md."""
     folder = Path(folder)
     if not (folder / "SKILL.md").is_file():
         return None
     h = hashlib.sha256()
     for f in _files(folder):
-        h.update(f.relative_to(folder).as_posix().encode() + b"\0" + f.read_bytes() + b"\0")
+        h.update(f.relative_to(folder).as_posix().encode() + b"\0" + _content(f) + b"\0")
     return h.hexdigest()[:12]
 
 
