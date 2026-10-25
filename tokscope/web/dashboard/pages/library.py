@@ -434,7 +434,7 @@ def _library_skill(k, qs, used, conn, linter=None, found=(), back="/library", rn
                f'An optimize run is going</b><span>Started <time data-ts="{html.escape(going[0]["started"])}" data-fmt="hm">{html.escape(going[0]["started"][11:16])} UTC</time> · see its progress</span></a>') + opt
     # a skill with one version and every load tracked has nothing to compare
     versions = (f'<section class="card" id="versions"><h2 class="sec">Versions</h2>{_skill_versions(conn, "full", skill=k["dir"])[1]}</section>'
-                if len(skills.versions(conn, k["dir"])) > 1 else "")
+                if len(skills.versions(conn, k["dir"])) > 1 or skills.source_split(conn, k["dir"]) else "")
     return (f'{head}{opt}<div class="libview"><nav class="card files" aria-label="Files">{tree}</nav>'
             f'<article class="card viewer"><h3 class="path">{html.escape(rel)}</h3>{view}</article></div>{versions}')
 

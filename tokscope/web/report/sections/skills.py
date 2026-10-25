@@ -91,6 +91,13 @@ def _skill_versions(conn, level="full", where=None, skill=None):
     if unknown:
         parts.append(f"<p class='note'>No folder found, so no version (built into Claude Code and not unpacked, or deleted): "
                      f"{html.escape(', '.join(unknown))}.</p>")
+    split = skills.source_split(conn, skill, where=where)
+    if split:  # typed /command loads against loads the model made with the Skill tool
+        cell = lambda d: (f"{d[0]} · {_tok(d[1])}" if d else "–")  # noqa: E731
+        rows = [(k, cell(by.get("command")), cell(by.get("tool"))) for k, by in sorted(split.items()) if k in by_skill]
+        if rows:
+            parts.append("<h3>Loads by source</h3><p class='note'>Typed as a /command, or chosen by the model with the Skill "
+                         "tool: loads · median tokens per load.</p>" + _table(["skill", "typed (/command)", "model (Skill tool)"], rows, -1))
     failed = {}
     for k, vs in by_skill.items():
         if sum(v["failed_loads"] for v in vs):
