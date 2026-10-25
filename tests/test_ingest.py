@@ -233,6 +233,18 @@ class IngestTest(Fixture):
         for args in ("ENG-1 creds", "ddtrace 2 to 4"):
             self.assertIn(placeholder, loaded_text_hash(inline.format(args), args).split())
 
+    def test_an_argument_that_also_occurs_elsewhere_in_the_body_still_matches_the_placeholder_body(self):
+        head = "Base directory for this skill: /x\n\n"
+        real = loaded_text_hash(head + "Run $ARGUMENTS on the config; the end")
+        self.assertIn(real, loaded_text_hash(head + "Run the on the config; the end", "the").split())
+
+    def test_positional_placeholders_are_put_back(self):
+        head = "Base directory for this skill: /x\n\n"
+        for body, loaded in (("Move $0 to $1.", "Move a.py to b.py."), ("Move $ARGUMENTS[0] to $ARGUMENTS[1].", "Move a.py to b.py.")):
+            self.assertIn(loaded_text_hash(head + body), loaded_text_hash(head + loaded, "a.py b.py").split())
+        quoted = loaded_text_hash(head + "Say $0 then $1.")
+        self.assertIn(quoted, loaded_text_hash(head + "Say hello world then two.", '"hello world" two').split())
+
     def test_a_short_argument_that_is_also_a_word_of_the_skill_still_matches_the_plain_text(self):
         text = "Base directory for this skill: /x\n\n# Wiki\nRun update when the source changed.\n\n\nARGUMENTS: update"
         plain = loaded_text_hash("Base directory for this skill: /x\n\n# Wiki\nRun update when the source changed.")
