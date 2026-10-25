@@ -218,7 +218,7 @@ function appMenu() {
   ] : [];
   return Menu.buildFromTemplate([
     ...macMenu,
-    { label: "File", submenu: [{ role: "close" }, ...macFile] },
+    { label: "File", submenu: [{ role: isMac ? "close" : "quit" }, ...macFile] },
     { role: "editMenu" },
     { label: "View", submenu: [
       { label: "Reload", accelerator: "CmdOrCtrl+R", click: reloadDashboard },

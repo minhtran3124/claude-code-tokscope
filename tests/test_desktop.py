@@ -177,6 +177,9 @@ class MacIntegration(unittest.TestCase):
         self.assertIn("mac-integration.js", json.loads((DESKTOP / "package.json").read_text())["build"]["files"])
         subprocess.run([NODE, "--check", str(DESKTOP / "main.js")], check=True)
 
+    def test_file_menu_keeps_quit_off_mac(self):
+        self.assertIn('{ role: isMac ? "close" : "quit" }', (DESKTOP / "main.js").read_text())
+
 
 class FetchPython(unittest.TestCase):
     def test_dry_run_downloads_nothing(self):
