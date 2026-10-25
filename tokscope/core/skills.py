@@ -210,6 +210,7 @@ def record(conn, skill, folder, seen_at, source, version=None):
 
 def record_load(conn, session_id, tool_use_id, skill, cwd, ts):
     """The exact version one Skill call loaded, hashed while the call is still fresh (the mod's mark)."""
+    skill = canonical_name(skill, cwd)  # as ingest names it, so a bare plugin skill is one row, not two
     folder = skill_dir(skill, cwd)
     version = record(conn, skill, folder, ts, "load", None if folder else builtin_version(skill))
     if version and tool_use_id:

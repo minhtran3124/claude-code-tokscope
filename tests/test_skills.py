@@ -91,6 +91,17 @@ class SkillsTest(unittest.TestCase):
         kept = self.tmp / "data-home" / "data" / "skills" / "review" / v1 / "SKILL.md"
         self.assertEqual(kept.read_text(), (self.skill / "SKILL.md").read_text())
 
+    def test_a_mark_for_a_bare_plugin_skill_name_is_one_version_row_under_the_canonical_name(self):
+        plug = write_skill(self.tmp / "cache" / "ce" / "3.9" / "skills" / "simplify")
+        plugins = self.home / ".claude" / "plugins"
+        plugins.mkdir(parents=True)
+        (plugins / "installed_plugins.json").write_text(json.dumps({"plugins": {"ce@market": [
+            {"scope": "user", "installPath": str(plug.parent.parent)}]}}))
+        v = skills.record_load(self.conn, "s1", "t1", "simplify", str(self.repo / "src"), "2026-10-10T00:00:00Z")
+        self.assertEqual(self.conn.execute("SELECT skill, version FROM skill_versions").fetchall(), [("ce:simplify", v)])
+        self.assertEqual(self.conn.execute("SELECT session_id, tool_use_id, skill, version FROM skill_load_versions").fetchall(),
+                         [("s1", "t1", "ce:simplify", v)])
+
     def test_an_edit_seen_at_ingest_is_a_new_version_dated_by_the_file_and_later_loads_take_it(self):
         self.load("2026-10-01T00:00:00Z", 1)                     # before tokscope ever saw the skill
         self.load("2026-10-10T00:00:00Z", 2, "t2")
