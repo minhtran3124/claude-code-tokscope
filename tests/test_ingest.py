@@ -537,7 +537,6 @@ class IncrementalTest(Fixture):
                          [("a-orig", "r1"), ("b-fork", "r3")])
 
     def test_a_truncated_or_rewritten_file_is_parsed_in_full(self):
-        main = self.project / f"{SID}.jsonl"
         self.write_main(self.BASE + self.MORE)
         self.run_ingest()
         self.write_main(self.BASE[:3])  # shorter than the stored offset
