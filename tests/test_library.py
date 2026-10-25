@@ -86,6 +86,12 @@ class LibraryTest(unittest.TestCase):
         self.assertEqual(library.usage(self.conn, found, days=30)[mine][0], 1)
         self.assertNotIn(mine, library.usage(self.conn, found, project="-other"))
 
+    def test_api_library_counts_loads_by_skill_id(self):
+        from tokscope.web.dashboard import server
+        self._calls([("s1", "2999-01-01T00:00:00.000Z", "mine-a")])
+        rows = {r["name"]: r for r in server.api(self.conn, "library", {}, "")}
+        self.assertEqual((rows["mine-a"]["loads"], rows["linked"]["loads"]), (1, 0))
+
     def test_same_name_in_two_scopes_keeps_own_counts_and_a_frontmatter_name_matches(self):
         skill(self.home / ".claude" / "skills" / "proj-own", "proj-own")           # personal twin of the project skill
         skill(self.home / ".claude" / "skills" / "folder-x", "fm-name")
