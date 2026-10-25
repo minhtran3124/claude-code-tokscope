@@ -77,6 +77,20 @@ class SkillsTest(unittest.TestCase):
         (self.skill / "dataset.jsonl").write_bytes(b"x" * (skills.MAX_BYTES + 1))
         self.assertEqual(skills.fingerprint(self.skill), before)
 
+    def test_only_top_level_bench_folders_are_ignored_and_crlf_is_the_same_as_lf(self):
+        before = skills.fingerprint(self.skill)
+        (self.skill / "assets" / "results").mkdir(parents=True)
+        (self.skill / "assets" / "results" / "r.md").write_text("kept")
+        self.assertNotEqual(skills.fingerprint(self.skill), before)
+        (self.skill / "tests").mkdir()
+        (self.skill / "tests" / "t.md").write_text("ignored")
+        lf = write_skill(self.tmp / "lf" / "review", "a\nb\n")
+        crlf = write_skill(self.tmp / "crlf" / "review", "a\r\nb\r\n")
+        self.assertEqual(skills.fingerprint(lf), skills.fingerprint(crlf))
+        (lf / "x.bin").write_bytes(b"\0a\nb")
+        (crlf / "x.bin").write_bytes(b"\0a\r\nb")
+        self.assertNotEqual(skills.fingerprint(lf), skills.fingerprint(crlf))
+
     def test_a_built_in_skill_takes_the_claude_code_version(self):
         (self.tmp / "claude-1000" / "bundled-skills" / "2.1.304" / "abc" / "dataviz").mkdir(parents=True)
         with mock.patch.object(skills, "BUNDLED_ROOT", self.tmp):
