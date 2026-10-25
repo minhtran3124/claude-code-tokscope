@@ -62,6 +62,11 @@ class SkillBenchTest(unittest.TestCase):
         got = [skills.check_load(self.conn, s, "review", self.v1) for s in ("ran-v1", "ran-v2-instead", "no-text", "never")]
         self.assertEqual(got, ["ok", "other text", "unconfirmed", "not loaded"])
 
+    def test_a_failed_load_is_not_a_load_for_the_check(self):
+        self.conn.execute("INSERT INTO skill_calls (session_id, ts, skill, source, prompt_idx, tool_use_id, failed) "
+                          "VALUES ('only-failed', '2026-10-20', 'review', 'tool', 1, 't1', 1)")
+        self.assertEqual(skills.check_load(self.conn, "only-failed", "review", self.v1), "not loaded")
+
     def test_a_skill_benchmark_runs_each_version_interleaved_in_its_own_folder_and_records_the_check(self):
         task = {"name": "t", "repo": "r", "commit": "c", "paths": [], "prompt": "/review {version}", "grader": {}}
         snapshot = self.tmp / "bench" / "snapshots" / "s-abc"

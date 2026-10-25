@@ -650,7 +650,7 @@ def pin(skill, version, root):
 def check_load(conn, session_id, skill, version):
     """Did this session load the pinned version? 'ok', 'other text' (another copy of the skill won, e.g. a personal
     one), 'not loaded' (the model never called it), or 'unconfirmed' (Claude Code kept no text to compare)."""
-    texts = [t for (t,) in conn.execute("SELECT text_hash FROM skill_calls WHERE session_id = ? AND skill = ?", (session_id, skill))]
+    texts = [t for (t,) in conn.execute("SELECT text_hash FROM skill_calls WHERE session_id = ? AND skill = ? AND COALESCE(failed, 0) = 0", (session_id, skill))]
     if not texts:
         return "not loaded"
     want = _sha(_body((snapshot_dir(skill, version) / "SKILL.md").read_text(errors="replace")))

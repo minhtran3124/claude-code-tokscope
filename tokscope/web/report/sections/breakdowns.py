@@ -179,7 +179,7 @@ def _breakdowns(conn, cond, params):
     carried = sum(c for _, _, _, c, _, _ in phase)
     owner = q(f"SELECT CASE WHEN agent_id IS NULL THEN 'main thread' ELSE 'agent: ' || agent_type END, sum({TOKENS}), sum(output), "
               f"sum(cost_usd) {base} GROUP BY 1 ORDER BY 2 DESC")
-    loads = dict(conn.execute("SELECT skill, count(*) FROM skill_calls GROUP BY skill"))
+    loads = dict(conn.execute("SELECT skill, count(*) FROM skill_calls WHERE COALESCE(failed, 0) = 0 GROUP BY skill"))
     skills = q(f"SELECT skill, count(DISTINCT session_id), sum({TOKENS}), sum(cost_usd), "
                f"sum(CASE WHEN agent_id IS NULL THEN {TOKENS} ELSE 0 END), sum(CASE WHEN agent_id IS NOT NULL THEN {TOKENS} ELSE 0 END) "
                f"{base} AND skill IS NOT NULL GROUP BY skill ORDER BY 3 DESC LIMIT 30")
