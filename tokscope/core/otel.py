@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from .. import paths
 
 HEAD_BYTES = 4096  # the start of a file that must be unchanged for it to count as appended to
+BENCH_LIKE = "%tokscope%-bench-%"  # features.changes.BENCH_PROJECT (core cannot import it; tests/test_otel.py checks they agree)
 MATCH_SECONDS = 120  # an event and its transcript request must be this close in time
 INT64 = 2**63 - 1
 BAD_LINE = (ValueError, TypeError, AttributeError, OverflowError, RecursionError, sqlite3.Error)
@@ -170,7 +171,9 @@ def cost_check(conn, cond="", params=(), since=None, scoped=False):
            "tk": sum(m["tk"] for m in models), "unmatched": None, "only": None}
     if scoped:
         return out
-    since_sql, sp = ("AND o.ts >= ?", (since,)) if since else ("", ())
+    # bench sessions are left out, as in the matched pairs
+    since_sql, sp = ("AND o.ts >= ?", (BENCH_LIKE, since)) if since else ("", (BENCH_LIKE,))
+    since_sql = "AND (o.session_id IS NULL OR o.session_id NOT IN (SELECT session_id FROM sessions WHERE project LIKE ?)) " + since_sql
     out["unmatched"] = conn.execute(
         "SELECT count(*), sum(cost_usd) FROM otel_requests o WHERE request_key IS NULL "
         f"AND (session_id IS NULL OR EXISTS (SELECT 1 FROM requests r WHERE r.session_id = o.session_id)) {since_sql}", sp).fetchone()

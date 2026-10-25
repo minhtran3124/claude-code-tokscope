@@ -164,6 +164,22 @@ class OtelTest(unittest.TestCase):
         self.assertIn(f"${cost * 1.5 + 0.5 + 0.25 + 3.0:,.2f}", card)  # the Claude Code total, telemetry-only included
         self.assertNotIn("telemetry only", cost_check(self.conn, COND, (), scoped=True))
 
+    def test_telemetry_only_and_unmatched_leave_out_bench_sessions(self):
+        from tokscope.features.changes import BENCH_PROJECT
+        self.assertEqual(otel.BENCH_LIKE, BENCH_PROJECT)
+        self.conn.execute("INSERT INTO sessions (session_id, project) VALUES ('b1', '-x-tokscope-bench-t1')")
+        self.req("a", "2026-10-20T10:00:00.000Z", "claude-sonnet-4-6", 1000, 500, 0, 0)
+        self.req("k", "2026-10-20T10:00:00.000Z", "claude-sonnet-4-6", 7, 7, 0, 0, session="b1")
+        self.write(line(event("s1", "2026-10-20T10:00:00.000Z", "claude-sonnet-4-6", 1000, 500, 0, 0, 0.5))
+                   + line(event("b1", "2026-10-20T10:05:00.000Z", "claude-sonnet-4-6", 9, 9, 0, 0, 4.0))  # unmatched, bench
+                   + line(event("gone", "2026-10-20T09:00:00.000Z", "claude-sonnet-4-6", 40, 20, 100, 0, 2.0)))
+        self.ingest()
+        c = otel.cost_check(self.conn, COND, ())
+        self.assertEqual(tuple(c["unmatched"]), (0, None))
+        self.assertEqual(tuple(c["only"]), (1, 1, 160, 2.0))
+        c = otel.cost_check(self.conn, COND, (), since="2026-10-20T00:00:00Z")
+        self.assertEqual(tuple(c["unmatched"]), (0, None))
+
     def test_report_cost_check_follows_the_report_filter(self):
         from tokscope.web.report import write_report
         self.req("a", "2026-10-20T10:00:00.000Z", "claude-sonnet-4-6", 1000, 500, 0, 0)
