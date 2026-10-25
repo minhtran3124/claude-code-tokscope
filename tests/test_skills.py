@@ -102,6 +102,41 @@ class SkillsTest(unittest.TestCase):
         self.assertEqual(self.conn.execute("SELECT session_id, tool_use_id, skill, version FROM skill_load_versions").fetchall(),
                          [("s1", "t1", "ce:simplify", v)])
 
+    def install(self, *plugs):
+        plugins = self.home / ".claude" / "plugins"
+        plugins.mkdir(parents=True, exist_ok=True)
+        (plugins / "installed_plugins.json").write_text(json.dumps({"plugins": {
+            f"{p.parent.parent.parent.name}@market": [{"scope": "user", "installPath": str(p.parent.parent)}] for p in plugs}}))
+
+    def test_canonical_name_sees_a_plugin_installed_or_removed_without_a_restart(self):
+        cwd = str(self.repo / "src")
+        self.assertEqual(skills.canonical_name("simplify", cwd), "simplify")
+        plug = write_skill(self.tmp / "cache" / "ce" / "3.9" / "skills" / "simplify")
+        self.install(plug)
+        self.assertEqual(skills.canonical_name("simplify", cwd), "ce:simplify")
+        (plug / "SKILL.md").unlink()
+        os.utime(plug.parent, (1, 1))
+        self.assertEqual(skills.canonical_name("simplify", cwd), "simplify")
+
+    def test_a_project_or_personal_command_or_skill_is_not_claimed_by_a_plugin(self):
+        plug = write_skill(self.tmp / "cache" / "ce" / "3.9" / "skills" / "foo")
+        self.install(plug)
+        cwd = str(self.repo / "src")
+        self.assertEqual(skills.canonical_name("foo", cwd), "ce:foo")
+        (self.repo / ".claude" / "commands").mkdir(parents=True)
+        (self.repo / ".claude" / "commands" / "foo.md").write_text("do foo")
+        self.assertEqual(skills.canonical_name("foo", cwd), "foo")
+        (self.repo / ".claude" / "commands" / "foo.md").unlink()
+        write_skill(self.home / ".claude" / "skills" / "foo")
+        self.assertEqual(skills.canonical_name("foo", cwd), "foo")
+
+    def test_two_plugins_with_the_same_skill_name_leave_the_bare_name_bare(self):
+        a = write_skill(self.tmp / "cache" / "ce" / "3.9" / "skills" / "dup")
+        b = write_skill(self.tmp / "cache" / "other" / "1.0" / "skills" / "dup")
+        self.install(a, b)
+        self.assertEqual(skills.canonical_name("dup", str(self.repo)), "dup")
+        self.assertEqual(skills.canonical_name("ce:dup", str(self.repo)), "ce:dup")
+
     def test_an_edit_seen_at_ingest_is_a_new_version_dated_by_the_file_and_later_loads_take_it(self):
         self.load("2026-10-01T00:00:00Z", 1)                     # before tokscope ever saw the skill
         self.load("2026-10-10T00:00:00Z", 2, "t2")
