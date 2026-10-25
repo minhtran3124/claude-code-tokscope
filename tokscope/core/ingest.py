@@ -835,7 +835,10 @@ def ingest(db_path, phases_path, projects_dir=None, project_filter=None, log=pri
     conn.commit()
     log(f"ingest: {parsed} sessions parsed, {skipped} unchanged")
     if (otel_dir or paths.otel_dir()).is_dir():  # a missing folder is a no-op
-        otel.ingest(conn, otel_dir)  # after the sessions: it also matches the events to their requests
+        try:
+            otel.ingest(conn, otel_dir)  # after the sessions: it also matches the events to their requests
+        except Exception as e:  # telemetry never stops the skills steps below
+            log(f"ingest: OTel skipped ({e})")
     from .skills import rekey, scan  # a skill edited since the last ingest shows up as a new version
 
     rekey(conn)  # loads keep their version under a renamed skill

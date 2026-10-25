@@ -6,12 +6,16 @@ The files are read incrementally: a byte offset per file, so a re-run adds nothi
 
 import hashlib
 import json
+import math
+import sqlite3
 from datetime import datetime, timezone
 
 from .. import paths
 
 HEAD_BYTES = 4096  # the start of a file that must be unchanged for it to count as appended to
 MATCH_SECONDS = 120  # an event and its transcript request must be this close in time
+INT64 = 2**63 - 1
+BAD_LINE = (ValueError, TypeError, AttributeError, OverflowError, RecursionError, sqlite3.Error)
 VALUE_KEYS = ("stringValue", "intValue", "doubleValue", "boolValue")
 
 
@@ -28,14 +32,15 @@ def _attrs(items):
 
 def _num(v):
     try:
-        return float(v)
+        n = float(v)
     except (TypeError, ValueError):
         return None
+    return n if math.isfinite(n) else None  # nan and inf are no number
 
 
 def _int(v):
     n = _num(v)
-    return int(n) if n is not None else 0
+    return max(-INT64, min(INT64, int(n))) if n is not None else 0  # SQLite INTEGER is 64 bit
 
 
 def _ts(attrs, rec):
@@ -81,15 +86,24 @@ def _read(conn, path):
     data = data[:data.rfind(b"\n") + 1]  # a line still being written waits for the next run
     added, pos = 0, off
     for line in data.splitlines(True):
-        try:
+        try:  # a malformed or hostile line is skipped, and pos still moves past it
             rec = json.loads(line)
-        except ValueError:
-            rec = None
-        body = rec.get("body") if isinstance(rec, dict) and rec.get("signal") == "logs" else None
-        for j, ev in enumerate(events(body) if isinstance(body, dict) else ()):
-            added += conn.execute("INSERT OR IGNORE INTO otel_requests (src, pos, idx, session_id, prompt_id, ts, model, input, "
-                                  "output, cache_read, cache_write, cost_usd, duration_ms, speed) "
-                                  "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (src, pos, j, *ev)).rowcount
+            body = rec.get("body") if isinstance(rec, dict) and rec.get("signal") == "logs" else None
+            evs = list(events(body)) if isinstance(body, dict) else ()
+            conn.execute("SAVEPOINT otel_line")
+            n = 0
+            for j, ev in enumerate(evs):
+                n += conn.execute("INSERT OR IGNORE INTO otel_requests (src, pos, idx, session_id, prompt_id, ts, model, input, "
+                                      "output, cache_read, cache_write, cost_usd, duration_ms, speed) "
+                                      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (src, pos, j, *ev)).rowcount
+            conn.execute("RELEASE otel_line")
+            added += n
+        except BAD_LINE:
+            try:
+                conn.execute("ROLLBACK TO otel_line")
+                conn.execute("RELEASE otel_line")
+            except sqlite3.Error:
+                pass
         pos += len(line)
     conn.execute("INSERT OR REPLACE INTO otel_files VALUES (?, ?, ?)", (src, pos, _head(path, pos) if pos else None))
     return added

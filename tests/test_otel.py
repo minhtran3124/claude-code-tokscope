@@ -88,6 +88,18 @@ class OtelTest(unittest.TestCase):
         self.assertEqual({r[0] for r in self.conn.execute("SELECT input FROM otel_requests")}, {7})
         self.assertEqual(self.conn.execute("SELECT count(*) FROM otel_requests").fetchone()[0], 2)
 
+    def test_a_hostile_line_is_skipped_and_the_offset_moves_past_it(self):
+        good = event("s1", "2026-10-20T12:00:00.000Z", "claude-opus-4-8", 10, 5, 0, 0, 0.01)
+        bad = [{"resourceLogs": [1]}, {"resourceLogs": [{"scopeLogs": [{"logRecords": [{"attributes": [attr("event.name", 7)]}]}]}]}]
+        for tok in ("nan", "1e999", "1e30"):
+            bad.append(event("s2", "2026-10-20T12:00:00.000Z", "m", tok, 1, 0, 0, 0.0))
+        text = "".join(line(b) for b in bad) + "[" * 100000 + "\n" + line(good)
+        (self.dir / "logs-1.jsonl").write_text(text)
+        conn = self.conn
+        self.assertEqual(otel.ingest(conn, self.dir), 4)  # the good event, and "nan"/"1e999" read as 0 tokens, "1e30" clamped
+        self.assertEqual(otel.ingest(conn, self.dir), 0)
+        self.assertEqual(conn.execute("SELECT count(*) FROM otel_requests WHERE session_id = 's1'").fetchone()[0], 1)
+
     def test_a_missing_folder_is_a_no_op(self):
         gone = self.tmp / "nothing"
         self.assertEqual(otel.ingest(self.conn, gone), 0)
