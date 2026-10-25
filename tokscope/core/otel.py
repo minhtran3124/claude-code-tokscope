@@ -11,6 +11,7 @@ import sqlite3
 from datetime import datetime, timezone
 
 from .. import paths
+from . import pricing
 
 HEAD_BYTES = 4096  # the start of a file that must be unchanged for it to count as appended to
 BENCH_LIKE = "%tokscope%-bench-%"  # features.changes.BENCH_PROJECT (core cannot import it; tests/test_otel.py checks they agree)
@@ -18,6 +19,8 @@ MATCH_SECONDS = 120  # an event and its transcript request must be this close in
 INT64 = 2**63 - 1
 BAD_LINE = (ValueError, TypeError, AttributeError, OverflowError, RecursionError,
             sqlite3.InterfaceError, sqlite3.ProgrammingError)  # input-caused; OperationalError (locked, disk full) propagates
+ONLY_TIP = "telemetry only: no transcript, so no prompts, skills or subagents; the cost is Claude Code's own cost_usd"
+ONLY_NOTE = " Includes telemetry-only sessions (no transcript): their figure is Claude Code's own cost_usd."
 VALUE_KEYS = ("stringValue", "intValue", "doubleValue", "boolValue")
 
 
@@ -183,3 +186,47 @@ def cost_check(conn, cond="", params=(), since=None, scoped=False):
         "FROM otel_requests o WHERE session_id IS NOT NULL "
         f"AND NOT EXISTS (SELECT 1 FROM requests r WHERE r.session_id = o.session_id) {since_sql}", sp).fetchone()
     return out
+
+
+def only_sessions(conn, since=None, until=None):
+    """Telemetry-only sessions: a session id in otel_requests that has no transcript request (bench sessions left out).
+
+    One dict per session, newest first: id, first/last event ts, requests, input, output, cache_read, cache_write, usd (the
+    events' own cost_usd; an event without one is priced from its tokens with pricing.py, and counts $0 when its model has no
+    rate), unpriced (events left at $0), models. since/until bound the events in the range, as a transcript session
+    counts only the requests in it."""
+    ts_sql, tp = "", [BENCH_LIKE]
+    for op, bound in ((">=", since), ("<", until)):
+        if bound:
+            ts_sql += f" AND o.ts {op} ?"
+            tp.append(bound)
+    rows = conn.execute(
+        "SELECT o.session_id, o.ts, o.model, o.input, o.output, o.cache_read, o.cache_write, o.cost_usd, o.speed FROM otel_requests o "
+        "WHERE o.session_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM requests r WHERE r.session_id = o.session_id) "
+        f"AND o.session_id NOT IN (SELECT session_id FROM sessions WHERE project LIKE ?){ts_sql} ORDER BY o.ts", tp).fetchall()
+    ov = pricing.overrides() if any(r[7] is None for r in rows) else {}
+    out = {}
+    for sid, ts, model, inp, outp, cr, cw, usd, speed in rows:
+        s = out.setdefault(sid, {"id": sid, "first": ts, "last": ts, "requests": 0, "input": 0, "output": 0, "cache_read": 0,
+                                 "cache_write": 0, "usd": 0.0, "unpriced": 0, "models": set()})
+        if usd is None:  # Claude Code sent no cost: list price from the tokens, if the model has a rate
+            usd = pricing.cost_usd(model or "", inp, outp, cr, cw, 0, speed, None, 0, ov)
+            s["unpriced"] += usd is None
+        s["requests"] += 1
+        s["usd"] += usd or 0.0
+        for k, v in (("input", inp), ("output", outp), ("cache_read", cr), ("cache_write", cw)):
+            s[k] += v or 0
+        s["first"] = min(filter(None, (s["first"], ts)), default=None)
+        s["last"] = max(filter(None, (s["last"], ts)), default=None)
+        if model:
+            s["models"].add(model)
+    return sorted(out.values(), key=lambda s: s["last"] or "", reverse=True)
+
+
+def only_totals(conn, since=None, until=None):
+    """Sum of only_sessions: sessions, requests, tokens (input + cache + output, as TOKENS), output, cache_read, usd."""
+    found = only_sessions(conn, since, until)
+    return {"sessions": len(found), "requests": sum(s["requests"] for s in found),
+            "tokens": sum(s["input"] + s["output"] + s["cache_read"] + s["cache_write"] for s in found),
+            "output": sum(s["output"] for s in found), "cache_read": sum(s["cache_read"] for s in found),
+            "usd": sum(s["usd"] for s in found), "unpriced": sum(s["unpriced"] for s in found)}

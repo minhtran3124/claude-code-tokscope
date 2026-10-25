@@ -2,14 +2,19 @@
 
 import html
 import json
+from datetime import timedelta
 
+from ....core import otel
 from ...report.sections.sessions import _sessions_json
 from ...report.scripts import SORT_SEG
+from ..common import _iso
 
 
 def page_sessions(conn, f, qs):
     cond, params = f.cond()
-    data = json.dumps(_sessions_json(conn, cond, params), separators=(",", ":")).replace("</", "<\\/")
+    # a project, model or skill filter names what a transcript knows: telemetry-only sessions have none of it
+    only = [] if (f.project or f.model or f.skill) else otel.only_sessions(conn, _iso(f.now - timedelta(days=f.days)) if f.days else None)
+    data = json.dumps(_sessions_json(conn, cond, params, only), separators=(",", ":")).replace("</", "<\\/")
     prefill = html.escape((qs.get("q") or [""])[0])
     return (f'<section class="card" id="sessions"><p class="note"><span class="key"><i></i>main thread</span><span class="key">'
             f'<i class="a"></i>subagents</span> Sessions with activity in {f.label()}. Open a row for each prompt; tick 2 to 4 to compare.</p>'

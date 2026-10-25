@@ -222,9 +222,9 @@ class OtelTest(unittest.TestCase):
         self.conn.commit()
         out = self.tmp / "r.html"
         write_report(self.db, out, tasks_dir=self.tmp)
-        self.assertIn("telemetry only", out.read_text())
+        self.assertIn('<span class="tag">telemetry only</span>', out.read_text())  # the page script also says it, hence the markup
         write_report(self.db, out, "WHERE s.project = ?", ("-home-u-app",), tasks_dir=self.tmp)
-        self.assertNotIn("telemetry only", out.read_text())
+        self.assertNotIn('<span class="tag">telemetry only</span>', out.read_text())
 
     def test_the_dashboard_cost_check_sits_in_a_data_region_so_live_refresh_swaps_it(self):
         from tokscope.web.dashboard.common import Filters
@@ -234,6 +234,90 @@ class OtelTest(unittest.TestCase):
         self.write(line(event("s9", "2026-10-20T10:00:00.000Z", "claude-opus-5-5", 10, 5, 0, 0, 0.5)))
         self.ingest()
         self.assertRegex(overview.page_overview(self.conn, Filters({})), r'<div data-region="cost-check"><section[^>]*>.*?Cost check')
+
+    def telemetry_db(self):
+        """s1 has a transcript and OTel events; "gone" has OTel events only."""
+        self.req("a", "2026-10-20T10:00:00.000Z", "claude-sonnet-4-6", 1000, 500, 0, 0)
+        self.write(line(event("s1", "2026-10-20T10:00:00.000Z", "claude-sonnet-4-6", 1000, 500, 0, 0, 0.5))
+                   + line(event("gone", "2026-10-20T09:00:00.000Z", "claude-sonnet-4-6", 40, 20, 100, 0, 2.0))
+                   + line(event("gone", "2026-10-20T09:01:00.000Z", "claude-sonnet-4-6", 40, 20, 100, 0, 1.0)))
+        self.ingest()
+        self.conn.commit()
+
+    def report(self, level="full", where="", params=()):
+        from tokscope.web.report import write_report
+        out = self.tmp / "r.html"
+        write_report(self.db, out, where, params, tasks_dir=self.tmp, level=level)
+        return out.read_text()
+
+    def test_a_telemetry_only_session_is_a_row_and_in_the_totals_once(self):
+        from tokscope.web.report.sections.sessions import _sessions_json
+        self.telemetry_db()
+        got = otel.only_sessions(self.conn)
+        self.assertEqual([(s["id"], s["requests"], s["usd"]) for s in got], [("gone", 2, 3.0)])
+        self.assertEqual(otel.only_totals(self.conn)["tokens"], 320)
+        rows = {s["id"]: s for s in _sessions_json(self.conn, COND, (), got)}
+        self.assertEqual(sorted(rows), ["gone", "s1"])
+        self.assertTrue(rows["gone"]["only"])
+        self.assertEqual((rows["gone"]["tokens"], rows["gone"]["usd"], rows["gone"]["turns"]), (320, 3.0, []))
+        self.assertNotIn("only", rows["s1"])
+        page = self.report()
+        self.assertIn('data-count="2" data-kind="int">2<', page)  # Sessions: s1 and gone, each once
+        self.assertEqual(page.count('"id":"gone"'), 1)
+        cost = cost_usd("claude-sonnet-4-6", 1000, 500, 0, 0, 0)
+        self.assertIn(f'data-count="{round(cost + 3.0, 2)}" data-kind="usd"', page)  # API-eq: transcript-priced plus Claude Code's 3.0
+        self.assertIn("Includes telemetry-only sessions", page)
+
+    def test_a_session_with_a_transcript_and_events_is_not_added_again(self):
+        self.telemetry_db()
+        self.assertNotIn("s1", [s["id"] for s in otel.only_sessions(self.conn)])
+        cost = cost_usd("claude-sonnet-4-6", 1000, 500, 0, 0, 0)
+        self.assertIn(f'data-count="{round(cost + 3.0, 2)}"', self.report())  # not cost + 0.5 + 3.0
+        # events that come before the transcript is ingested make it telemetry only; once it has requests they stop counting
+        self.conn.execute("DELETE FROM requests")
+        self.assertEqual({s["id"] for s in otel.only_sessions(self.conn)}, {"s1", "gone"})
+
+    def test_an_event_without_cost_is_priced_from_its_tokens_and_a_model_with_no_rate_counts_zero(self):
+        self.write(line(event("t1", "2026-10-20T09:00:00.000Z", "claude-sonnet-4-6", 1000, 500, 0, 0, None))
+                   + line(event("t1", "2026-10-20T09:01:00.000Z", "claude-mystery-9", 10, 10, 0, 0, None)))
+        self.ingest()
+        (s,) = otel.only_sessions(self.conn)
+        self.assertAlmostEqual(s["usd"], cost_usd("claude-sonnet-4-6", 1000, 500, 0, 0, 0))
+        self.assertEqual(s["unpriced"], 1)
+
+    def test_a_range_counts_only_the_events_in_it(self):
+        self.telemetry_db()
+        self.assertEqual(otel.only_totals(self.conn, since="2026-10-20T09:00:30Z")["requests"], 1)
+        self.assertEqual(otel.only_totals(self.conn, until="2026-10-20T09:00:30Z")["requests"], 1)
+        self.assertEqual(otel.only_totals(self.conn, since="2026-10-21T00:00:00Z")["sessions"], 0)
+
+    def test_a_filtered_report_and_the_dashboard_filters_leave_telemetry_only_sessions_out(self):
+        from tokscope.web.dashboard.common import Filters
+        from tokscope.web.dashboard.pages import overview, sessions
+        self.telemetry_db()
+        self.assertNotIn('"id":"gone"', self.report(where="WHERE s.project = ?", params=("-home-u-app",)))
+        for qs, shown in (({"range": ["all"]}, True), ({"range": ["all"], "project": ["-home-u-app"]}, False),
+                          ({"range": ["all"], "model": ["claude-sonnet-4-6"]}, False)):
+            f = Filters(qs)
+            self.assertEqual('"id":"gone"' in sessions.page_sessions(self.conn, f, {}), shown, qs)
+            self.assertEqual("telemetry only" in overview._kpis(self.conn, f), shown, qs)
+
+    def test_a_redacted_report_lists_the_session_without_any_name(self):
+        self.telemetry_db()
+        page = self.report("redacted")
+        self.assertIn('"id":"gone"', page)
+        self.assertIn('"only":true', page)
+        self.assertNotIn("-home-u-app", page)
+
+    def test_the_dashboard_counts_the_telemetry_only_session_in_the_tiles_and_the_nav(self):
+        from tokscope.web.dashboard import shell
+        from tokscope.web.dashboard.common import Filters
+        from tokscope.web.dashboard.pages import overview
+        self.telemetry_db()
+        tiles = overview._kpis(self.conn, Filters({"range": ["all"]}))
+        self.assertIn('data-count="2" data-kind="int" data-key="sessions"', tiles)
+        self.assertIn("telemetry only", tiles)
+        self.assertEqual(shell._nav_counts(self.conn)["sessions"], 2)  # s1 plus gone
 
 
 if __name__ == "__main__":

@@ -205,8 +205,9 @@ in the data home (`TOKSCOPE_DATA_DIR` replaces that whole `data/otel` folder: th
 background ingest) then reads the `claude_code.api_request` events into the database: model, tokens, `cost_usd`, duration,
 session and prompt id. They are matched to transcript requests by session, token counts and time, and the **Cost check**
 card (report and dashboard Overview) shows tokscope's API-eq against Claude Code's own `cost_usd`, the drift per model
-(a model with no rate drifts 100%), unmatched events, and sessions that exist only in telemetry ("telemetry only", counted
-in the card's Claude Code total, not in the API-eq KPIs). `tokscope ingest --otel [DIR]` reads only these events. No folder, no change.
+(a model with no rate drifts 100%), unmatched events, and sessions that exist only in telemetry. Those are rows in Sessions
+tagged "telemetry only" and are in the Sessions, Tokens, Output tokens, From cache and API-eq totals at Claude Code's own `cost_usd`
+(list price from the tokens when an event has none). They have no transcript, so no skill, agent or phase breakdown counts them. `tokscope ingest --otel [DIR]` reads only these events. No folder, no change.
 Skip the receiver unless you want this check or a request history that outlives the transcripts.
 
 ```sh

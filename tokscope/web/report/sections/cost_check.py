@@ -35,7 +35,7 @@ def cost_check(conn, cond, params, since=None, scoped=False):
     only = c["only"] if c["only"] and c["only"][0] else None
     if only:
         notes.append(f'<span class="tag">telemetry only</span> {only[0]:,} session{"s" * (only[0] != 1)}, {only[1]:,} requests, '
-                     f'{_tok(only[2])} tokens, {_usd(only[3])} by Claude Code, no transcript. Not in the API-eq totals (no transcript to price)')
+                     f'{_tok(only[2])} tokens, {_usd(only[3])} by Claude Code, no transcript. Counted in the totals and listed in Sessions at that cost')
     if not scoped:
         total = c["cc"] + (c["unmatched"][1] or 0 if c["unmatched"] else 0) + (only[3] or 0 if only else 0)
         notes.append(f"Claude Code reported {_usd(total)} in this range, telemetry-only sessions included")
