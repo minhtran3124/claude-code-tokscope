@@ -11,6 +11,7 @@ import zlib
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from .. import paths
 
@@ -35,7 +36,11 @@ def unzip(raw, limit):
     """Decompress gzip, or None when the result would pass `limit` bytes (a gzip bomb)."""
     d = zlib.decompressobj(16 + zlib.MAX_WBITS)
     out = d.decompress(raw, limit + 1)
-    return None if len(out) > limit or d.unconsumed_tail else out
+    if len(out) > limit or d.unconsumed_tail:
+        return None
+    if not d.eof or d.unused_data:  # cut short, or more than one gzip member
+        raise zlib.error("incomplete or multi-member gzip stream")
+    return out
 
 
 def host_name(value):
@@ -47,8 +52,10 @@ def host_name(value):
 
 
 class Handler(BaseHTTPRequestHandler):
+    timeout = 30  # a client that stalls mid-body must not hold a thread for ever
+
     def do_POST(self):
-        signal = SIGNALS.get(self.path)
+        signal = SIGNALS.get(urlsplit(self.path).path.rstrip("/"))
         if signal is None:
             self.send_error(404)
             return
@@ -87,11 +94,15 @@ class Handler(BaseHTTPRequestHandler):
             return
         now = datetime.now(timezone.utc)
         data_dir = self.server.data_dir
-        data_dir.mkdir(parents=True, exist_ok=True)
         line = json.dumps({"received_at": now.isoformat(), "signal": signal, "body": body})
-        with self.server.write_lock:  # a line over the 8 KiB buffer is several writes; keep parallel requests from interleaving
-            with open(data_dir / f"{signal}-{now:%Y-%m-%d}.jsonl", "a") as f:
-                f.write(line + "\n")
+        try:
+            data_dir.mkdir(parents=True, exist_ok=True)
+            with self.server.write_lock:  # a line over the 8 KiB buffer is several writes; keep parallel requests from interleaving
+                with open(data_dir / f"{signal}-{now:%Y-%m-%d}.jsonl", "a") as f:
+                    f.write(line + "\n")
+        except OSError:  # read-only folder, full disk: tell the exporter, which retries
+            self.send_error(500, "cannot write the data folder")
+            return
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
@@ -102,6 +113,10 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def make_server(host, port, data_dir, max_body=DEFAULT_MAX_BODY, allow_remote=False):
+    if not 0 <= port <= 65535:
+        raise ValueError(f"port {port} is outside 0-65535")
+    if max_body < 1:
+        raise ValueError("--max-body must be at least 1 byte")
     if not allow_remote and not is_loopback(host):
         raise ValueError(f"{host!r} is not a loopback address and the receiver has no authentication; pass --allow-remote to bind it anyway")
     srv = ThreadingHTTPServer((host, port), Handler)

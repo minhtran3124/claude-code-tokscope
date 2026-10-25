@@ -201,7 +201,7 @@ from Terminal and from Claude Code's statusline.
 ## Optional: the OTel receiver
 
 `tokscope otel-receiver` saves the OpenTelemetry export of Claude Code to `data/otel/<signal>-YYYY-MM-DD.jsonl`
-in the data home (`TOKSCOPE_DATA_DIR` changes the folder). **It only collects data: no report, dashboard page or
+in the data home (`TOKSCOPE_DATA_DIR` replaces that whole `data/otel` folder: the files go straight into it). **It only collects data: no report, dashboard page or
 number reads these files yet** (reading them is planned, issue #58). Skip it unless you want the raw events.
 
 ```sh

@@ -430,7 +430,7 @@ def main():
         try:
             port = args.port if args.port is not None else int(os.environ.get("TOKSCOPE_PORT") or "4318")
             otel_receiver.serve(args.host, port, otel_receiver.default_dir(), args.max_body, args.allow_remote)
-        except (ValueError, OSError) as e:
+        except (ValueError, OSError, OverflowError) as e:
             sys.exit(f"tokscope: {e}")
         return
     DB.parent.mkdir(parents=True, exist_ok=True)
