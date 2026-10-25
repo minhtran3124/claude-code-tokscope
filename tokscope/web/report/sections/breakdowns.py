@@ -168,7 +168,7 @@ def _context_section(conn, cond, params):
         ("".join(f"<p class='finding'>{html.escape(n)}</p>" for n in notes)) + "".join(tables), "context")
 
 
-def _breakdowns(conn, cond, params):
+def _breakdowns(conn, cond, params, now=None):
     base = f"FROM requests r JOIN sessions s USING (session_id) {cond}"
     q = lambda sql: conn.execute(sql, params).fetchall()  # noqa: E731
     real_total = q(f"SELECT sum({TOKENS}) {base}")[0][0] or 0
@@ -213,7 +213,7 @@ def _breakdowns(conn, cond, params):
     def usage(groups):
         return [(k, n, est_tokens(chars) / n, est_tokens(chars)) for k, (n, _, chars) in groups.items()]
 
-    week = _week_skills(conn, cond, params, datetime.now(timezone.utc))
+    week = _week_skills(conn, cond, params, now or datetime.now(timezone.utc))
     week_rows = [(sk, ph or "", this, (_tok(last) if last else "–", "lm"),
                   (charts.change_text(last, this), "lm"))
                  for sk, ph, this, last in week]
