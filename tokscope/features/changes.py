@@ -1,6 +1,5 @@
 """Config-change markers (e.g. "reviewer: fable -> opus") and their before/after impact on real sessions."""
 
-import sqlite3
 from datetime import datetime, timedelta, timezone
 from statistics import median
 

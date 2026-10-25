@@ -11,7 +11,7 @@ from tokscope.web.theme.classic import CLASSIC_CSS, CLASSIC_DASH_CSS
 def rules(css):
     """(media prefix, selector, normalised body) of every flat rule; nested at-rules are read through."""
     css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
-    out, i = [], 0
+    out = []
 
     def walk(text, prefix):
         j = 0

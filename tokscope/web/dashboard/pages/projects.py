@@ -1,7 +1,6 @@
 """The Projects page: projects with their tokens, and a project's MCP servers (add, remove, registry)."""
 
 import html
-import secrets
 import time
 from pathlib import Path
 

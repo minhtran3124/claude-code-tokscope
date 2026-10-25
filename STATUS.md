@@ -9,15 +9,16 @@ updated_by: claude   # claude | manual
 # claude-code-tokscope — Status
 
 ## Summary
-Skill features #132-#136 are combined on feat/skill-features (PRs 137-141 merged into it); 535 tests pass; final PR to main open.
+Skill features #132-#136 are merged. #51: CI runs Python 3.10-3.13 and a ruff job (`E9,F`, config in pyproject.toml); the first findings are fixed; 538 tests pass locally.
 
 ## Next step
-Review and merge the skill-features PR into main.
+Fix GitHub billing so Actions run, then confirm the new lint job and 3.11 leg pass.
 
 ## Blockers
-- GitHub Actions jobs do not start: account payment or spending limit (Settings > Billing).
+- GitHub Actions jobs did not start on 2026-10-25 (annotation: payment failed or spending limit; the runs on 2026-10-22 passed). Settings > Billing. Until then the new `lint` job and the 3.11 leg have not run on GitHub; both pass locally.
 
 ## Recent
+- 2026-10-25: #51 CI matrix adds 3.11, new ruff lint job, 10 ruff findings fixed (unused imports, shadowed names); the STATUS blocker stays because Actions still fail to start on billing.
 - 2026-10-25: skill features #132-#136 combined on feat/skill-features (PRs 137-141), final PR to main; 535 tests pass; screenshots are in the sub-PRs.
 - 2026-10-25: skill bugs #117-#123 combined on fix/skill-bugs-2 (PRs 124-130), final PR to main; 479 tests pass; no UI change.
 - 2026-10-25: skill bugs #106-#110 combined on fix/skill-bugs (PRs 111-115), final PR to main; 455 tests pass; #110 lacks hosted screenshots.
