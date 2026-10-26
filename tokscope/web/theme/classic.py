@@ -35,8 +35,6 @@ details.more:hover,details.more[open]{border-color:color-mix(in oklch,var(--mark
 .tools input[type=search]:focus,.tools select:focus{outline:none;border-color:var(--mark);box-shadow:0 0 0 3px color-mix(in oklch,var(--mark) 22%,transparent)}
 .srow{transition:border-color var(--t-state) var(--ease),background var(--t-state) var(--ease)}
 .srow:hover{border-color:color-mix(in oklch,var(--mark) 40%,var(--edge))}
-.srow[open]{border-color:color-mix(in oklch,var(--mark) 55%,var(--edge));box-shadow:0 8px 26px -14px color-mix(in oklch,var(--mark) 60%,transparent)}
-.srow.picked{border-color:var(--mark);box-shadow:0 0 0 2px color-mix(in oklch,var(--mark) 22%,transparent)}
 .brand{color:var(--mark-ink);--tok-accent:var(--agent)}
 .totop{border:1px solid color-mix(in oklch,var(--mark) 40%,var(--edge));color:var(--mark-ink);box-shadow:0 8px 22px -10px #0006}
 .totop.show:hover{background:var(--mark);color:#fff}

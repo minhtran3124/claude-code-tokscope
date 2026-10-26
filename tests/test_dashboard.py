@@ -349,7 +349,17 @@ class SessionsTableTest(unittest.TestCase):
         self.assertIn("background:var(--tint)", rule.group(1))
         self.assertIn("inset 4px 0 0 var(--mark)", rule.group(1))
         self.assertNotRegex(rule.group(1), r"#[0-9a-fA-F]{3,8}\b")             # theme tokens only, no raw colour
-        self.assertNotIn(".srow[open]{box-shadow:none", CLASSIC_CSS)          # the Classic skin no longer overrides the panel
+        # one place defines the open-row look: no rule outside the layout sheet's panel rules styles an [open] row's ground
+        for name, sheet in (("classic", CLASSIC_CSS), ("ink", CSS), ("layout", LAYOUT_CSS.replace(block, ""))):
+            for sel, body in re.findall(r"([^{}]*\.srow[^{},]*\[open\][^{}]*)\{([^}]*)\}", sheet):
+                self.assertNotRegex(body, r"(?:^|;)\s*(?:background|box-shadow|border-color)\s*:", f"{name}: {sel.strip()}")
+        # opened and picked: explicit selectors (1,3,0 and 1,4,0) so hover and the skins' .picked rule lose in any file order
+        picked = re.search(r"#session-list \.srow\.picked\[open\],#session-list \.srow\.picked\[open\]:hover\{([^}]*)\}", block)
+        self.assertIsNotNone(picked)
+        self.assertIn("inset 6px 0 0 var(--mark)", picked.group(1))        # a wider edge than the plain panel's 4px
+        self.assertIn("var(--tint)", picked.group(1))
+        self.assertNotRegex(picked.group(1), r"#[0-9a-fA-F]{3,8}\b")
+        self.assertLess(block.index(rule.group(0)), block.index(picked.group(0)))
         for sheet in (CSS, CLASSIC_CSS):
             self.assertIn("--tint:", sheet)
 
