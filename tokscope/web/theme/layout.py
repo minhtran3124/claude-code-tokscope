@@ -243,7 +243,10 @@ table.sbs td.add{background:color-mix(in oklch,var(--pass) 12%,transparent)}
 .fresh.stale .dot,body.offline h2>.dot{background:transparent;box-shadow:inset 0 0 0 1.5px var(--muted)}
 /* a session that is working now: its dot pulses for as long as it works (the one loop besides the spinners; off under reduced motion) */
 @keyframes pulse{from{box-shadow:0 0 0 0 color-mix(in oklch,var(--pass) 55%,transparent)}to{box-shadow:0 0 0 var(--pr,9px) transparent}}
-.runnow{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;margin:0 0 14px;font-size:15px}
+.live-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 20px;margin:0 0 14px}
+.live-head>h2,.live-head .runnow{margin:0}
+.live-head [data-region=running]{flex:1 1 14rem;min-width:0}
+.runnow{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;font-size:15px}
 .runnow b{font-size:28px;line-height:1}
 .runnow .note{flex-basis:100%;margin:0 0 0 16px}
 .runnow .dot{align-self:center}
