@@ -138,10 +138,15 @@ class ServerTest(unittest.TestCase):
         self.assertNotEqual(json.loads(self.get("/api/version")[1])["live"], "")
 
     def test_the_today_heading_and_the_running_line_share_one_row(self):
+        from tokscope.web.theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS
         self.open_session(os.getpid(), "now1-aaaa", "busy")
-        self.assertRegex(self.get("/overview")[1], r'<div class="live-head"><h2><span class="dot"></span>Today</h2><div data-region="running"><p class="runnow">.*?</p></div></div><div data-region="today">')
+        self.assertRegex(self.get("/overview")[1], r'<div class="live-head">\s*<h2><span class="dot"></span>Today</h2>\s*<div data-region="running">\s*<p class="runnow">.*?</p>\s*</div>\s*</div>\s*<div data-region="today">', re.S)
         (self.claude / "sessions" / f"{os.getpid()}.json").unlink()
-        self.assertRegex(self.get("/overview")[1], r'<div class="live-head"><h2>.*?Today</h2><div data-region="running"><p class="runnow none">')
+        self.assertRegex(self.get("/overview")[1], r'<div class="live-head">\s*<h2>.*?Today</h2>\s*<div data-region="running">\s*<p class="runnow none">', re.S)
+        css = LAYOUT_CSS + LAYOUT_DASH_CSS
+        self.assertRegex(css, r"\.live-head\{[^}]*display:flex[^}]*flex-wrap:wrap")
+        # the region may shrink, so a long note wraps inside it instead of pushing the line under the heading
+        self.assertRegex(css, r"\.live-head \[data-region=running\]\{[^}]*flex:1 1[^}]*min-width:0")
 
     def test_the_overview_says_so_when_nothing_is_open(self):
         _, over = self.get("/overview")
