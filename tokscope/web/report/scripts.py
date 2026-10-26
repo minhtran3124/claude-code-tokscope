@@ -201,10 +201,14 @@ function dayEl(label,n,tk){const h=document.createElement('div');h.className='da
 // A redacted report keeps no path or prompt text, so only its placeholders are here and these never match a real name.
 // the folder name that holds the text (the last one that does), else the last folder
 const base=(p,n)=>{const f=p.replace(/\\/+$/,'').split('/');return(n&&[...f].reverse().find(x=>x.toLowerCase().includes(n)))||f.pop()};
-// lower-cased copies of the searchable text, built once per session on first use (a keystroke then only runs `includes`)
-const PLACEHOLDER=/^\\[prompt · \\d+ chars\\]$/;
-const lc=s=>s._lc||(s._lc={title:(s.title||'').toLowerCase(),cwd:(s.cwd||'').toLowerCase(),hdirs:(s.hdirs||[]).map(x=>x.toLowerCase()),
-  prompts:(s.turns||[]).map(t=>t.text||'').filter(x=>x&&!PLACEHOLDER.test(x)).join('\\n').toLowerCase()});
+// lower-cased copies of the searchable text, built once per session on first use (a keystroke then only runs `includes`).
+// Kept in a WeakMap, not on the data, and rebuilt when the cheap signature changes (title, folders, turn count, last prompt),
+// so a session edited in place is never searched by its old text.
+const PLACEHOLDER=/^\\[prompt · \\d+ chars\\]$/,LC=new WeakMap();
+const lc=s=>{const t=s.turns||[],sig=[s.title,s.cwd,(s.hdirs||[]).join('|'),t.length,t.length?t[t.length-1].text:''].join('|');let c=LC.get(s);
+  if(c&&c.sig===sig)return c;
+  c={sig,title:(s.title||'').toLowerCase(),cwd:(s.cwd||'').toLowerCase(),hdirs:(s.hdirs||[]).map(x=>x.toLowerCase()),
+    prompts:t.map(x=>x.text||'').filter(x=>x&&!PLACEHOLDER.test(x)).join('\\n').toLowerCase()};LC.set(s,c);return c};
 // the filter for one needle (trimmed, lower case): match(s) keeps a session, whyOf(s) is the chip text when only a folder or
 // a prompt matched. Each session is judged once per needle.
 function finder(n){const memo=new Map();

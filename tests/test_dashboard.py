@@ -468,6 +468,16 @@ console.log(JSON.stringify({pi:out('travel-pi'),prompt:out('prompt'),title:out('
         self.assertEqual(trimmed.returncode, 0, trimmed.stderr[-400:])
         self.assertEqual(json.loads(trimmed.stdout), got["pi"])
 
+        # a session edited in place is searched by its new text, and the cache adds nothing to the data
+        edit = subprocess.run([node, "-e", code.rsplit("const out=", 1)[0] + r"""
+const a=finder('zebra'),before=a.match(S[0]);S[0].title='A zebra title';
+const after=finder('zebra').match(S[0]),old=finder('add export').match(S[0]);
+S[2].turns.push({text:'now about zebra crossings'});const turn=finder('crossings');
+console.log(JSON.stringify([before,after,old,turn.match(S[2]),turn.whyOf(S[2]),JSON.stringify(S[0]).includes('_lc')]))"""],
+                              capture_output=True, text=True)
+        self.assertEqual(edit.returncode, 0, edit.stderr[-400:])
+        self.assertEqual(json.loads(edit.stdout), [False, True, False, True, "mentions crossings", False])
+
     def test_the_reason_chip_wraps_only_the_rows_that_show_it_and_the_report_has_the_phone_list(self):
         from tokscope.web.theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS, LAYOUT_TOKEN_CSS
         self.assertEqual(LAYOUT_TOKEN_CSS.count(".srow>summary .why{"), 1)               # one place for the chip rules
@@ -475,6 +485,9 @@ console.log(JSON.stringify({pi:out('travel-pi'),prompt:out('prompt'),title:out('
         self.assertIn("#session-list .srow.has-why>summary .t{flex-wrap:wrap", LAYOUT_TOKEN_CSS)
         self.assertNotRegex(LAYOUT_TOKEN_CSS + LAYOUT_DASH_CSS, r"#session-list \.srow>summary \.t\{[^}]*flex-wrap")  # every other row keeps one ellipsised line
         self.assertIn("el.classList.toggle('has-why',!!why)", JS_SESSIONS)
+        # a row without a chip keeps its ellipsis: the title and its cell clip, so a long unbroken title cannot push the tokens
+        self.assertIn(".srow>summary .tt{overflow:hidden;text-overflow:ellipsis;min-width:0}", LAYOUT_CSS)
+        self.assertIn(".srow>summary .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}", LAYOUT_CSS)
         # the two-line phone list is in the sheet the static report loads too (its title column was 0 px wide)
         self.assertIn("#session-list{--scols:44px auto minmax(0,1fr) 72px 24px}", LAYOUT_CSS)
         self.assertNotIn("--scols:44px auto", LAYOUT_DASH_CSS)
