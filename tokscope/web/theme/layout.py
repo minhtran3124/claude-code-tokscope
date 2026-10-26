@@ -143,6 +143,10 @@ html.settled [data-region] :is(.hero,.kpi,.empty,.bar i u){animation:none}
 #session-list .track{display:block;min-width:0}
 #session-list .srow>summary .split{height:10px}
 #session-list .srow .body{padding:4px 12px 12px 34px}
+/* an opened session is one panel: the summary line and the body share a tinted ground, a mark-coloured left edge and hairlines above and below */
+#session-list .srow[open],#session-list .srow[open]:hover{background:var(--tint);box-shadow:inset 4px 0 0 var(--mark),inset 0 1px 0 var(--edge),inset 0 -1px 0 var(--edge)}
+/* opened and picked for compare: the same panel with a wider edge and a deeper tint; explicit selectors, so the skins' hover and .picked rules (1,2,0) lose in any file order */
+#session-list .srow.picked[open],#session-list .srow.picked[open]:hover{background:color-mix(in oklch,var(--mark) 12%,var(--tint));box-shadow:inset 6px 0 0 var(--mark),inset 0 1px 0 var(--edge),inset 0 -1px 0 var(--edge)}
 #session-list .btn.kids-more{margin:6px 10px 6px calc(34px + var(--depth)*20px)}
 #sessions .tools .seg{flex:none}
 #sessions .seg .chip{transition:color var(--t-state) var(--ease),background var(--t-state) var(--ease),border-color var(--t-state) var(--ease)}
@@ -553,7 +557,6 @@ mark{background:var(--hl);color:inherit;border-radius:2px}
 .tools input[type=search],.tools select{font:inherit;padding:var(--pad-in);border:var(--line-w) solid var(--line-c);border-radius:var(--r-ctl);background:var(--in-bg);color:var(--ink)}
 .srow{border:var(--line-w) solid var(--line-c);border-radius:var(--r-tile);background:var(--surface);margin-bottom:8px}
 .srow.ghost{position:absolute;left:0;right:0;margin:0;pointer-events:none;z-index:0}
-.srow[open]{background:color-mix(in oklch,var(--mark) 4%,var(--surface))}
 .srow>summary{display:grid;grid-template-columns:22px 92px 1fr 90px 74px 92px 150px 14px;gap:8px;align-items:center;padding:9px 10px;cursor:pointer;list-style:none;border-radius:10px}
 .srow>summary:focus-visible{outline:2px solid var(--focus-c);outline-offset:2px}
 .srow:hover>summary .t{color:var(--mark-ink)}
