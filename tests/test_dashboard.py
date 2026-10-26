@@ -400,9 +400,9 @@ class SessionsTableTest(unittest.TestCase):
     def test_a_narrow_page_keeps_the_from_link_and_the_title_column(self):
         from tokscope.web.theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS
         block = (LAYOUT_CSS + LAYOUT_DASH_CSS).split("/* sessions:", 1)[1].split("/* end sessions */", 1)[0]
-        self.assertIn("#session-list :is(.n,.sid8){display:none}", LAYOUT_DASH_CSS)       # the phone rows drop these, not the parent link
-        self.assertNotIn(":is(.n,.sid8,.from)", LAYOUT_DASH_CSS)
-        self.assertIn(".srow>summary .from{max-width:45%}", LAYOUT_DASH_CSS)
+        self.assertIn("#session-list :is(.n,.sid8){display:none}", LAYOUT_CSS)       # the phone rows drop these, not the parent link
+        self.assertNotIn(":is(.n,.sid8,.from)", LAYOUT_CSS)
+        self.assertIn(".srow>summary .from{max-width:45%}", LAYOUT_CSS)
         self.assertIn("@media (max-width:1200px)", block)
         self.assertIn("@media (max-width:1040px)", block)
 
@@ -441,18 +441,43 @@ class ScriptTest(unittest.TestCase):
         node = shutil.which("node")
         if not node:
             self.skipTest("node is not installed")
-        fn = JS_SESSIONS.split("const base=", 1)[1].split("const whyText", 1)[0]
-        text = JS_SESSIONS.split("const whyText=", 1)[1].split("\n", 1)[0]
-        code = ("const base=" + fn + "const whyText=" + text + """
-const S=[{cwd:'/home/x/projects/Travel-Pi/app',project:'app',turns:[]},
- {cwd:'/home/x/other',project:'other',hdirs:['/home/x/projects/travel-pi'],turns:[]},
- {cwd:'/home/x/other',project:'other',turns:[{text:'plan the travel-pi trip'}]},
- {cwd:'/home/x/other',project:'other',turns:[{text:'[prompt \\u00b7 20 chars]'}]},
- {cwd:'',project:'',turns:[]}];
-console.log(JSON.stringify([...S.map(s=>whyText(whyFolder(s,'travel-pi'))),whyText(whyFolder(S[3],'prompt')),String(whyFolder(S[0],''))]))""")
+        code = "const base=" + JS_SESSIONS.split("const base=", 1)[1].split("function render(){", 1)[0] + r"""
+const S=[{id:'a1',title:'Add export',top_skill:'review',cwd:'/home/x/projects/Travel-Pi/app',project:'app',turns:[]},
+ {id:'b2',title:'Collect',cwd:'/home/x/other',project:'other',hdirs:['/home/x/projects/travel-pi'],turns:[]},
+ {id:'c3',title:'Budget',cwd:'/home/x/other',project:'other',turns:[{text:'plan the travel-pi trip'}]},
+ {id:'d4',title:'Redacted',cwd:'/project-ab12cd',project:'project-ab12cd',turns:[{text:'[prompt \u00b7 20 chars]'}]},
+ {id:'e5',title:'No cwd',cwd:'',project:'',turns:[]},
+ {id:'f6',title:'Travel-pi notes',cwd:'/x',project:'x',turns:[]}];
+const out=n=>{const f=finder(n);return S.map(s=>[f.match(s)?1:0,f.whyOf(s)])};
+console.log(JSON.stringify({pi:out('travel-pi'),prompt:out('prompt'),title:out('add'),id:out('b2'),skill:out('revie'),none:out('')}))"""
         run = subprocess.run([node, "-e", code], capture_output=True, text=True)
         self.assertEqual(run.returncode, 0, run.stderr[-400:])
-        self.assertEqual(json.loads(run.stdout), ["in Travel-Pi", "ran claude -p in travel-pi", "mentions travel-pi", "", "", "", "null"])
+        got = json.loads(run.stdout)
+        # a title match (f6) or a folder or prompt match (a1, b2, c3) keeps the row; only a non-title match gets a chip
+        self.assertEqual(got["pi"], [[1, "in Travel-Pi"], [1, "ran claude -p in travel-pi"], [1, "mentions travel-pi"], [0, ""], [0, ""], [1, ""]])
+        self.assertEqual([m for m, _ in got["prompt"]], [0, 0, 0, 0, 0, 0])      # a redaction placeholder is not text to search
+        self.assertEqual([r for r in got["title"]], [[1, ""], [0, ""], [0, ""], [0, ""], [0, ""], [0, ""]])
+        self.assertEqual([m for m, _ in got["id"]], [0, 1, 0, 0, 0, 0])           # an id prefix still matches, with no chip
+        self.assertEqual([m for m, _ in got["skill"]], [1, 0, 0, 0, 0, 0])        # so does the top skill
+        self.assertEqual(got["none"], [[1, ""]] * 6)                              # no needle keeps every row, no chip
+        # render() trims the box once, so a pasted trailing space finds the folder and the chip text has none
+        self.assertIn("finder(q.value.trim().toLowerCase())", JS_SESSIONS)
+        trimmed = subprocess.run([node, "-e", "const q={value:'travel-pi  '};" + code.rsplit("const out=", 1)[0] +
+                                  "const f=finder(q.value.trim().toLowerCase());console.log(JSON.stringify(S.map(s=>[f.match(s)?1:0,f.whyOf(s)])))"],
+                                 capture_output=True, text=True)
+        self.assertEqual(trimmed.returncode, 0, trimmed.stderr[-400:])
+        self.assertEqual(json.loads(trimmed.stdout), got["pi"])
+
+    def test_the_reason_chip_wraps_only_the_rows_that_show_it_and_the_report_has_the_phone_list(self):
+        from tokscope.web.theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS, LAYOUT_TOKEN_CSS
+        self.assertEqual(LAYOUT_TOKEN_CSS.count(".srow>summary .why{"), 1)               # one place for the chip rules
+        self.assertNotIn(".why", LAYOUT_CSS + LAYOUT_DASH_CSS)
+        self.assertIn("#session-list .srow.has-why>summary .t{flex-wrap:wrap", LAYOUT_TOKEN_CSS)
+        self.assertNotRegex(LAYOUT_TOKEN_CSS + LAYOUT_DASH_CSS, r"#session-list \.srow>summary \.t\{[^}]*flex-wrap")  # every other row keeps one ellipsised line
+        self.assertIn("el.classList.toggle('has-why',!!why)", JS_SESSIONS)
+        # the two-line phone list is in the sheet the static report loads too (its title column was 0 px wide)
+        self.assertIn("#session-list{--scols:44px auto minmax(0,1fr) 72px 24px}", LAYOUT_CSS)
+        self.assertNotIn("--scols:44px auto", LAYOUT_DASH_CSS)
 
     def test_the_filter_placeholder_names_the_folder(self):
         conn = connect(Path(tempfile.mkdtemp()) / "t.db")

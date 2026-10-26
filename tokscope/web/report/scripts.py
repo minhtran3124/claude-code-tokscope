@@ -201,18 +201,26 @@ function dayEl(label,n,tk){const h=document.createElement('div');h.className='da
 // A redacted report keeps no path or prompt text, so only its placeholders are here and these never match a real name.
 // the folder name that holds the text (the last one that does), else the last folder
 const base=(p,n)=>{const f=p.replace(/\\/+$/,'').split('/');return(n&&[...f].reverse().find(x=>x.toLowerCase().includes(n)))||f.pop()};
-function whyFolder(s,n){
-  if(!n)return null;
-  if(s.cwd&&s.cwd.toLowerCase().includes(n))return['in',base(s.cwd,n)||s.project];
-  const d=(s.hdirs||[]).find(x=>x.toLowerCase().includes(n));if(d)return['ran',base(d,n)||d];
-  if(s.turns&&s.turns.some(t=>/^\\[prompt · \\d+ chars\\]$/.test(t.text||'')?false:(t.text||'').toLowerCase().includes(n)))return['says',n];
-  return null}
-const whyText=w=>!w?'':w[0]==='in'?'in '+w[1]:w[0]==='ran'?'ran claude -p in '+w[1]:'mentions '+w[1];
-const direct=(s,n)=>(s.title||'').toLowerCase().includes(n)||s.id.startsWith(n)||(s.top_skill||'').includes(n);
+// lower-cased copies of the searchable text, built once per session on first use (a keystroke then only runs `includes`)
+const PLACEHOLDER=/^\\[prompt · \\d+ chars\\]$/;
+const lc=s=>s._lc||(s._lc={title:(s.title||'').toLowerCase(),cwd:(s.cwd||'').toLowerCase(),hdirs:(s.hdirs||[]).map(x=>x.toLowerCase()),
+  prompts:(s.turns||[]).map(t=>t.text||'').filter(x=>x&&!PLACEHOLDER.test(x)).join('\\n').toLowerCase()});
+// the filter for one needle (trimmed, lower case): match(s) keeps a session, whyOf(s) is the chip text when only a folder or
+// a prompt matched. Each session is judged once per needle.
+function finder(n){const memo=new Map();
+  const ev=s=>{let e=memo.get(s);if(e)return e;const c=lc(s);
+    if(c.title.includes(n)||s.id.startsWith(n)||(s.top_skill||'').includes(n))e={w:null,ok:true};
+    else{let w=null;
+      if(c.cwd.includes(n))w=['in',base(s.cwd,n)||s.project];
+      else{const i=c.hdirs.findIndex(x=>x.includes(n));
+        if(i>-1)w=['ran',base(s.hdirs[i],n)||s.hdirs[i]];else if(c.prompts.includes(n))w=['says',n]}
+      e={w,ok:!!w}}
+    memo.set(s,e);return e};
+  const text=w=>!w?'':w[0]==='in'?'in '+w[1]:w[0]==='ran'?'ran claude -p in '+w[1]:'mentions '+w[1];
+  return{match:s=>!n||ev(s).ok,whyOf:s=>n?text(ev(s).w):''}}
 function render(){
-  const needle=q.value.toLowerCase();
-  const match=s=>!needle||direct(s,needle)||!!whyFolder(s,needle);
-  const whyOf=s=>needle&&!direct(s,needle)?whyText(whyFolder(s,needle)):'';
+  // one trimmed needle for the match, the chip and the <mark> (a pasted trailing space still finds the folder)
+  const {match,whyOf}=finder(q.value.trim().toLowerCase());
   let rows=S.filter(isRoot).map(s=>group(s,match)).filter(g=>g.length);
   rows.sort(SORTS[sortKey][1]);
   // sessions with no start go last under Newest, so "No date" never sits between two days
@@ -225,7 +233,7 @@ function render(){
     else{el.getAnimations().forEach(a=>a.cancel());el.classList.remove('ghost');el.style.top='';
       el.querySelector('.tt').innerHTML=s.title?hl(s.title,q.value.trim()):s.only?'':'(untitled)';el.querySelector('.d').textContent=when(s);
       el.classList.toggle('picked',picked.has(s.id));el.querySelector('input').checked=picked.has(s.id)}
-    const why=whyOf(s),chip=el.querySelector('.why');chip.textContent=why;chip.title=why;chip.hidden=!why;
+    const why=whyOf(s),chip=el.querySelector('.why');chip.textContent=why;chip.title=why;chip.hidden=!why;el.classList.toggle('has-why',!!why);
     el.classList.toggle('child',e.d>0);el.classList.toggle('dim',e.dim);el.style.setProperty('--depth',e.d);
     return el};
   // by day: a header for each day (all its sessions and tokens, also those past "Show more"), newest first. Ranked: one header, and the date moves into the time column.
