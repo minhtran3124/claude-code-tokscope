@@ -147,6 +147,11 @@ class ServerTest(unittest.TestCase):
         self.assertRegex(css, r"\.live-head\{[^}]*display:flex[^}]*flex-wrap:wrap")
         # the region may shrink, so a long note wraps inside it instead of pushing the line under the heading
         self.assertRegex(css, r"\.live-head \[data-region=running\]\{[^}]*flex:1 1[^}]*min-width:0")
+        # one line: the heading's dot sits on the text baseline (not centred, which moved the h2 baseline), as do the
+        # running line's items, and the running dot is no longer centred on the taller count
+        self.assertRegex(css, r"\.live-head>h2\{[^}]*align-items:baseline")
+        self.assertRegex(css, r"\.runnow\{[^}]*display:flex[^}]*align-items:baseline")
+        self.assertNotRegex(css, r"\.runnow \.dot\{[^}]*align-self:center")
 
     def test_the_overview_says_so_when_nothing_is_open(self):
         _, over = self.get("/overview")
