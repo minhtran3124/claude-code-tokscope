@@ -247,9 +247,9 @@ table.sbs td.add{background:color-mix(in oklch,var(--pass) 12%,transparent)}
 .live-head>h2,.live-head .runnow{margin:0}
 .live-head>h2{align-items:baseline}
 .live-head [data-region=running]{flex:1 1 14rem;min-width:0}
-.runnow{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;font-size:15px}
+.runnow{display:grid;grid-template-columns:auto auto minmax(0,1fr);align-items:baseline;gap:4px 8px;font-size:15px}
 .runnow b{font-size:28px;line-height:1}
-.runnow .note{flex-basis:100%;margin:0 0 0 16px}
+.runnow .note{grid-column:3;margin:0}
 .dot.off{background:transparent;box-shadow:inset 0 0 0 1.5px var(--muted)}
 .dot.live.busy-now,.srow .live.working i{animation:pulse 1600ms var(--ease) infinite}
 .srow .live{display:inline-flex;align-items:center;gap:6px;flex:none;font-size:11px;padding:1px 8px;border-radius:99px;margin-left:8px;color:var(--muted);box-shadow:inset 0 0 0 1px var(--line,currentColor)}
