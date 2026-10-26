@@ -2,7 +2,7 @@
 state: active        # active | paused | blocked | done
 progress: 90          # rough estimate, 0-100
 priority: medium     # high | medium | low
-updated: 2026-10-25
+updated: 2026-10-26
 updated_by: claude   # claude | manual
 ---
 
@@ -18,6 +18,7 @@ Review the final PR `feat/otel-leftovers` -> main; on the M2: `cd desktop && npm
 - GitHub Actions jobs did not start on 2026-10-25 (annotation: payment failed or spending limit; the runs on 2026-10-22 passed). Settings > Billing. Until then the new `lint` job and the 3.11 leg have not run on GitHub; both pass locally.
 
 ## Recent
+- 2026-10-26: Overview Today card: heading and "N sessions running" share one row (`.live-head`, wraps on narrow screens); 636 tests pass, ruff clean; screenshots in the PR.
 - 2026-10-25: #157/#158 combined on feat/otel-leftovers (PRs 159, 160), final PR to main; checked end to end on ::1 in a temp home (duplicate post ingested once, deep JSON 400, modes 700/600); no UI change.
 - 2026-10-25: #158 OTel ingest: dedupe key plus unique index (migration drops stored duplicates), match() n log n, reader goes line by line, statusline `prompt_id` stored and joined to OTel events in `cache.official_by`; no UI change.
 - 2026-10-25: PR #156 review fix: a malformed or hostile OTel line is skipped per line (offset still advances) and cannot stop the skills steps; a transient DB error (locked, disk full) now propagates so the offset is not advanced; telemetry-only sessions (OTel events, no transcript) are tagged Sessions rows and in the Sessions, Tokens, Output, From cache and API-eq totals at Claude Code's cost_usd, so every #58 criterion is met; 623 tests pass.

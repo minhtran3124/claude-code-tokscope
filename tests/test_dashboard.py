@@ -137,6 +137,12 @@ class ServerTest(unittest.TestCase):
         self.assertNotIn("dead", over)
         self.assertNotEqual(json.loads(self.get("/api/version")[1])["live"], "")
 
+    def test_the_today_heading_and_the_running_line_share_one_row(self):
+        self.open_session(os.getpid(), "now1-aaaa", "busy")
+        self.assertRegex(self.get("/overview")[1], r'<div class="live-head"><h2><span class="dot"></span>Today</h2><div data-region="running"><p class="runnow">.*?</p></div></div><div data-region="today">')
+        (self.claude / "sessions" / f"{os.getpid()}.json").unlink()
+        self.assertRegex(self.get("/overview")[1], r'<div class="live-head"><h2>.*?Today</h2><div data-region="running"><p class="runnow none">')
+
     def test_the_overview_says_so_when_nothing_is_open(self):
         _, over = self.get("/overview")
         self.assertIn("No Claude Code session is open", over)

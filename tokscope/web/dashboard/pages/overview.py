@@ -529,7 +529,7 @@ def page_overview(conn, f):
     rows = _day_rows(conn, f)
     versions = _version_marks(conn, f, rows[0][0], rows[-1][0]) if rows else []
     return "".join([
-        f'<section class="card answer live-card"><h2><span class="dot"></span>Today</h2><div data-region="running">{_running()}</div><div data-region="today">{_today(conn, f)}</div></section>',
+        f'<section class="card answer live-card"><div class="live-head"><h2><span class="dot"></span>Today</h2><div data-region="running">{_running()}</div></div><div data-region="today">{_today(conn, f)}</div></section>',
         f'<div data-region="budgets">{_budgets(conn)}</div>',
         f'<div data-region="kpis">{_kpis(conn, f)}</div>',
         f'<div data-region="cache">{_cache_finding(conn, f)}</div>',
