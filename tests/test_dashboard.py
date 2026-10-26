@@ -814,6 +814,20 @@ class OverviewTest(unittest.TestCase):
         self.assertIn('<code class="ver">bbbbbb</code>', body)             # the "New skill versions" list agrees with the lines
         self.assertNotIn('<code class="ver">aaaaaa</code>', body)
 
+    def test_models_are_listed_by_requests_and_link_to_the_model_filter(self):
+        def req(key, model):
+            self.conn.execute("INSERT INTO requests (session_id, request_key, ts, model, prompt_idx, input, output, cache_read, "
+                              "cache_write_5m, cache_write_1h, cost_usd) VALUES ('s1',?,?,?,1,10,0,0,0,0,0.1)", (key, self.ts(1), model))
+        for i in range(3):
+            req(f"a{i}", "claude-haiku-5-5")
+        req("b0", "claude-opus-5-5")
+        body = overview_page._models(self.conn, dashboard.Filters({}))
+        self.assertLess(body.index("claude-haiku-5-5"), body.index("claude-opus-5-5"))   # 3 requests before 1
+        self.assertIn("75%", body)
+        self.assertIn('href="/overview?model=claude-opus-5-5"', body)
+        self.assertIn("Nothing in this range.", overview_page._models(self.conn, dashboard.Filters({"range": ["7"], "project": ["none"]})))
+        self.assertIn('<div data-region="models">', self.page())
+
     def test_top_spenders_are_one_container_with_three_columns(self):
         self.add(1, skill="xia2")
         body = self.page()
