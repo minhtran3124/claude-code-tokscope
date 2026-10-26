@@ -113,7 +113,7 @@ class FindingTest(WeekTest):
     def test_week_finding_compares_with_the_week_before(self):
         self.req(1, 300, "a")
         self.req(9, 100, "a")
-        head, _ = self.summary(_breakdowns(self.conn, COND, PARAMS), "by-week")
+        head, _ = self.summary(_breakdowns(self.conn, COND, PARAMS, now=NOW), "by-week")  # NOW, not the clock: the rows are dated from NOW
         self.assertIn("this week, ", head)
         self.assertIn("on last week; a leads", head)
 

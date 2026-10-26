@@ -87,7 +87,7 @@ class CacheTest(unittest.TestCase):
         self.fixture()
         self.assertIsNone(cache.official(self.conn, COND, PARAMS))
         pc = {"misses": 7, "miss_recache_tokens": 310000, "miss_causes": {"tools_changed": 5, "ttl_expired_5m": 2}}
-        self.conn.execute("INSERT INTO statusline_snapshots VALUES ('s1', '2026-10-20T13:00:00+00:00', ?)", (json.dumps(pc),))
+        self.conn.execute("INSERT INTO statusline_snapshots (session_id, ts, prompt_cache) VALUES ('s1', '2026-10-20T13:00:00+00:00', ?)", (json.dumps(pc),))
         self.assertEqual(cache.official(self.conn, COND, PARAMS),
                          {"causes": {"tools_changed": 5, "ttl_expired_5m": 2}, "misses": 7, "recache_tokens": 310000, "sessions": 1})
         page = _breakdowns(self.conn, COND, PARAMS)
@@ -96,7 +96,7 @@ class CacheTest(unittest.TestCase):
 
     def snap(self, secs, misses, tokens, causes):
         pc = {"misses": misses, "miss_recache_tokens": tokens, "miss_causes": causes}
-        self.conn.execute("INSERT INTO statusline_snapshots VALUES ('s1', ?, ?)",
+        self.conn.execute("INSERT INTO statusline_snapshots (session_id, ts, prompt_cache) VALUES ('s1', ?, ?)",
                           ((T0 + timedelta(seconds=secs)).isoformat(), json.dumps(pc)))
 
     def test_official_misses_are_grouped_by_the_skill_running_when_they_grew(self):
@@ -118,8 +118,22 @@ class CacheTest(unittest.TestCase):
         self.req(2, 100, 0, cw5=100, skill="bar")
         self.conn.execute("UPDATE requests SET ts = '2026-10-25T10:00:05.400Z' WHERE skill = 'bar'")
         pc = json.dumps({"misses": 1, "miss_recache_tokens": 10, "miss_causes": {"tools_changed": 1}})
-        self.conn.execute("INSERT INTO statusline_snapshots VALUES ('s1', '2026-10-25T10:00:05.900000+00:00', ?)", (pc,))
+        self.conn.execute("INSERT INTO statusline_snapshots (session_id, ts, prompt_cache) VALUES ('s1', '2026-10-25T10:00:05.900000+00:00', ?)", (pc,))
         self.assertEqual([d["key"] for d in cache.official_by(self.conn, "skill", COND, PARAMS)], ["bar"])
+
+    def test_a_snapshot_with_a_prompt_id_joins_the_otel_event_of_that_prompt_and_without_one_falls_back(self):
+        self.req(0, 100, 0, cw5=100, skill="early")   # k1
+        self.req(300, 100, 0, cw5=100, skill="late")  # k2: after the snapshot by time
+        self.conn.execute("INSERT INTO otel_requests (src, pos, idx, session_id, prompt_id, request_key) VALUES ('f', 0, 0, 's1', 'p9', 'k2')")
+        data = {"session_id": "s1", "prompt_id": "p9", "prompt_cache": {"misses": 1, "miss_recache_tokens": 5, "miss_causes": {"x": 1}}}
+        self.assertTrue(cache.record_snapshot(self.conn, data))
+        self.assertEqual(self.conn.execute("SELECT prompt_id FROM statusline_snapshots").fetchone()[0], "p9")
+        self.conn.execute("UPDATE statusline_snapshots SET ts = ?", ((T0 + timedelta(seconds=100)).isoformat(),))
+        self.assertEqual([d["key"] for d in cache.official_by(self.conn, "skill", COND, PARAMS)], ["late"])
+        self.conn.execute("UPDATE statusline_snapshots SET prompt_id = NULL")  # no id: the old time rule
+        self.assertEqual([d["key"] for d in cache.official_by(self.conn, "skill", COND, PARAMS)], ["early"])
+        self.conn.execute("UPDATE statusline_snapshots SET prompt_id = 'unknown'")  # an id no event carries: same fallback
+        self.assertEqual([d["key"] for d in cache.official_by(self.conn, "skill", COND, PARAMS)], ["early"])
 
     def test_record_snapshot_keeps_counters_only_and_skips_an_unchanged_one(self):
         data = {"session_id": "s1", "prompt_cache": {"misses": 3, "miss_recache_tokens": 900, "hit_ratio": 0.8,

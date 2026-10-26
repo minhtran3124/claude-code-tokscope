@@ -218,7 +218,8 @@ export CLAUDE_CODE_ENABLE_TELEMETRY=1 OTEL_LOGS_EXPORTER=otlp OTEL_EXPORTER_OTLP
 ```
 
 Options: `--host`, `--port` (or `TOKSCOPE_HOST`, `TOKSCOPE_PORT`), `--max-body BYTES` (default 8 MiB; bigger bodies,
-also after gzip, get a 413). It has no authentication, so it refuses a non-loopback `--host` unless you pass `--allow-remote`.
+also after gzip, get a 413; chunked uploads follow the same caps). `--host ::1` binds IPv6. On POSIX the data folder is
+created 0700 and the files 0600, because the bodies can hold prompt text. It has no authentication, so it refuses a non-loopback `--host` unless you pass `--allow-remote`.
 
 ## Development
 

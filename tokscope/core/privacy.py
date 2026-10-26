@@ -55,9 +55,9 @@ COLUMNS = {
                    "phase": PHASE, "ts": KEEP, "model": KEEP},
     "turn_events": {"session_id": KEEP, "ts": KEEP, "prompt_idx": KEEP, "agent_id": KEEP, "skill": SKILL, "phase": PHASE,
                     "kind": KEEP},
-    "statusline_snapshots": {"session_id": KEEP, "ts": KEEP, "prompt_cache": KEEP},  # counts only, see cache.record_snapshot
+    "statusline_snapshots": {"session_id": KEEP, "ts": KEEP, "prompt_cache": KEEP, "prompt_id": KEEP},  # counts only, see cache.record_snapshot
     "mcp_defs": {"session_id": KEEP, "server": "name:mcp", "tools": KEEP, "chars": KEEP},
-    "otel_requests": {"src": DROP, "pos": DROP, "idx": DROP, "session_id": KEEP, "prompt_id": KEEP, "ts": KEEP, "model": KEEP,
+    "otel_requests": {"src": DROP, "pos": DROP, "idx": DROP, "dedupe": DROP, "session_id": KEEP, "prompt_id": KEEP, "ts": KEEP, "model": KEEP,
                       "input": KEEP, "output": KEEP, "cache_read": KEEP, "cache_write": KEEP, "cost_usd": KEEP,
                       "duration_ms": KEEP, "speed": KEEP, "request_key": KEEP},
     "otel_files": {"src": DROP, "off": DROP, "head": DROP},
