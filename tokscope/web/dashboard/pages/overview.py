@@ -402,7 +402,7 @@ def _models(conn, f):
              (f"{n / total:.0%}", "lm"), (_tok(t), "lm")) for m, n, t in rows[:MODELS_SHOWN]]
     more = f" {len(rows) - MODELS_SHOWN} more not shown." if len(rows) > MODELS_SHOWN else ""
     return (f'<section class="card models"><h2>Models</h2><p class="note">{f.label()}, by number of requests.{more}</p>'
-            f'{_table(["model", "requests", "share", "tokens"], body, 1)}</section>')
+            f'{_table(["model", "requests", "share", "tokens"], body, 1, lambda n: f"{n:,}")}</section>')
 
 
 def _version_marks(conn, f, first, last):

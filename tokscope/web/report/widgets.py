@@ -14,12 +14,12 @@ def _usd(v):
     return "–" if v is None else f"${v:,.2f}"
 
 
-def _bar(value, top):
+def _bar(value, top, fmt=_tok):
     pct = 0 if not top else max(1.5, 100 * (value or 0) / top)
-    return f'<span class="bar">{_tok(value)}<i><u style="width:{pct:.1f}%"></u></i></span>'
+    return f'<span class="bar">{fmt(value)}<i><u style="width:{pct:.1f}%"></u></i></span>'
 
 
-def _table(headers, rows, bar_col):
+def _table(headers, rows, bar_col, fmt=_tok):
     """Cells: plain values, or (text, css class) tuples; class "raw" is pre-escaped HTML. The bar column holds tokens."""
     top = max((r[bar_col] or 0 for r in rows), default=0)
     head = "".join(f"<th>{html.escape(h)}</th>" for h in headers)
@@ -30,7 +30,7 @@ def _table(headers, rows, bar_col):
             # data-label names the column when a phone-width card stacks the table into one block per row
             label = f' data-label="{html.escape(headers[i])}"' if i < len(headers) else ""
             if i == bar_col:
-                cells.append(f"<td{label}>{_bar(v, top)}</td>")
+                cells.append(f"<td{label}>{_bar(v, top, fmt)}</td>")
             elif isinstance(v, tuple):
                 cells.append(f'<td class="{v[1]}"{label}>{v[0] if v[1] == "raw" else html.escape(str(v[0]))}</td>')
             else:
