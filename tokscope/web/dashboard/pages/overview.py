@@ -170,6 +170,7 @@ def _local_midnight():
     return tz.midnight()
 
 
+MODELS_SHOWN = 8       # the Models card lists this many models; the rest are counted in its note
 TYPICAL_DAYS = 14      # a typical day is the median of this many of the latest active days
 TYPICAL_LOOKBACK = 120  # days of requests read to find them
 
@@ -389,6 +390,21 @@ def _top(conn, f):
             + "".join(f'<div class="col"><h3>{h}</h3>{_table([k, "tokens", "share"], r[:keep], 1)}</div>' for h, k, r in rows) + "</div></section>")
 
 
+def _models(conn, f):
+    """Models called in the range, most requests first. A row links to the Overview filtered to that model."""
+    cond, params = f.cond()
+    rows = _q(conn, f"SELECT r.model, count(*), sum({TOKENS}) FROM requests r JOIN sessions s USING (session_id) {cond} "
+                    f"AND r.model IS NOT NULL GROUP BY 1 ORDER BY 2 DESC, 3 DESC", params)
+    if not rows:
+        return '<section class="card models"><h2>Models</h2><p class="note">Nothing in this range.</p></section>'
+    total = sum(n for _, n, _ in rows)
+    body = [((f'<a href="{f.link("overview", model=m)}" title="{html.escape(m)}">{html.escape(m)}</a>', "raw"), n,
+             (f"{n / total:.0%}", "lm"), (_tok(t), "lm")) for m, n, t in rows[:MODELS_SHOWN]]
+    more = f" {len(rows) - MODELS_SHOWN} more not shown." if len(rows) > MODELS_SHOWN else ""
+    return (f'<section class="card models"><h2>Models</h2><p class="note">{f.label()}, by number of requests.{more}</p>'
+            f'{_table(["model", "requests", "share", "tokens"], body, 1)}</section>')
+
+
 def _version_marks(conn, f, first, last):
     """Skill versions first seen on a day of the chart that replaced an earlier one: [(day, skill, version, label)]."""
     if not conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'skill_versions'").fetchone():
@@ -541,5 +557,6 @@ def page_overview(conn, f):
         f'<div data-region="changed">{_movers(conn, f, cmp)}<h3>New skill versions</h3>{_new_versions(conn, f)}</div></section>',
         f'<section class="card" id="trend"><h2>Daily tokens</h2><p class="note">{f.label()}, days in {tz.label()}</p>'
         f'<div data-region="trend">{_daily_stacked(rows, list_changes(conn), versions)}</div></section>',
+        f'<div data-region="models">{_models(conn, f)}</div>',
         f'<div data-region="top">{_top(conn, f)}</div>',
     ])
