@@ -143,6 +143,8 @@ html.settled [data-region] :is(.hero,.kpi,.empty,.bar i u){animation:none}
 #session-list .track{display:block;min-width:0}
 #session-list .srow>summary .split{height:10px}
 #session-list .srow .body{padding:4px 12px 12px 34px}
+/* an opened session is one panel: the summary line and the body share a tinted ground, a mark-coloured left edge and hairlines above and below */
+#session-list .srow[open],#session-list .srow[open]:hover{background:var(--tint);box-shadow:inset 4px 0 0 var(--mark),inset 0 1px 0 var(--edge),inset 0 -1px 0 var(--edge)}
 #session-list .btn.kids-more{margin:6px 10px 6px calc(34px + var(--depth)*20px)}
 #sessions .tools .seg{flex:none}
 #sessions .seg .chip{transition:color var(--t-state) var(--ease),background var(--t-state) var(--ease),border-color var(--t-state) var(--ease)}

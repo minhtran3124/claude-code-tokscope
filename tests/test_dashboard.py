@@ -339,6 +339,20 @@ class SessionsTableTest(unittest.TestCase):
         self.assertIsNone(re.search(r"duration:\s*\d", js))
         self.assertIsNone(re.search(r"easing:'ease", js))
 
+    def test_an_opened_session_is_one_tinted_panel_in_every_skin(self):
+        from tokscope.web.theme.layout import LAYOUT_CSS
+        from tokscope.web.theme.classic import CLASSIC_CSS
+        from tokscope.web.report.styles import CSS
+        block = LAYOUT_CSS.split("/* sessions:", 1)[1].split("/* end sessions */", 1)[0]
+        rule = re.search(r"#session-list \.srow\[open\],#session-list \.srow\[open\]:hover\{([^}]*)\}", block)
+        self.assertIsNotNone(rule)                                            # the summary and the body are one element, so one rule
+        self.assertIn("background:var(--tint)", rule.group(1))
+        self.assertIn("inset 4px 0 0 var(--mark)", rule.group(1))
+        self.assertNotRegex(rule.group(1), r"#[0-9a-fA-F]{3,8}\b")             # theme tokens only, no raw colour
+        self.assertNotIn(".srow[open]{box-shadow:none", CLASSIC_CSS)          # the Classic skin no longer overrides the panel
+        for sheet in (CSS, CLASSIC_CSS):
+            self.assertIn("--tint:", sheet)
+
     def test_rows_are_44px_and_children_keep_their_indent_in_the_layout_sheet(self):
         from tokscope.web.theme.layout import LAYOUT_CSS
         block = LAYOUT_CSS.split("/* sessions:", 1)[1].split("/* end sessions */", 1)[0]

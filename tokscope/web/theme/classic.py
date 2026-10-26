@@ -75,7 +75,6 @@ dialog.keys::backdrop{backdrop-filter:blur(3px)}
 .viz .dot{stroke:var(--surface);stroke-width:2px}
 #session-list .shead,#session-list .dayhd{font-size:12px}
 #session-list .srow:hover{background:color-mix(in oklch,var(--mark) 5%,var(--surface))}
-#session-list .srow[open]{box-shadow:none;background:color-mix(in oklch,var(--mark) 5%,var(--surface))}
 #session-list .srow.picked{background:color-mix(in oklch,var(--mark) 10%,var(--surface));box-shadow:inset 3px 0 0 var(--mark)}
 #sessions .seg .chip{border-radius:8px}
 #sessions .pickbar{background:color-mix(in oklch,var(--mark) 10%,var(--surface));border:1px solid color-mix(in oklch,var(--mark) 45%,var(--edge));border-radius:12px;box-shadow:0 10px 30px -12px #0006;padding:10px 14px}
