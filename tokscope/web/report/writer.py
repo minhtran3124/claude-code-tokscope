@@ -110,7 +110,7 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 <p class="note"><span class="key"><i></i>main thread</span><span class="key"><i class="a"></i>subagents</span>
 Open a row to see each prompt, its skill, tokens and calls. Tick 2 to 4 rows, then press Compare.
 Sessions do different work, so a comparison describes them; for a controlled before/after use a benchmark.</p>
-<div class="tools"><input type="search" id="s-q" placeholder="Filter by title, skill or session id  ( / )">
+<div class="tools"><input type="search" id="s-q" placeholder="Filter by title, skill, folder or session id  ( / )">
 {SORT_SEG}
 <span class="note" id="s-count"></span></div>
 <section class="card" id="compare"><h3>Compare</h3>

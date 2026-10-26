@@ -181,6 +181,28 @@ html #toast{transform:translate(-50%,0)}
 html details::details-content{transition:content-visibility var(--t-state) allow-discrete}
 html details.more>summary::before{transition:none}
 }
+/* the sessions list on a phone (the dashboard and the static report share it) */
+@media (max-width:639px){
+/* sessions: two lines. Title and tokens, then time, top skill and the split bar */
+#session-list{--scols:44px auto minmax(0,1fr) 72px 24px}
+#session-list .shead[aria-hidden]{display:none}
+#session-list .srow>summary{height:auto;min-height:56px;padding:6px 6px 6px 0;gap:2px 8px}
+#session-list .srow>summary>input{grid-column:1;grid-row:1/3}
+#session-list .srow>summary .t{grid-column:2/4;grid-row:1;padding-left:calc(var(--depth,0)*14px)}
+#session-list .srow>summary .r{grid-column:4;grid-row:1}
+#session-list .srow>summary .cv{grid-column:5;grid-row:1/3}
+#session-list .srow>summary .d{grid-column:2;grid-row:2;font-size:12px}
+#session-list .srow>summary .sk{grid-column:3;grid-row:2;font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+#session-list .srow>summary .track{grid-column:4;grid-row:2}
+#session-list .srow>summary :is(.d,.sk,.track,.split){display:block}
+#session-list :is(.n,.sid8){display:none}
+#session-list .srow.orphan>summary .t{flex-direction:row}#session-list .srow>summary .from{max-width:45%}  /* an orphan child keeps its link to the parent (#28 review) */
+#session-list .btn.kids-more{margin-left:calc(44px + var(--depth)*14px);min-height:44px}
+#session-list .srow>summary>input{appearance:none;-webkit-appearance:none;width:44px;height:44px;margin:0;display:grid;place-items:center}
+#session-list .srow>summary>input::before{content:"";width:18px;height:18px;border:var(--line-w,1px) solid var(--ink);border-radius:4px;background:var(--surface)}
+#session-list .srow>summary>input:checked::before{background:var(--mark) linear-gradient(135deg,transparent 42%,var(--surface) 42% 52%,transparent 52%);}
+#session-list .srow>summary>input:focus-visible{outline:2px solid var(--ink);outline-offset:-4px}
+}
 """
 
 LAYOUT_DASH_CSS = """
@@ -414,25 +436,6 @@ main{padding:16px 12px 72px}
 /* daily chart: a phone shows the 14-day chart with 4 labels, not the wide one */
 #trend svg.wide{display:none}
 #trend svg.narrow{display:block}
-/* sessions: two lines. Title and tokens, then time, top skill and the split bar */
-#session-list{--scols:44px auto minmax(0,1fr) 72px 24px}
-#session-list .shead[aria-hidden]{display:none}
-#session-list .srow>summary{height:auto;min-height:56px;padding:6px 6px 6px 0;gap:2px 8px}
-#session-list .srow>summary>input{grid-column:1;grid-row:1/3}
-#session-list .srow>summary .t{grid-column:2/4;grid-row:1;padding-left:calc(var(--depth,0)*14px)}
-#session-list .srow>summary .r{grid-column:4;grid-row:1}
-#session-list .srow>summary .cv{grid-column:5;grid-row:1/3}
-#session-list .srow>summary .d{grid-column:2;grid-row:2;font-size:12px}
-#session-list .srow>summary .sk{grid-column:3;grid-row:2;font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis}
-#session-list .srow>summary .track{grid-column:4;grid-row:2}
-#session-list .srow>summary :is(.d,.sk,.track,.split){display:block}
-#session-list :is(.n,.sid8){display:none}
-#session-list .srow.orphan>summary .t{flex-direction:row}#session-list .srow>summary .from{max-width:45%}  /* an orphan child keeps its link to the parent (#28 review) */
-#session-list .btn.kids-more{margin-left:calc(44px + var(--depth)*14px);min-height:44px}
-#session-list .srow>summary>input{appearance:none;-webkit-appearance:none;width:44px;height:44px;margin:0;display:grid;place-items:center}
-#session-list .srow>summary>input::before{content:"";width:18px;height:18px;border:var(--line-w,1px) solid var(--ink);border-radius:4px;background:var(--surface)}
-#session-list .srow>summary>input:checked::before{background:var(--mark) linear-gradient(135deg,transparent 42%,var(--surface) 42% 52%,transparent 52%);}
-#session-list .srow>summary>input:focus-visible{outline:2px solid var(--ink);outline-offset:-4px}
 #sessions .tools .seg .chip,#sessions .tools input[type=search]{min-height:44px}
 #sessions .pickbar .primary,#sessions .pickbar .btn{min-height:44px}
 /* touch targets: 44 px */
@@ -591,6 +594,10 @@ a,summary,label,select,button:not(:disabled),input[type=checkbox],svg [data-chan
 .srow.child::before{content:'';position:absolute;left:-15px;top:-10px;height:calc(10px + 1.3em);width:10px;border-bottom-left-radius:6px}
 .srow.child>summary .t::before,.srow.orphan>summary .tt::before{content:'↳ ';color:var(--muted)}
 .srow.child.ghost{position:absolute}
+.srow>summary .why{flex:none;max-width:45%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;padding:1px 8px;border-radius:999px;background:var(--chip);color:var(--ink2)}
+.srow>summary .why[hidden]{display:none}
+/* on a phone a row that shows a reason chip lets it drop to its own line; other rows keep one ellipsised line */
+@media (max-width:639px){#session-list .srow.has-why>summary .t{flex-wrap:wrap;row-gap:2px}#session-list .srow.has-why>summary .tt,#session-list .srow.has-why>summary .why{max-width:100%}}
 .srow>summary .from{flex:none;max-width:45%;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:12px}
 .srow>summary .n{white-space:nowrap;color:var(--ink2);font-size:13px}
 .srow>summary .sk{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
