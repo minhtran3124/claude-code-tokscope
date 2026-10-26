@@ -818,12 +818,13 @@ class OverviewTest(unittest.TestCase):
         def req(key, model):
             self.conn.execute("INSERT INTO requests (session_id, request_key, ts, model, prompt_idx, input, output, cache_read, "
                               "cache_write_5m, cache_write_1h, cost_usd) VALUES ('s1',?,?,?,1,10,0,0,0,0,0.1)", (key, self.ts(1), model))
-        for i in range(3):
+        for i in range(1200):
             req(f"a{i}", "claude-haiku-5-5")
         req("b0", "claude-opus-5-5")
         body = overview_page._models(self.conn, dashboard.Filters({}))
-        self.assertLess(body.index("claude-haiku-5-5"), body.index("claude-opus-5-5"))   # 3 requests before 1
-        self.assertIn("75%", body)
+        self.assertLess(body.index("claude-haiku-5-5"), body.index("claude-opus-5-5"))   # 1,200 requests before 1
+        self.assertIn("100%", body)
+        self.assertIn("1,200", body)   # a request count is exact; the bar column's token format would write 1.2K
         self.assertIn('href="/overview?model=claude-opus-5-5"', body)
         self.assertIn("Nothing in this range.", overview_page._models(self.conn, dashboard.Filters({"range": ["7"], "project": ["none"]})))
         self.assertIn('<div data-region="models">', self.page())
