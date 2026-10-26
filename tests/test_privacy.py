@@ -60,6 +60,8 @@ class PrivacyTest(unittest.TestCase):
         conn.execute("INSERT INTO skill_calls (session_id, ts, skill, phase, source, agent_id, prompt_idx) "
                      "VALUES ('s-real-0001', ?, ?, ?, 'user', NULL, 1)",
                      (ts(1), NAMES["skill"], "other:" + NAMES["skill"]))
+        conn.execute("INSERT INTO headless_calls VALUES ('s-real-0001', 'h1', ?, ?, ?, '')",
+                     (c["cwd"] + "\n/home/secretuser/clients/acme-corp/travel-pi", ts(1), ts(1)))
         conn.execute("INSERT INTO bench_runs (run_id, task, variant, run_idx, session_id, started_at, duration_s, exit_code, "
                      "is_error, reported_cost, passed, result, commit_sha) VALUES ('b', 'acme-task', 'v1', 0, 's-bench-01', ?, "
                      "1, 0, 0, 0, 1, ?, ?)", (ts(1), c["answer"], c["sha"]))
@@ -89,6 +91,17 @@ class PrivacyTest(unittest.TestCase):
             for word in ("secretuser", "acme-corp", "acme.example"):
                 self.assertNotIn(word, page, f"{level}: {word}")
             self.assertIn('"text":"[prompt \\u00b7 ', page)  # the session data is JSON, so · is escaped
+
+    def test_the_folder_filter_data_is_in_the_full_report_only(self):
+        # the session data feeds the Sessions folder filter: the full path, and the folders where `claude -p` started
+        full = self.report("full")
+        self.assertIn('"cwd":"/home/secretuser/clients/acme-corp"', full)
+        self.assertIn('"hdirs":["/home/secretuser/clients/acme-corp","/home/secretuser/clients/acme-corp/travel-pi"]', full)
+        for level in ("redacted", "numbers"):
+            page = self.report(level)
+            self.assertNotIn("travel-pi", page, level)
+            self.assertNotIn('"hdirs"', page, level)            # the call's folders are dropped from the copy
+            self.assertRegex(page, r'"cwd":"/project-[0-9a-f]{6}"')   # the same alias the project already has
 
     def test_names_survive_redacted_but_become_aliases_in_numbers(self):
         redacted, numbers = self.report("redacted"), self.report("numbers")

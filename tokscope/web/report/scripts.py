@@ -125,7 +125,7 @@ function row(s){
   const by=s.parent_title||s.parent?.slice(0,8)||'',from=s.parent?`\nstarted by ${by}${byId.has(s.parent)?'':' (outside this range)'}`:'';
   // a parent outside the range has no row to sit under, so the child names it
   d.innerHTML=`<summary><input type=checkbox aria-label="compare" ${picked.has(s.id)?'checked':''}${s.only?' disabled':''}>
-    <span class=d>${esc(when(s))}</span><span class="t${/^session [0-9a-f]{8}$/.test(s.title||'')?' sid':''}" title="${esc(s.title+from)}"><span class=tt>${s.title?hl(s.title,q.value.trim()):s.only?'':'(untitled)'}</span>${s.only?`<span class=tag title="${esc(s.tip)}">telemetry only</span>`:''}${liveTag(s.id)}${/^session [0-9a-f]{8}$/.test(s.title||'')?'':`<code class=sid8>${esc(s.id.slice(0,8))}</code>`}${s.parent&&!byId.has(s.parent)?`<small class=from>from ${DASH&&s.parent?`<a href="/sessions?range=all&amp;q=${encodeURIComponent(s.parent)}" title="show the session that started this one (all time)">${esc(by)}</a>`:esc(by)}</small>`:''}</span>
+    <span class=d>${esc(when(s))}</span><span class="t${/^session [0-9a-f]{8}$/.test(s.title||'')?' sid':''}" title="${esc(s.title+from)}"><span class=tt>${s.title?hl(s.title,q.value.trim()):s.only?'':'(untitled)'}</span><small class=why hidden></small>${s.only?`<span class=tag title="${esc(s.tip)}">telemetry only</span>`:''}${liveTag(s.id)}${/^session [0-9a-f]{8}$/.test(s.title||'')?'':`<code class=sid8>${esc(s.id.slice(0,8))}</code>`}${s.parent&&!byId.has(s.parent)?`<small class=from>from ${DASH&&s.parent?`<a href="/sessions?range=all&amp;q=${encodeURIComponent(s.parent)}" title="show the session that started this one (all time)">${esc(by)}</a>`:esc(by)}</small>`:''}</span>
     <span class=sk>${esc(s.top_skill||'')}</span><span class="r n">${s.prompts}</span><span class="r n" title="${s.runs||0} subagent runs" aria-label="${s.runs||0} subagent runs">${s.runs||'–'}</span><span class=r><b>${fmt(s.tokens)}</b></span>${split(s.main,s.agents)}<span class=cv aria-hidden=true>›</span></summary><div class=body></div>`;
   const cb=d.querySelector('input');
   cb.addEventListener('click',e=>e.stopPropagation());
@@ -196,9 +196,23 @@ function headEl(){const h=document.createElement('div');h.className='shead';
 window.onTz=()=>render();
 function dayEl(label,n,tk){const h=document.createElement('div');h.className='dayhd';
   h.innerHTML=`<b>${esc(label)}</b><span>${n} session${n===1?'':'s'} · ${fmt(tk)} tokens</span>`;return h}
+// why a session matches the filter when its title, id or top skill do not: it ran in a folder whose path has the text
+// ('in'), it started `claude -p` in one ('ran'), or one of its prompts names it ('says'). Returns [kind, label] or null.
+// A redacted report keeps no path or prompt text, so only its placeholders are here and these never match a real name.
+// the folder name that holds the text (the last one that does), else the last folder
+const base=(p,n)=>{const f=p.replace(/\\/+$/,'').split('/');return(n&&[...f].reverse().find(x=>x.toLowerCase().includes(n)))||f.pop()};
+function whyFolder(s,n){
+  if(!n)return null;
+  if(s.cwd&&s.cwd.toLowerCase().includes(n))return['in',base(s.cwd,n)||s.project];
+  const d=(s.hdirs||[]).find(x=>x.toLowerCase().includes(n));if(d)return['ran',base(d,n)||d];
+  if(s.turns&&s.turns.some(t=>/^\\[prompt · \\d+ chars\\]$/.test(t.text||'')?false:(t.text||'').toLowerCase().includes(n)))return['says',n];
+  return null}
+const whyText=w=>!w?'':w[0]==='in'?'in '+w[1]:w[0]==='ran'?'ran claude -p in '+w[1]:'mentions '+w[1];
+const direct=(s,n)=>(s.title||'').toLowerCase().includes(n)||s.id.startsWith(n)||(s.top_skill||'').includes(n);
 function render(){
   const needle=q.value.toLowerCase();
-  const match=s=>!needle||(s.title||'').toLowerCase().includes(needle)||s.id.startsWith(needle)||(s.top_skill||'').includes(needle);
+  const match=s=>!needle||direct(s,needle)||!!whyFolder(s,needle);
+  const whyOf=s=>needle&&!direct(s,needle)?whyText(whyFolder(s,needle)):'';
   let rows=S.filter(isRoot).map(s=>group(s,match)).filter(g=>g.length);
   rows.sort(SORTS[sortKey][1]);
   // sessions with no start go last under Newest, so "No date" never sits between two days
@@ -211,6 +225,7 @@ function render(){
     else{el.getAnimations().forEach(a=>a.cancel());el.classList.remove('ghost');el.style.top='';
       el.querySelector('.tt').innerHTML=s.title?hl(s.title,q.value.trim()):s.only?'':'(untitled)';el.querySelector('.d').textContent=when(s);
       el.classList.toggle('picked',picked.has(s.id));el.querySelector('input').checked=picked.has(s.id)}
+    const why=whyOf(s),chip=el.querySelector('.why');chip.textContent=why;chip.title=why;chip.hidden=!why;
     el.classList.toggle('child',e.d>0);el.classList.toggle('dim',e.dim);el.style.setProperty('--depth',e.d);
     return el};
   // by day: a header for each day (all its sessions and tokens, also those past "Show more"), newest first. Ranked: one header, and the date moves into the time column.
@@ -221,7 +236,7 @@ function render(){
       g.forEach(e=>els.push(rowFor(e)))})}
     else{let n=0,tk=0;rows.forEach(r=>{const[a,b]=tally(r[0].s);n+=a;tk+=b});els.push(dayEl(SORTS[sortKey][0],n,tk));page.forEach(g=>g.forEach(e=>els.push(rowFor(e))))}}
   list.replaceChildren(...els);
-  if(!rows.length){list.innerHTML=`<div class=empty><b>No sessions match “${esc(q.value)}”</b>Try part of a title, a skill name or the start of a session id.
+  if(!rows.length){list.innerHTML=`<div class=empty><b>No sessions match “${esc(q.value)}”</b>Try part of a title, a skill name, a folder or the start of a session id.
     <p><button type=button class=btn id=s-clear>Clear the filter</button></p></div>`;
     document.getElementById('s-clear').addEventListener('click',()=>{q.value='';render();q.focus()})}
   if(anim){top=list.getBoundingClientRect().top;const vh=innerHeight,seen=y=>y+top>-200&&y+top<vh+200;let k=0;

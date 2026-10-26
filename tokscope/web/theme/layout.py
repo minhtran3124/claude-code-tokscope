@@ -422,6 +422,7 @@ main{padding:16px 12px 72px}
 #session-list .srow>summary .t{grid-column:2/4;grid-row:1;padding-left:calc(var(--depth,0)*14px)}
 #session-list .srow>summary .r{grid-column:4;grid-row:1}
 #session-list .srow>summary .cv{grid-column:5;grid-row:1/3}
+#session-list .srow>summary .t{flex-wrap:wrap;row-gap:2px}#session-list .srow>summary .tt{max-width:100%}#session-list .srow>summary .why{max-width:100%}  /* the reason chip drops to its own line when the title leaves no room */
 #session-list .srow>summary .d{grid-column:2;grid-row:2;font-size:12px}
 #session-list .srow>summary .sk{grid-column:3;grid-row:2;font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis}
 #session-list .srow>summary .track{grid-column:4;grid-row:2}
@@ -591,6 +592,8 @@ a,summary,label,select,button:not(:disabled),input[type=checkbox],svg [data-chan
 .srow.child::before{content:'';position:absolute;left:-15px;top:-10px;height:calc(10px + 1.3em);width:10px;border-bottom-left-radius:6px}
 .srow.child>summary .t::before,.srow.orphan>summary .tt::before{content:'↳ ';color:var(--muted)}
 .srow.child.ghost{position:absolute}
+.srow>summary .why{flex:none;max-width:45%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;padding:1px 8px;border-radius:999px;background:var(--chip);color:var(--ink2)}
+.srow>summary .why[hidden]{display:none}
 .srow>summary .from{flex:none;max-width:45%;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:12px}
 .srow>summary .n{white-space:nowrap;color:var(--ink2);font-size:13px}
 .srow>summary .sk{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

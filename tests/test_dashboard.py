@@ -434,6 +434,32 @@ class ScriptTest(unittest.TestCase):
             os.unlink(f.name)
             self.assertEqual(run.returncode, 0, f"{name}: {run.stderr[-400:]}")
 
+    def test_the_folder_filter_matches_what_the_owner_typed(self):
+        # runs the page's own matcher in node: ran in the folder, ran `claude -p` in it, or a prompt names it
+        import shutil
+        import subprocess
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node is not installed")
+        fn = JS_SESSIONS.split("const base=", 1)[1].split("const whyText", 1)[0]
+        text = JS_SESSIONS.split("const whyText=", 1)[1].split("\n", 1)[0]
+        code = ("const base=" + fn + "const whyText=" + text + """
+const S=[{cwd:'/home/x/projects/Travel-Pi/app',project:'app',turns:[]},
+ {cwd:'/home/x/other',project:'other',hdirs:['/home/x/projects/travel-pi'],turns:[]},
+ {cwd:'/home/x/other',project:'other',turns:[{text:'plan the travel-pi trip'}]},
+ {cwd:'/home/x/other',project:'other',turns:[{text:'[prompt \\u00b7 20 chars]'}]},
+ {cwd:'',project:'',turns:[]}];
+console.log(JSON.stringify([...S.map(s=>whyText(whyFolder(s,'travel-pi'))),whyText(whyFolder(S[3],'prompt')),String(whyFolder(S[0],''))]))""")
+        run = subprocess.run([node, "-e", code], capture_output=True, text=True)
+        self.assertEqual(run.returncode, 0, run.stderr[-400:])
+        self.assertEqual(json.loads(run.stdout), ["in Travel-Pi", "ran claude -p in travel-pi", "mentions travel-pi", "", "", "", "null"])
+
+    def test_the_filter_placeholder_names_the_folder(self):
+        conn = connect(Path(tempfile.mkdtemp()) / "t.db")
+        page = dashboard.page_sessions(conn, dashboard.Filters({"range": ["all"]}), {})
+        self.assertIn("Filter by title, skill, folder or session id", page)
+        self.assertIn("class=why hidden", JS_SESSIONS)
+
     def test_pages_ask_for_new_data_every_2_seconds(self):
         # the "New data · reload" button and the live numbers wait at most this long after an ingest
         self.assertIn("setInterval(poll,2000)", dashboard.DASH_JS)

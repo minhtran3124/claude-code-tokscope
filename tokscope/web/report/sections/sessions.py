@@ -16,7 +16,7 @@ def _sessions_json(conn, cond, params, telemetry=()):
                        sum(CASE WHEN agent_id IS NULL THEN {TOKENS} END), sum(CASE WHEN agent_id IS NOT NULL THEN {TOKENS} END),
                        count(DISTINCT agent_id) {base} GROUP BY session_id""", params):
         sessions[sid] = {"id": sid, "title": title or "", "start": start or "", "end": end or "", "prompts": prompts or 0,
-                         "project": Path(cwd or "").name, "path": f"~/.claude/projects/{proj}/{sid}.jsonl", "tokens": tokens or 0, "output": out or 0, "usd": usd,
+                         "project": Path(cwd or "").name, "cwd": cwd or "", "path": f"~/.claude/projects/{proj}/{sid}.jsonl", "tokens": tokens or 0, "output": out or 0, "usd": usd,
                          "main": main or 0, "agents": agents or 0, "runs": runs, "owners": {}, "skills": {}, "turns": []}
     for sid, owner, tk in conn.execute(
             f"SELECT session_id, COALESCE(agent_type, 'main thread'), sum({TOKENS}) {base} GROUP BY 1, 2", params):
@@ -50,6 +50,11 @@ def _sessions_json(conn, cond, params, telemetry=()):
             first = next((t["text"] for t in s["turns"] if t["text"]), "")
             s["title"] = f"“{first[:80]}”" if first else ""
         s["top_skill"] = max(s["skills"], key=s["skills"].get) if s["skills"] else ""
+    # folders where a session started `claude -p` (only sessions that did; the privacy copy has none), for the folder filter
+    for sid, cwds in conn.execute("SELECT session_id, cwds FROM headless_calls WHERE cwds IS NOT NULL AND cwds != ''"):
+        if sid in sessions:
+            seen = sessions[sid].setdefault("hdirs", [])
+            seen.extend(d for d in cwds.split("\n") if d and d not in seen)
     # a headless session (claude -p) names the session that started it; the list shows it under that one
     # (a parent outside the report's filter keeps its id but not its title: that is another project's text)
     for sid, parent in conn.execute("SELECT session_id, parent_session_id FROM sessions WHERE parent_session_id IS NOT NULL"):
