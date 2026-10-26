@@ -141,12 +141,20 @@ class ServerTest(unittest.TestCase):
         from tokscope.web.theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS
         self.open_session(os.getpid(), "now1-aaaa", "busy")
         self.assertRegex(self.get("/overview")[1], r'<div class="live-head">\s*<h2><span class="dot"></span>Today</h2>\s*<div data-region="running">\s*<p class="runnow">.*?</p>\s*</div>\s*</div>\s*<div data-region="today">', re.S)
+        self.assertRegex(self.get("/overview")[1], r'</b> <span class="lbl">sessions? running</span><span class="note">')
         (self.claude / "sessions" / f"{os.getpid()}.json").unlink()
         self.assertRegex(self.get("/overview")[1], r'<div class="live-head">\s*<h2>.*?Today</h2>\s*<div data-region="running">\s*<p class="runnow none">', re.S)
         css = LAYOUT_CSS + LAYOUT_DASH_CSS
         self.assertRegex(css, r"\.live-head\{[^}]*display:flex[^}]*flex-wrap:wrap")
         # the region may shrink, so a long note wraps inside it instead of pushing the line under the heading
         self.assertRegex(css, r"\.live-head \[data-region=running\]\{[^}]*flex:1 1[^}]*min-width:0")
+        # one line: the heading's dot sits on the text baseline (not centred, which moved the h2 baseline), as do the
+        # running line's items, and the running dot is no longer centred on the taller count
+        self.assertRegex(css, r"\.live-head>h2\{[^}]*align-items:baseline")
+        self.assertRegex(css, r"\.runnow\{[^}]*display:grid[^}]*grid-template-columns:auto auto minmax\(0,1fr\)[^}]*align-items:baseline")
+        # the note sits in the label column, so its left edge follows the label for any count width and for "session"
+        self.assertRegex(css, r"\.runnow \.note\{[^}]*grid-column:3")
+        self.assertNotRegex(css, r"\.runnow \.dot\{[^}]*align-self:center")
 
     def test_the_overview_says_so_when_nothing_is_open(self):
         _, over = self.get("/overview")

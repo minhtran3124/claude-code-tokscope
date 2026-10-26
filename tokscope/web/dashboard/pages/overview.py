@@ -482,7 +482,7 @@ def _running():
         by[s["entry"]] = by.get(s["entry"], 0) + 1
     where = " · ".join(f"{n} in {e}" for e, n in sorted(by.items()))
     return (f'<p class="runnow"><span class="dot live{" busy-now" if busy else ""}"></span><b data-count="{len(open_)}" data-kind="int" '
-            f'data-key="running">{len(open_)}</b> session{"s" if len(open_) != 1 else ""} running'
+            f'data-key="running">{len(open_)}</b> <span class="lbl">session{"s" if len(open_) != 1 else ""} running</span>'
             f'<span class="note">{busy} working · {len(open_) - busy} waiting for you · {html.escape(where)}</span></p>')
 
 
