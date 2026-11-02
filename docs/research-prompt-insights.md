@@ -101,6 +101,7 @@ Slice 1 grouping rules (the first scripts were not kept, so these are the defini
 - **Each group shows:** prompts, sessions, in-prompt cost, its lowest, median and highest cost per prompt, median steps, subagent
   requests, skills, median start context, facets outcomes and one example.
 - **At `redacted` and `numbers`:** the command reads `privacy.redacted_copy`, which has no prompt text, so only workflow groups appear.
+  Facets files are read too, by session id, and only a fixed list of outcome values is shown.
 - **Facets:** read only, from `usage-data/facets/` under `$CLAUDE_CONFIG_DIR`, else `~/.claude`.
 
 | Pattern | Route |
