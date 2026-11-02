@@ -8,13 +8,14 @@ import unittest
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
 from tokscope import paths
 from tokscope.core import skills
 from tokscope.experiments import optimize
-from tokscope.features import library
+from tokscope.features import changes, library
 from tokscope.web import dashboard
 from http.server import BaseHTTPRequestHandler
 from tokscope.web.dashboard.pages import library as library_page
@@ -196,6 +197,52 @@ body = next(Path(".claude/skills").glob("*/SKILL.md")).read_text()
 print(json.dumps({"is_error": False, "result": "CLAUDE_MODEL in ai_config", "session_id": "b-" + uuid.uuid4().hex,
                   "total_cost_usd": round(len(body) / 10000, 4)}))
 """
+
+
+class ApplyChangeRowTest(OptimizeTest):
+    def rows(self):
+        return changes.list_changes(self.conn)
+
+    def test_apply_adds_one_row_for_the_skill_at_the_applied_time(self):
+        job = optimize.start(self.k, self.found, ["unslop"], wait=True)
+        optimize.apply(self.conn, job)
+        rows = self.rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0][1], rows[0][3], rows[0][4]), (optimize.status(job)["applied"], None, "mine-a"))
+
+    def test_a_refused_apply_adds_no_row(self):
+        job = optimize.start(self.k, self.found, ["unslop"], wait=True)
+        (self.src / "SKILL.md").write_text("---\nname: mine-a\n---\nEdited by hand meanwhile.\n")
+        with self.assertRaises(ValueError):
+            optimize.apply(self.conn, job)                         # the skill changed
+        os.environ["FAKE_FAIL"] = "1"
+        self.addCleanup(os.environ.pop, "FAKE_FAIL", None)
+        failed = optimize.start(self.k, self.found, ["unslop"], wait=True)
+        with self.assertRaises(ValueError):
+            optimize.apply(self.conn, failed)                      # not done
+        self.assertEqual(self.rows(), [])
+
+    def test_a_second_apply_adds_no_second_row(self):
+        job = optimize.start(self.k, self.found, ["unslop"], wait=True)
+        optimize.apply(self.conn, job)
+        with self.assertRaises(ValueError):
+            optimize.apply(self.conn, job)
+        self.assertEqual(len(self.rows()), 1)
+
+    def test_the_row_is_measured_with_requests_on_both_sides(self):
+        applied = datetime.now(timezone.utc) - timedelta(days=2)
+        self.conn.execute("INSERT INTO sessions (session_id, project) VALUES ('s1', '-home-u-app')")
+        for i, delta in enumerate((-30, -20, 20, 30)):
+            ts = (applied + timedelta(hours=delta)).isoformat()
+            self.conn.execute("INSERT INTO requests (session_id, request_key, ts, skill, prompt_idx, input, output, cache_read, "
+                              "cache_write_5m, cache_write_1h) VALUES ('s1', ?, ?, 'mine-a', ?, 10, 5, 0, 0, 0)", (f"k{i}", ts, i))
+        self.conn.commit()
+        job = optimize.start(self.k, self.found, ["unslop"], wait=True)
+        with mock.patch.object(optimize, "_now", return_value=applied.isoformat(timespec="seconds")):
+            optimize.apply(self.conn, job)
+        r = changes.impact(self.conn, self.rows()[0])
+        self.assertGreater(r["before"]["n"], 0)
+        self.assertGreater(r["after"]["n"], 0)
 
 
 class CompareAndBenchTest(OptimizeTest):
