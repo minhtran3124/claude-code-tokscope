@@ -110,10 +110,15 @@ reads again.
 | `/tokscope open` | Opens the report (`/tokscope report` does the same) |
 | `/tokscope skills [name]` | Lists skill versions |
 | `/tokscope pane on\|off` | Shows or closes the live pane |
+| `/tokscope nudge on\|off` | Turns the 300K context warning on or off |
 
 The **live pane** shows the session tokens (main thread and subagents), the last 8 turns with tokens, list price,
 subagents, MCP servers and tools, and the tokens by owner and by skill. It updates after each turn; press `r` to
 refresh and `o` to open the report. It is off by default and remembers your last choice.
+
+The **context nudge**: when the last main-thread request of a session reaches 300K tokens of context, the mod shows a
+toast, once per session, and the pane shows a line whenever the context is 300K or more. It spends no tokens, works with the pane closed, and is on by default.
+`/tokscope nudge off` turns it off, and the off setting persists across sessions.
 
 The mod finds the CLI in `TOKSCOPE_CLI`, then on `PATH`, then in `~/.local/bin/tokscope`. It writes a mark for each
 Skill and Agent call to `data/marks/` and ingests the session when it ends.
