@@ -46,6 +46,8 @@ let tween: Timer | undefined
 let glow: Timer | undefined
 // session ids already nudged: one toast per session, even after a compact and a second crossing
 const nudged = new Set<string>()
+// session ids whose pane line is spent: context fell below NUDGE_AT after the nudge (a compact), so a second crossing adds no line
+const lineSpent = new Set<string>()
 
 type MarkedInput = { skill?: string; subagent_type?: string; description?: string }
 
@@ -179,8 +181,10 @@ async function refresh($: EngineInterface, cli: string): Promise<void> {
 
 // one toast per session when its last request reaches NUDGE_AT; spends no tokens
 async function nudge($: EngineInterface, v: SessionView | null): Promise<void> {
-  if (!v || v.empty || v.error || (v.context ?? 0) < NUDGE_AT || !(await isNudgeOn($))) return
+  if (!v || v.empty || v.error) return
   const id = await $.session.id()
+  if ((v.context ?? 0) < NUDGE_AT && nudged.has(id)) lineSpent.add(id)
+  if ((v.context ?? 0) < NUDGE_AT || !(await isNudgeOn($))) return
   if (nudged.has(id)) return
   nudged.add(id)  // before the toast, so a failing toast cannot repeat
   $.ui.toast(`tokscope: context is ${fmt(v.context)} tokens. Consider /compact or a fresh session. /tokscope nudge off hides this.`)
@@ -281,7 +285,9 @@ export const register: Register = on => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const v = await read($, view)
     const m = await read($, motion)
-    const nudgeOn = await isNudgeOn($)
+    const sid = await $.session.id()
+    if (v && (v.context ?? 0) < NUDGE_AT && nudged.has(sid)) lineSpent.add(sid)
+    const nudgeOn = (await isNudgeOn($)) && !lineSpent.has(sid)
     const width = Math.max(32, Math.min(MAX_WIDTH, (e.props.bodyColumns ?? 40) - 1))
     const spin = SPIN[m.frame % SPIN.length]
     if (!v) return <Text><Text color={MAIN}>{spin}</Text> <Text dimColor>Reading this session…</Text></Text>

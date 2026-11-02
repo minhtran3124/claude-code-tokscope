@@ -430,6 +430,27 @@ test('nudge: a compact and a second crossing in the same session does not toast 
   expect(toasts).toHaveLength(1)
 })
 
+test('nudge: the pane line does not come back on a second crossing in the same session', async ($, on) => {
+  const source = at(350_000)
+  const { clock } = await start($, on, { source, sessionId: 'n6b' })
+  await $.command.run({ command: 'tokscope', args: 'pane on' })
+  await turn($, 't1')
+  await clock.advance(5000)
+  const first = await $.ui.mount(PANE)
+  expect(await first.find({ type: 'Text', text: /context 350\.0K/ })).toBeTruthy()
+  await first.unmount()
+  source.view = { ...VIEW, context: 10_000 } as never
+  await turn($, 't2')
+  await clock.advance(5000)
+  source.view = { ...VIEW, context: 400_000 } as never
+  await turn($, 't3')
+  await clock.advance(5000)
+
+  const ui = await $.ui.mount(PANE)
+  expect(await ui.find({ type: 'Text', text: /consider \/compact/ })).toBeFalsy()
+  await ui.unmount()
+})
+
 test('nudge: with the pane closed it toasts without opening the pane or starting motion', async ($, on) => {
   const { toasts, panes, runs, clock } = await start($, on, { source: at(310_000), sessionId: 'n7' })
   await turn($, 't1')
