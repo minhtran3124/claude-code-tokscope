@@ -394,6 +394,15 @@ class CliTest(Base):
         self.assertIn("no prompt groups", out)
         self.assertIn("tokscope ingest", out)
 
+    def test_missing_database_is_not_created(self):
+        absent = Path(tempfile.mkdtemp()) / "absent.db"
+        out = io.StringIO()
+        with mock.patch.object(cli, "DB", absent), mock.patch.object(sys, "argv", ["tokscope", "patterns", "--format", "json"]), \
+                contextlib.redirect_stdout(out):
+            cli.main()
+        self.assertEqual(json.loads(out.getvalue()), [])
+        self.assertFalse(absent.exists())
+
     def test_bad_date_and_bad_level(self):
         code, out, err = self.cli("--since", "yesterday")
         self.assertEqual(code, "tokscope: bad date 'yesterday', use YYYY-MM-DD")

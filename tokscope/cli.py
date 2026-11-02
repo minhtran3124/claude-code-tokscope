@@ -71,7 +71,7 @@ def summary(args):
 
 
 def patterns_cmd(args):
-    """`tokscope patterns`: read-only, so it ingests nothing; connect() only makes the tables on a fresh install."""
+    """`tokscope patterns`: read-only, so it ingests nothing and never creates the database file; an existing one is opened with connect() to bring its tables up to date."""
     from .features import patterns
 
     text = args.since or patterns.default_since()
@@ -79,8 +79,11 @@ def patterns_cmd(args):
         bound = tz.utc_bound(text)
     except ValueError:
         sys.exit(f"tokscope: bad date {text!r}, use YYYY-MM-DD")
-    connect(DB).close()
-    result = patterns.run(DB, bound, args.privacy)
+    if Path(DB).exists():
+        connect(DB).close()
+        result = patterns.run(DB, bound, args.privacy)
+    else:  # no database yet: nothing to read, and a read must not create one
+        result = {"since": bound, "privacy": args.privacy, "groups": [], "unpriced": ""}
     # the notes are not data: with json, stdout holds only the JSON
     note_out = sys.stdout if args.format == "table" else sys.stderr
     print(patterns.to_json(result) if args.format == "json" else patterns.to_table(result))
