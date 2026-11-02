@@ -430,7 +430,7 @@ test('nudge: a compact and a second crossing in the same session does not toast 
   expect(toasts).toHaveLength(1)
 })
 
-test('nudge: the pane line does not come back on a second crossing in the same session', async ($, on) => {
+test('nudge: the pane line shows again on a second crossing in the same session', async ($, on) => {
   const source = at(350_000)
   const { clock } = await start($, on, { source, sessionId: 'n6b' })
   await $.command.run({ command: 'tokscope', args: 'pane on' })
@@ -447,11 +447,11 @@ test('nudge: the pane line does not come back on a second crossing in the same s
   await clock.advance(5000)
 
   const ui = await $.ui.mount(PANE)
-  expect(await ui.find({ type: 'Text', text: /consider \/compact/ })).toBeFalsy()
+  expect(await ui.find({ type: 'Text', text: /context 400\.0K.*consider \/compact/ })).toBeTruthy()
   await ui.unmount()
 })
 
-test('nudge: with the pane closed, a compact the mod never read still spends the pane line', async ($, on) => {
+test('nudge: with the pane closed, a compact the mod never read still shows the pane line at 300K or more', async ($, on) => {
   const source = at(350_000)
   await start($, on, { source, sessionId: 'n6c' })
   await turn($, 't1')  // quiet read: nudged
@@ -460,7 +460,7 @@ test('nudge: with the pane closed, a compact the mod never read still spends the
   await $.command.run({ command: 'tokscope', args: 'pane on' })
 
   const ui = await $.ui.mount(PANE)
-  expect(await ui.find({ type: 'Text', text: /consider \/compact/ })).toBeFalsy()
+  expect(await ui.find({ type: 'Text', text: /consider \/compact/ })).toBeTruthy()
   await ui.unmount()
 })
 
