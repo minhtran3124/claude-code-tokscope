@@ -70,6 +70,24 @@ def summary(args):
         print(note, file=note_out)
 
 
+def patterns_cmd(args):
+    """`tokscope patterns`: read-only, so it ingests nothing; connect() only makes the tables on a fresh install."""
+    from .features import patterns
+
+    text = args.since or patterns.default_since()
+    try:
+        bound = tz.utc_bound(text)
+    except ValueError:
+        sys.exit(f"tokscope: bad date {text!r}, use YYYY-MM-DD")
+    connect(DB).close()
+    result = patterns.run(DB, bound, args.privacy)
+    # the notes are not data: with json, stdout holds only the JSON
+    note_out = sys.stdout if args.format == "table" else sys.stderr
+    print(patterns.to_json(result) if args.format == "json" else patterns.to_table(result))
+    for line in patterns.notes(result):
+        print(line, file=note_out)
+
+
 def _budgets(args):
     """The loaded budgets (None when there is no file); a bad file ends the command with its message, exit 2."""
     from .core import budgets
@@ -391,6 +409,11 @@ def main():
     ps.add_argument("--errors", action="store_true", help="count failed and repeated tool calls, interrupts, API errors "
                     "and retries instead of cost (--by skill, agent or phase)")
     ps.add_argument("--format", choices=("table", "json", "csv"), default="table", help="json or csv print only the rows")
+    ppt = sub.add_parser("patterns", help="which kinds of prompts cost the most, what they ran and how they ended (read-only)")
+    ppt.add_argument("--since", metavar="YYYY-MM-DD", help="first day to read (default: the last 14 days)")
+    ppt.add_argument("--format", choices=("table", "json"), default="table", help="json prints only the groups")
+    ppt.add_argument("--privacy", choices=LEVELS, default="full",
+                     help="redacted or numbers: workflow groups only, no prompt text (default full)")
     pr = sub.add_parser("report", help="write the HTML report")
     po = sub.add_parser("open", help="ingest new transcripts, rebuild the HTML report and open it in the browser")
     for q in (pr, po):
@@ -530,6 +553,8 @@ def main():
             print(bench.diff(DB, task["name"]))
     elif args.cmd == "summary":
         summary(args)
+    elif args.cmd == "patterns":
+        patterns_cmd(args)
     elif args.cmd in ("report", "open"):
         from .web.report import write_report
 

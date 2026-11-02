@@ -3,12 +3,14 @@ import contextlib
 import io
 import json
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
+from tokscope import cli
 from tokscope.core import tz
 from tokscope.core.ingest import connect
 from tokscope.features import patterns
@@ -315,6 +317,84 @@ class PrivacyLevelTest(Base):
     def test_invalid_level(self):
         with self.assertRaises(ValueError):
             patterns.run(self.db, "2000-01-01T00:00:00", "bogus")
+
+
+class CliTest(Base):
+    def cli(self, *argv):
+        self.conn.commit()
+        self.conn.close()
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(cli, "DB", self.db), mock.patch.object(sys, "argv", ["tokscope", "patterns", *argv]), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            try:
+                cli.main()
+                code = 0
+            except SystemExit as e:
+                code = e.code
+        self.conn = connect(self.db)
+        return code, out.getvalue(), err.getvalue()
+
+    def test_json_stdout_is_only_json_and_notes_go_to_stderr(self):
+        self.prompt("a", 1, LONG, skills=["sk1"], reqs=[dict(model="mystery-model")])
+        self.conn.execute("UPDATE requests SET cost_usd = NULL")
+        code, out, err = self.cli("--format", "json")
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertEqual(data["groups"][0]["key"], "sk1")
+        self.assertIn("API-eq", err)
+        self.assertIn("unpriced", err)
+
+    def test_table_with_groups_and_notes_on_stdout(self):
+        self.prompt("a", 1, LONG, skills=["sk1"])
+        code, out, err = self.cli()
+        self.assertEqual(code, 0)
+        self.assertIn("API-eq $", out)
+        self.assertIn("sk1", out)
+        self.assertIn("e.g. " + LONG, out)
+        self.assertIn("API-eq = these tokens", out)
+        self.assertEqual(err, "")
+
+    def test_no_groups_on_a_fresh_database(self):
+        fresh = Path(tempfile.mkdtemp()) / "fresh.db"
+        self.db = fresh
+        self.conn = connect(fresh)
+        code, out, _ = self.cli("--format", "json", "--privacy", "numbers")
+        self.assertEqual((code, json.loads(out)["groups"]), (0, []))
+        code, out, _ = self.cli()
+        self.assertEqual(code, 0)
+        self.assertIn("no prompt groups", out)
+        self.assertIn("tokscope ingest", out)
+
+    def test_bad_date_and_bad_level(self):
+        code, out, err = self.cli("--since", "yesterday")
+        self.assertEqual(code, "tokscope: bad date 'yesterday', use YYYY-MM-DD")
+        code, _, err = self.cli("--privacy", "everything")
+        self.assertEqual(code, 2)
+        self.assertIn("invalid choice", err)
+
+    def test_default_window_and_since_override(self):
+        self.prompt("old", 1, LONG, days=15, skills=["old"])
+        self.prompt("new", 1, LONG, days=13, skills=["new"])
+        self.assertEqual([g["key"] for g in json.loads(self.cli("--format", "json")[1])["groups"]], ["new"])
+        since = (tz.now().date() - timedelta(days=20)).isoformat()
+        self.assertEqual({g["key"] for g in json.loads(self.cli("--format", "json", "--since", since)[1])["groups"]},
+                         {"old", "new"})
+
+    def test_privacy_level_through_the_command(self):
+        self.prompt("a", 1, CANARY + " deploy it", skills=["acme-deploy"])
+        _, out, _ = self.cli("--format", "json", "--privacy", "redacted")
+        self.assertNotIn("CANARY", out)
+        self.assertEqual(json.loads(out)["groups"][0]["key"], "acme-deploy")
+
+
+class RenderTest(unittest.TestCase):
+    def test_table_handles_none(self):
+        g = {"kind": "workflow", "key": "k", "prompts": 1, "sessions": 1, "in_prompt_usd": 1.0, "in_prompt_low": 1.0,
+             "in_prompt_median": 1.0, "in_prompt_high": 1.0, "steps_median": 0, "subagent_requests": 0,
+             "skills": [], "start_context_median": None, "outcomes": {}, "example": None}
+        text = patterns.to_table({"groups": [g], "unpriced": ""})
+        self.assertEqual(len(text.splitlines()), 2)
+        self.assertEqual(json.loads(patterns.to_json({"groups": [g]}))["groups"][0]["key"], "k")
 
 
 if __name__ == "__main__":

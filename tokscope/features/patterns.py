@@ -13,6 +13,7 @@ from pathlib import Path
 from statistics import median
 
 from ..core import pricing, tz
+from ..core.pricing import API_EQ_NOTE
 from ..core.ingest import open_db
 from ..core.privacy import LEVELS, redacted_copy
 from .changes import BENCH_PROJECT
@@ -191,3 +192,39 @@ def run(db_path, since_bound, level="full"):
                if len(v) >= TASK_MIN_PROMPTS and len({m[0] for m in v}) >= TASK_MIN_SESSIONS]
     groups.sort(key=lambda g: (-g["in_prompt_usd"], g["key"]))
     return {"since": since_bound, "privacy": level, "groups": groups, "unpriced": note}
+
+
+def to_json(result):
+    return json.dumps(result)
+
+
+def _num(v, fmt="{:,.0f}"):
+    return "-" if v is None else fmt.format(v)
+
+
+def to_table(result):
+    """One line of numbers per group, then an indented line with skills, outcomes and the example."""
+    groups = result["groups"]
+    if not groups:
+        return "no prompt groups in this window; patterns reads only what is stored, so run `tokscope ingest` first"
+    out = [f"{'kind':<8} {'key':<36} {'prompts':>7} {'sessions':>8} {'API-eq $':>9} {'low':>7} {'median':>7} {'high':>7} "
+           f"{'steps':>5} {'sub req':>7} {'start ctx':>10}"]
+    for g in groups:
+        out.append(f"{g['kind']:<8} {g['key'][:36]:<36} {g['prompts']:>7,} {g['sessions']:>8,} {g['in_prompt_usd']:>9.2f} "
+                   f"{g['in_prompt_low']:>7.2f} {g['in_prompt_median']:>7.2f} {g['in_prompt_high']:>7.2f} "
+                   f"{_num(g['steps_median'], '{:g}'):>5} {g['subagent_requests']:>7,} {_num(g['start_context_median']):>10}")
+        extra = []
+        if g["skills"]:
+            extra.append("skills: " + ", ".join(g["skills"]))
+        if g["outcomes"]:
+            extra.append("outcomes: " + ", ".join(f"{k} {n}" for k, n in g["outcomes"].items()))
+        if g["example"]:
+            extra.append(f"e.g. {g['example']}")
+        if extra:
+            out.append("    " + " | ".join(extra))
+    return "\n".join(out)
+
+
+def notes(result):
+    """The lines that are not data: the API-eq note and the unpriced note."""
+    return [API_EQ_NOTE] + ([result["unpriced"]] if result["unpriced"] else [])
