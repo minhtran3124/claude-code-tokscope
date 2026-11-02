@@ -30,6 +30,11 @@ class TextTest(unittest.TestCase):
             self.assertIn("[masked]", out, raw)
             self.assertNotIn(raw.split()[-1], out, raw)
 
+    def test_mask_snake_case_names(self):
+        for raw in ("client_secret=abc1", "access_token: abc1", "DB_PASSWORD=abc1", "my-api-key=abc1"):
+            out = patterns.mask(f"set {raw} now")
+            self.assertEqual(out, "set [masked] now", raw)
+
     def test_mask_fragments_and_boundary(self):
         self.assertEqual(patterns.mask("key sk-"), "key [masked]")
         self.assertEqual(patterns.mask("see ghp_"), "see [masked]")

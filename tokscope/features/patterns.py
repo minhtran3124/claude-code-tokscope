@@ -32,8 +32,8 @@ _MASKS = [re.compile(p, f) for p, f in (
     (r"(?<![A-Za-z0-9])github_pat_\w*", 0),
     (r"(?<![A-Za-z0-9])(?:AKIA|ASIA)[A-Z0-9]{0,16}", 0),  # AWS access key ids (a cut one keeps the prefix)
     (r"\bBearer\s+\S+", re.I),
-    (r"\b(?:token|api[_-]?key|secret|password|passwd|pwd)\s*[=:]\s*\S*", re.I),
-    (r"\b(?:password|passwd|passphrase|secret)\s+is\s+\S*", re.I),  # "password is hunter2"
+    (r"(?<![A-Za-z0-9])(?:[A-Za-z0-9]+[_-])*(?:token|api[_-]?key|secret|password|passwd|pwd)\s*[=:]\s*\S*", re.I),  # also client_secret=, DB_PASSWORD=
+    (r"(?<![A-Za-z0-9])(?:password|passwd|passphrase|secret)\s+is\s+\S*", re.I),  # "password is hunter2"
     (r"[A-Za-z0-9_-]{32,}", re.I),                        # any long URL-safe run
 )]
 _OUTCOME = re.compile(r"[a-z_]{1,40}")
