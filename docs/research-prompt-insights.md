@@ -3,120 +3,110 @@
 The idea (owner, 2026-11-02): give the logs to an LLM, set a target, compare by session and by prompt, suggest a plan;
 when the owner approves, analyze and generate the plan. Example: prompts that repeat become a suggestion for a skill.
 
-**Verdict: build it, with two changes.** The free detection comes first and the LLM runs only after a click. The tool
-also must not rank by the cost of a prompt, and must not promise that a skill saves tokens. The measurements below show
-why. tokscope has most of the parts already; the new work is detection, a target, and the link between them.
+The owner's goals (2026-11-02): fewer tokens, a better workflow, more useful features. Quota limits are not the goal.
+
+**Verdict: build a small version.** One free CLI command finds patterns, and one skill gives them to a normal Claude Code
+session, which writes the plan. There is no dashboard page, job runner or target for now. Two levers need no build: the
+model default, which the owner already changed, and auto compact.
+
+An independent review changed this note from a first draft with five slices. That draft said a prompt's cost mostly
+measures its session position, and that skills save little. Both claims failed; see below.
 
 ## What the data says
 
-A throwaway script ran on the local database (read only): 2026-09-21 to 2026-11-02, 4,342 prompts, about $6.8K API-eq.
-The rules were tuned by hand on this one history, so read the numbers as sizes, not as a method.
+Source: read-only queries on the local database, 2026-09-21 to 2026-11-02, about $6.8K API-eq. There is one user and no
+quality measure, and task groups come from hand-written rules. Read the numbers as sizes. They cannot prove that a change
+saves tokens without a loss in quality.
 
-| Prompt class | Prompts | Share of spend |
-| --- | --- | --- |
-| Real text | 3,230 | 72% |
-| Follow-up ("ok", "yes", "approve") | 281 | 14% |
-| Machine text (pasted worker templates, compaction summaries, review bots) | 435 | 11% |
-| Typed `/command` | 131 | 3% |
-| Headless `claude -p` | 265 | 0.5% |
+1. **The history has two periods, so measure only the recent one.** The owner changed the default model to Sonnet.
 
-1. **Plain repetition finds the wrong things.** With exact matches after normalizing, the costliest groups are "approve",
-   "ok" and "yes". Their cost is the work that follows, not the prompt, so a skill cannot replace them.
-2. **Repeated tasks are a small share.** Without those classes, 44 groups repeat in 3 or more sessions: 458 prompts, $538,
-   8% of spend. That is an upper limit. About half of the top 30 groups are real tasks (open a PR, merge main, read a CI
-   failure, check an error tracker issue); the rest are follow-ups in other words.
-3. **The cost of a prompt mostly measures where it sits in the session.** 97% of all tokens are cache reads. In the
-   repeated groups only 0-16% of tokens are fresh. "Open PR" costs $0.23 at the median and $40.63 at most, for the same
-   words. A skill changes little of that carried context, and so a "saves $X" figure from a prompt's cost is false.
-4. **Session shape is the larger lever.** The median session costs $0.42, the p90 $12.10, and the top 10% of sessions hold
-   84% of spend. Requests with more than 300K tokens of context are 37% of spend.
-5. **Repeated tool calls are not a lever.** Exact repeats inside a prompt are 787 of 89,664 calls, 0.3% of result size.
-6. **Word overlap splits one task.** The same task appears as several groups, in English and in Vietnamese. This is the
-   part where an LLM adds value: naming and merging groups, not counting them.
-7. **The before/after tool is unused.** The `changes` table has 0 rows, and `optimize.apply` does not write to it
-   (`tokscope/experiments/optimize.py:307`). An improvement that you apply today leaves no measured result.
+   | | 09-21 to 10-18 | 10-26 to 11-02 |
+   | --- | --- | --- |
+   | Spend | $5,598 | $308 |
+   | $ per prompt | $2.28 | $0.44 |
+   | Sonnet share of spend | 4% | 84% |
 
-A skill also has a cost: its description goes into the skills list of every session start. The net effect of a new skill
-on tokens is unknown until it is measured. The clear gains of a skill are consistency and less typing.
+   Prompts per day stayed about the same. The task mix also changed, and the recent window is small (66 sessions).
+2. **Cost follows the work in a prompt, not its place in the session.** The number of steps explains log prompt cost far
+   better than the context at the start (R² 0.63 against 0.17; partly mechanical). In dollars, 28.5% of spend is reads of
+   context inherited at the start of a prompt, 31.8% is subagents and 39.7% is made inside the prompt. "97% of tokens are
+   cache reads" is true for tokens only; in dollars cache reads are 44%. One "open PR" prompt cost $40.63 and another with
+   the same text $0.23: the first ran 114 main steps, 185 subagent requests and 3 skills.
+3. **Most spend starts from short prompts that load a skill.** About half of spend is in prompts that load a skill. Prompts
+   under 25 characters that load a skill hold 22%. These are workflow runs, not repeated typed tasks.
+4. **The data cannot say if skills save tokens.** For the same task, runs with a skill cost 3.9x and take 2.4x the steps
+   (n=311, 31 with a skill). They probably do more work, and no outcome is measured. Skills clearly change the steps after a
+   prompt, so a skill can raise or lower cost.
+5. **Repeated typed tasks are a small share.** 4.5% to 8% of spend, by method. Exact repetition mostly finds "ok" and
+   "approve". The prompts have a median of 29 characters, so a skill saves almost no typing there.
+6. **Long sessions are a real but smaller lever.** Replaying the logs with a reset at 300K context saves 17-19% of spend, as
+   an upper limit that assumes no re-reading. After 35 compactions, context 30 requests later was close to that of a fresh
+   session (133K against 137K). 79% of main-thread spend above 300K is in prompts that started above 300K, so the owner had
+   a moment to decide. Cheap prompts that started above 300K are only 4.7% of spend.
+7. **Reports go unused.** The `changes` table has 0 rows, no `budgets.json` exists, and Optimize, bench and replay all ran on
+   one or two days only. A new report page has a poor chance. Advice must arrive in the session, at the moment of a choice.
+8. **Exact repeated tool calls are not a lever:** 787 of about 89K calls, 0.3% of result size.
 
-## What is there already
+## Plan
 
-| The idea needs | Exists | Gap |
-| --- | --- | --- |
-| Logs | `prompts`, `requests`, `tool_calls` tables; privacy levels | Nothing groups prompts across sessions |
-| Target | `budgets.json`, `tokscope check` (limits per day, skill, agent) | A limit warns; a target has a baseline, a goal and a date |
-| Compare by session | Sessions tick 2 to 4, `core/context.py` findings | You pick the rows by hand |
-| Compare by prompt | Per-prompt rows inside a session | No view across sessions |
-| LLM run, then approve | Optimize: `claude -p` in `bench/optimize/<job>/`, budget cap, steps page, diff, Approve and apply | Starts from a skill, not from a finding; cannot create a skill |
-| Verify | `tokscope change`, bench, replay | `change` is manual; replay has read-only tools, so it cannot run a task that pushes or merges |
+### Try first, no build
 
-## Proposed flow
+- Run `/insights`, built into Claude Code 2.1.316 ("Generate a report analyzing your Claude Code sessions"). Build only what
+  it does not cover. The likely gap is token cost per group. It has not been run yet.
+- Try `autoCompactWindow`. The name is in the 2.1.316 binary and not in the owner's user settings; the behavior is not tested.
+- Check the model set per subagent. Moving Opus and Fable subagents to Sonnet is the next model lever. The size is unknown,
+  because the default change already did part of this.
 
-```text
-Target ──> Detect (free) ──> Suggestions ──Approve──> Analyze (paid, capped) ──> Plan ──Approve──> Apply ──> Measure
-  ^                                                                                                          │
-  └──────────────────────────────────────── progress against the target ─────────────────────────────────────┘
-```
+### Slices
 
-- **Target.** A `targets` key in `budgets.json`, so it shares the loader and `tokscope check`. Example:
-  `{"metric": "session_cost_p90", "goal": 8, "by": "2026-12-01", "project": "x"}`. The baseline is frozen when the target is
-  created. First metrics: session cost p90, share of spend above 300K context, session start tokens. These are the levers
-  from the data above.
-- **Detect.** New pure module `core/patterns.py` (stdlib, no LLM). It classifies each prompt (follow-up, machine, task),
-  groups tasks, and keeps a group seen in 3 or more sessions. A machine prompt is found by shape, not by a word list: the same
-  long text, as the first prompt, in many sessions. Reuse `BENCH_PROJECT` so experiments do not count.
-- **Compare.** A group makes the comparison automatic: "same task, different cost". Show the cheapest, median and costliest
-  run, with each run's context at the start of the prompt, and open them in the existing Compare view. Rank groups by
-  fresh tokens and sessions, and show total cost only as context.
-- **Suggestions.** Each one has a route, so "make a skill" is one answer of several:
+Each slice is one issue and one PR. Nothing here runs a paid job by itself.
+
+| # | Slice | Serves | Done when |
+| --- | --- | --- | --- |
+| 1 | `features/patterns.py`, `tokscope patterns [--since DATE] [--format json]` | Tokens, workflow | Follow-ups, machine prompts and bench sessions form no task group. A short prompt that loads a skill is a workflow run. Groups rank by in-prompt cost (cost minus reads of inherited context) and show steps, subagents, skills and start context. No prompt text at `redacted`. |
+| 2 | A skill in `mod/` that reads the JSON and writes a plan in a normal session | Workflow | A plan names a route and a way to measure it, for each group it keeps, with no dollar saving. |
+| 3 | Automatic `changes` row: in `optimize.apply`, and `add_change` accepts a project scope | Useful features | An applied skill change gets its before/after card with no manual step. A `CLAUDE.md` or setting change has a project-level row. |
+| 4 | Context nudge in the mod pane or a hook | Tokens, workflow | When a main thread passes a set context size, the owner sees one line before the next prompt. It is off by default. |
+
+Slice 1 is the test of the whole idea. If its groups are not useful on real data, stop there. It goes in `features/`, not
+`core/`, because it uses `BENCH_PROJECT` and `core` must not import `features`.
 
 | Pattern | Route |
 | --- | --- |
+| Workflow run with a wide cost range | Optimize the skill or its subagent models |
 | Repeated task, no skill loaded, similar steps | Draft a new skill |
-| Repeated task, a skill already loaded, wide cost range | Existing Optimize, with the group as evidence |
-| Same correction or request in many sessions ("translate to Vietnamese") | A line in `CLAUDE.md` |
+| Same request in many sessions ("translate to Vietnamese") | A line in `CLAUDE.md` |
 | Same long template in many sessions | Shorten the template at its source |
-| Cheap task late in a huge session | New session or `/compact` first; a smaller model through a subagent |
+| Long session with work still to do | Compact or a new session; show this as the nudge |
 
-- **Analyze and plan.** Approve starts a job in `experiments/insights.py`, built on the Optimize job code, under
-  `bench/insights/<job>/`, so it counts as an experiment. Input is a digest file, not raw transcripts: for each group the
-  stats and up to 5 trimmed examples, about 9K tokens for 40 groups by estimate. Output is a plan: what to change, why, and how to
-  measure it. It says "unknown until measured" for the saving, not a dollar figure.
-- **Apply and measure.** A new skill or `CLAUDE.md` line is a draft with the existing diff and Approve and apply. Apply records a
-  `changes` row by itself, so the before/after card and the target progress work without a manual step.
+### Not now
 
-## Slices
-
-Each slice is one issue and one PR. Slices 1 to 3 cost nothing to run.
-
-| # | Slice | Done when |
+| Part | Why | Build it when |
 | --- | --- | --- |
-| 1 | `core/patterns.py`, `tokscope patterns [--format json]` | On a fixture, follow-ups and machine prompts form no task group; output has no prompt text at `redacted` |
-| 2 | Dashboard page Patterns (full level only): groups, routes, cheapest/median/costliest run, link to Compare | Before/after screenshots at 1440 and 375 px; ranks by fresh tokens |
-| 3 | `targets` in `budgets.json`, in `tokscope check` and on Overview | A frozen baseline, a progress line, a clear "no data" state |
-| 4 | `experiments/insights.py`: Approve, digest, capped job, plan page | Token-like strings are masked in the digest; the run has no Bash; a test with `TOKSCOPE_CLAUDE` as a fake runs the flow |
-| 5 | Draft a skill or a `CLAUDE.md` line, apply, auto `changes` row (also in `optimize.apply`) | A new skill appears in the Library; its before/after card shows without a manual step |
+| Patterns dashboard page | Slice 2 gives the same content where the owner works | The skill is used and a list is needed |
+| Paid job runner, first Approve click | A digest costs cents, and a normal session already has a plan review and edit permissions | A run must work without a session |
+| `targets` | No quota data (`statusline_snapshots` has 0 rows) and API-eq is a poor proxy for limits. A session p90 falls when a session is split, with the same total | Quota data is stored. A target should use weekly usage |
 
-Slice 1 is the test of the whole idea. If its groups do not look useful on real data, stop there.
+The owner's "click approve" becomes the plan review in the session. Only the approval before a change is applied stays.
 
 ## Risks
 
 | Risk | Control |
 | --- | --- |
-| Prompts hold secrets or client text, and go into a new run | Full privacy level only. Mask token-like strings in the digest. Show the digest before Approve |
-| Prompts hold pasted text with instructions | The digest is data in a file. The run has Read and Write in its job folder only; no Bash, no web |
-| A plan claims savings it cannot prove | The plan format has no saving field; the result comes from the measurement step |
-| The tool's own runs change the numbers | Jobs run under `bench/`, which is left out by `BENCH_PROJECT` |
-| Too few prompts for a new user | Show nothing below 3 sessions, and say so |
-| A list that nobody reads | Dismiss per group, stored in the data home; a dismissed group stays hidden |
+| A plan claims savings it cannot prove | The plan has no saving field; the result comes from the before/after measurement |
+| Fewer tokens with worse results | Tokens alone do not prove a gain. Use bench with a grader where a task allows it; replay is read-only |
+| Prompts hold secrets or pasted instructions | Output has trimmed examples only, with token-like strings masked. The skill treats them as data, and the normal permission prompts stay on |
+| A skill writes to `CLAUDE.md` or a skill file | The change goes through the normal edit approval in the session. tokscope itself writes nothing outside its data home (`REVIEW.md`) |
+| Old data gives false progress | `patterns` defaults to a recent window, and each before/after starts at its change |
 
 ## Decisions
 
 | Decision | Why | Rejected |
 | --- | --- | --- |
-| Detection is free and local; the LLM runs only after Approve | The classes above need no model; a digest is cheap and capped | Sending all prompts to an LLM on a schedule (cost, privacy, a paid step nobody asked for) |
-| "Logs" means the transcript tables | They have the prompt text and 42 days of data | OTel logs (2 days of files here; `otel_requests` has no prompt text) |
-| Rank by fresh tokens and sessions, never by total prompt cost | Total cost mostly measures session position (point 3) | The ranking by cost that the first prototype used |
-| The product of this idea is a plan with routes, and skills are one route | The biggest levers in this data are not skills | A "prompts to skills" feature only |
+| A CLI command and a skill, not a page and a job runner | The tools that exist are barely used, and a session already gives the LLM, the review and the permissions | The five-slice build with `targets` and a job runner |
+| Rank by in-prompt cost | It leaves out context inherited at the start, and steps explain cost better than position | Total prompt cost; fresh tokens, which miss the reads made inside a prompt |
+| "Logs" means the transcript tables | They have the prompt text | OTel logs (2 days of files here; `otel_requests` has no prompt text) |
+| No promised saving | Finding 4: the direction of a skill's effect is unknown without a measurement | "Saves $X" estimates |
 
-Source of the numbers: `prompts`, `requests`, `tool_calls` and `changes` in `data/tokscope.db`. The script was not kept.
+Source of the numbers: `prompts`, `requests`, `tool_calls`, `skill_calls` and `changes` in `data/tokscope.db`. The scripts were
+not kept. A later re-run will differ a little, because new sessions are added.

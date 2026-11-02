@@ -9,7 +9,7 @@ updated_by: claude   # claude | manual
 # claude-code-tokscope — Status
 
 ## Summary
-OTel receiver and ingest are done and merged, and recent work added dashboard polish: a Models card, Sessions folder filter and open-row panel. The macOS app (#144-#148) is unverified without a Mac. The last recorded run failed at the canary stage. A design for a logs-to-enhancement-plan feature is in `docs/research-prompt-insights.md`, not built yet.
+OTel receiver and ingest are done and merged, and recent work added dashboard polish: a Models card, Sessions folder filter and open-row panel. The macOS app (#144-#148) is unverified without a Mac. The last recorded run failed at the canary stage. A smaller logs-to-plan design (a CLI command and a skill) is in `docs/research-prompt-insights.md` (PR #170), not built yet.
 
 ## Next step
 Fix the failed run 01M602P6H66Q15NXYZ7FJM45GP: get a fresh canary pass for the implement stage, then re-run it.
@@ -20,7 +20,7 @@ Fix the failed run 01M602P6H66Q15NXYZ7FJM45GP: get a fresh canary pass for the i
 - macOS app (#144-#148) cannot be verified without a Mac.
 
 ## Recent
-- 2026-11-02: Research on the logs-to-plan idea: measured repetition on the local database (repeated real tasks are at most 8% of spend; 97% of tokens are cache reads), wrote `docs/research-prompt-insights.md` with the flow, 5 slices and risks (PR #170); no product code changed. Review: 3 design gaps reported, not fixed yet.
+- 2026-11-02: Research on the logs-to-plan idea: measured repetition on the local database (repeated real tasks are at most 8% of spend; 97% of tokens are cache reads), wrote `docs/research-prompt-insights.md` with the flow, 5 slices and risks (PR #170); no product code changed. An independent review overturned two conclusions, and the note is rewritten around 4 slices for the owner's goals (tokens, workflow, useful features).
 - 2026-10-28: run 01M602P6H66Q15NXYZ7FJM45GP (default) failed, 4 stage run(s): canary: stage implement needs a fresh canary pass (no canary result)
 - 2026-10-26: Overview gets a Models card (PR #168: models by request count, links to the model filter, region `models`); a follow-up shows exact counts and trims Recent to 10 lines.
 - 2026-10-26: Rule added: one assumptions artifact per PR, all that PR's assumptions in it (`.claude/rules/behavior.md` #5); old per-assumption files left as they are.
