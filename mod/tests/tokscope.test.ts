@@ -445,3 +445,20 @@ test('nudge: with the pane closed it toasts without opening the pane or starting
   expect(await ui.find({ type: 'Text', text: /NEW|updating/ })).toBeFalsy()
   await ui.unmount()
 })
+
+test('nudge: with the pane closed and the nudge off, a turn runs no session read', async ($, on) => {
+  const { runs } = await start($, on, { source: at(400_000), sessionId: 'n8', nudge: false })
+  await turn($, 't1')
+
+  expect(sessionRuns(runs)).toHaveLength(0)
+})
+
+test('nudge: with the pane closed, a session already nudged is not read again', async ($, on) => {
+  const { runs, toasts } = await start($, on, { source: at(400_000), sessionId: 'n9' })
+  await turn($, 't1')
+  await turn($, 't2')
+  await turn($, 't3')
+
+  expect(toasts).toHaveLength(1)
+  expect(sessionRuns(runs)).toHaveLength(1)
+})

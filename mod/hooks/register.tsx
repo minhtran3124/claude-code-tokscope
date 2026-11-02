@@ -180,7 +180,7 @@ async function refresh($: EngineInterface, cli: string): Promise<void> {
 // one toast per session when its last request reaches NUDGE_AT; spends no tokens
 async function nudge($: EngineInterface, v: SessionView | null): Promise<void> {
   if (!v || v.empty || v.error || (v.context ?? 0) < NUDGE_AT || !(await isNudgeOn($))) return
-  const id = v.id || (await $.session.id())
+  const id = await $.session.id()
   if (nudged.has(id)) return
   nudged.add(id)  // before the toast, so a failing toast cannot repeat
   $.ui.toast(`tokscope: context is ${fmt(v.context)} tokens. Consider /compact or a fresh session. /tokscope nudge off hides this.`)
@@ -260,7 +260,7 @@ export const register: Register = on => {
     // subagent turns end too; only the main loop's end means new numbers for the session
     if (!e.agentId) {
       if (await isOn($)) await refresh($, cli)
-      else await readView($, cli)
+      else if ((await isNudgeOn($)) && !nudged.has(await $.session.id())) await readView($, cli)  // nothing else needs the read
       await nudge($, await read($, view))
     }
 
