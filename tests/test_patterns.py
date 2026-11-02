@@ -30,6 +30,13 @@ class TextTest(unittest.TestCase):
             self.assertIn("[masked]", out, raw)
             self.assertNotIn(raw.split()[-1], out, raw)
 
+    def test_mask_phrased_password_variants(self):
+        for raw, secret in (("password is: hunter2", "hunter2"), ("password was hunter2", "hunter2"),
+                            ("password for bob is hunter2", "hunter2"), ("passphrase: hunter2", "hunter2")):
+            out = patterns.mask(f"use {raw} now")
+            self.assertIn("[masked]", out, raw)
+            self.assertNotIn(secret, out, raw)
+
     def test_mask_snake_case_names(self):
         for raw in ("client_secret=abc1", "access_token: abc1", "DB_PASSWORD=abc1", "my-api-key=abc1"):
             out = patterns.mask(f"set {raw} now")
