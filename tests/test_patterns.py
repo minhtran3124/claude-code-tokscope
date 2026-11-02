@@ -195,6 +195,12 @@ class GroupingTest(Base):
                           (stamp(1, -5),))
         self.assertEqual(self.keys(), {("workflow", "first")})
 
+    def test_main_thread_skill_beats_earlier_subagent_skill(self):
+        self.prompt("s", 1, LONG, skills=["main-skill"])
+        self.conn.execute("INSERT INTO skill_calls (session_id, ts, skill, prompt_idx, agent_id, failed) "
+                          "VALUES ('s', ?, 'sub-skill', 1, 'ag1', 0)", (stamp(1, -5),))
+        self.assertEqual(self.keys(), {("workflow", "main-skill")})
+
     def test_skill_in_subagent_counts(self):
         self.prompt("s", 1, LONG, sub_skills=["agent-skill"])
         self.assertEqual(self.keys(), {("workflow", "agent-skill")})

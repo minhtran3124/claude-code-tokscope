@@ -106,7 +106,7 @@ def _where(bound):
 
 
 def _load(conn, where, params, with_text):
-    """({(session, prompt): [request rows]}, {(session, prompt): [(skill)] in load order}, {(session, prompt): text}).
+    """({(session, prompt): [request rows]}, {(session, prompt): [(skill)] main-thread loads first, then in load order}, {(session, prompt): text}).
     Prompt text is selected only when with_text is true, which is only at `full`."""
     reqs = {}
     for sid, idx, agent, model, cost, inp, cr, w5, w1 in conn.execute(
@@ -118,7 +118,7 @@ def _load(conn, where, params, with_text):
     skills = {}
     for sid, idx, skill in conn.execute("SELECT session_id, prompt_idx, skill FROM skill_calls "
                                         "WHERE COALESCE(failed, 0) = 0 AND prompt_idx IS NOT NULL AND skill IS NOT NULL "
-                                        "ORDER BY ts, rowid"):
+                                        "ORDER BY agent_id IS NOT NULL, ts, rowid"):  # main-thread loads first: the workflow is the prompt's own
         if (sid, idx) in reqs:  # the join in Python is what drops loads from machine and bench prompts at every level
             skills.setdefault((sid, idx), []).append(skill)
     texts = {}
