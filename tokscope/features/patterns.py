@@ -181,7 +181,7 @@ def run(db_path, since_bound, level="full"):
         conn.close()
     ov, rates = pricing.overrides(), {}
     rate = lambda m: rates.setdefault(m, pricing.cache_read_rate(m, ov))  # noqa: E731
-    dirs = _facet_dirs() if level == "full" else []  # below full the privacy path reads no file keyed by a real session id
+    dirs = _facet_dirs()  # session_id is kept at every level and an outcome is a short token, so workflow groups show it too
     workflows, tasks = {}, {}
     for (sid, idx), rows in reqs.items():
         text = texts.get((sid, idx))

@@ -346,13 +346,13 @@ class PrivacyLevelTest(Base):
             self.assertNotIn("canary", blob)
             self.assertNotIn("weekly report", blob)
 
-    def test_facets_read_only_at_full(self):
+    def test_outcomes_shown_at_every_level(self):
         self.prompt("a", 1, "x", skills=["acme-deploy"])
-        (self.facets / "a.json").write_text('{"outcome": "achieved"}')
-        self.assertEqual(self.go("full")["groups"][0]["outcomes"], {"achieved": 1})
-        for level in ("redacted", "numbers"):
-            with mock.patch.object(patterns, "_outcome", side_effect=AssertionError("facet read")):
-                self.assertEqual(self.go(level)["groups"][0]["outcomes"], {})
+        (self.facets / "a.json").write_text('{"outcome": "achieved", "brief_summary": "CANARY text"}')
+        for level in ("full", "redacted", "numbers"):
+            result = self.go(level)
+            self.assertEqual(result["groups"][0]["outcomes"], {"achieved": 1}, level)
+            self.assertNotIn("canary", json.dumps(result).lower())
 
     def test_invalid_level(self):
         with self.assertRaises(ValueError):
