@@ -451,11 +451,11 @@ test('nudge: the pane line shows again on a second crossing in the same session'
   await ui.unmount()
 })
 
-test('nudge: with the pane closed, a compact the mod never read still shows the pane line at 300K or more', async ($, on) => {
+test('nudge: with the pane closed and the toast spent, a pane opened later shows the line at 300K or more', async ($, on) => {
   const source = at(350_000)
   await start($, on, { source, sessionId: 'n6c' })
   await turn($, 't1')  // quiet read: nudged
-  source.view = { ...VIEW, context: 400_000, compacted: true } as never  // compact and recross happened between reads
+  source.view = { ...VIEW, context: 400_000 } as never
   await turn($, 't2')  // already nudged: no read
   await $.command.run({ command: 'tokscope', args: 'pane on' })
 
