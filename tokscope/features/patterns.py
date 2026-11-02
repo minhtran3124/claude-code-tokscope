@@ -73,8 +73,8 @@ def _facet_dirs():
 
 
 def _outcome(session_id, dirs):
-    """The `outcome` token of the session's facets file, or None. Only that field is read, and only a short token is
-    kept, so free text (a summary) cannot reach the output. Never raises and never prints."""
+    """The `outcome` token of the session's facets file, or None. Only that field is read, and `_OUTCOME` bounds its
+    shape only: `run` keeps KNOWN_OUTCOMES below `full`. Never raises and never prints."""
     if not isinstance(session_id, str) or not _SESSION_FILE.fullmatch(session_id):
         return None
     for d in dirs:
