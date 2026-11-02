@@ -340,7 +340,8 @@ class CliTest(Base):
         code, out, err = self.cli("--format", "json")
         self.assertEqual(code, 0)
         data = json.loads(out)
-        self.assertEqual(data["groups"][0]["key"], "sk1")
+        self.assertIsInstance(data, list)
+        self.assertEqual(data[0]["key"], "sk1")
         self.assertIn("API-eq", err)
         self.assertIn("unpriced", err)
 
@@ -359,7 +360,7 @@ class CliTest(Base):
         self.db = fresh
         self.conn = connect(fresh)
         code, out, _ = self.cli("--format", "json", "--privacy", "numbers")
-        self.assertEqual((code, json.loads(out)["groups"]), (0, []))
+        self.assertEqual((code, json.loads(out)), (0, []))
         code, out, _ = self.cli()
         self.assertEqual(code, 0)
         self.assertIn("no prompt groups", out)
@@ -375,16 +376,16 @@ class CliTest(Base):
     def test_default_window_and_since_override(self):
         self.prompt("old", 1, LONG, days=15, skills=["old"])
         self.prompt("new", 1, LONG, days=13, skills=["new"])
-        self.assertEqual([g["key"] for g in json.loads(self.cli("--format", "json")[1])["groups"]], ["new"])
+        self.assertEqual([g["key"] for g in json.loads(self.cli("--format", "json")[1])], ["new"])
         since = (tz.now().date() - timedelta(days=20)).isoformat()
-        self.assertEqual({g["key"] for g in json.loads(self.cli("--format", "json", "--since", since)[1])["groups"]},
+        self.assertEqual({g["key"] for g in json.loads(self.cli("--format", "json", "--since", since)[1])},
                          {"old", "new"})
 
     def test_privacy_level_through_the_command(self):
         self.prompt("a", 1, CANARY + " deploy it", skills=["acme-deploy"])
         _, out, _ = self.cli("--format", "json", "--privacy", "redacted")
         self.assertNotIn("CANARY", out)
-        self.assertEqual(json.loads(out)["groups"][0]["key"], "acme-deploy")
+        self.assertEqual(json.loads(out)[0]["key"], "acme-deploy")
 
 
 class RenderTest(unittest.TestCase):
@@ -394,7 +395,7 @@ class RenderTest(unittest.TestCase):
              "skills": [], "start_context_median": None, "outcomes": {}, "example": None}
         text = patterns.to_table({"groups": [g], "unpriced": ""})
         self.assertEqual(len(text.splitlines()), 2)
-        self.assertEqual(json.loads(patterns.to_json({"groups": [g]}))["groups"][0]["key"], "k")
+        self.assertEqual(json.loads(patterns.to_json({"groups": [g]}))[0]["key"], "k")
 
 
 if __name__ == "__main__":

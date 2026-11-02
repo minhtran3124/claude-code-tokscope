@@ -195,7 +195,7 @@ def run(db_path, since_bound, level="full"):
 
 
 def to_json(result):
-    return json.dumps(result)
+    return json.dumps(result["groups"])
 
 
 def _num(v, fmt="{:,.0f}"):
