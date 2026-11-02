@@ -37,6 +37,8 @@ _MASKS = [re.compile(p, f) for p, f in (
     (r"[A-Za-z0-9_-]{32,}", re.I),                        # any long URL-safe run
 )]
 _OUTCOME = re.compile(r"[a-z_]{1,40}")
+# the values Claude Code writes; below `full` only these are shown, because a facets file never went through the redactor
+KNOWN_OUTCOMES = {"fully_achieved", "mostly_achieved", "partially_achieved", "not_achieved", "unclear_from_transcript"}
 _SESSION_FILE = re.compile(r"[\w][\w.-]*")
 
 
@@ -181,7 +183,7 @@ def run(db_path, since_bound, level="full"):
         conn.close()
     ov, rates = pricing.overrides(), {}
     rate = lambda m: rates.setdefault(m, pricing.cache_read_rate(m, ov))  # noqa: E731
-    dirs = _facet_dirs()  # session_id is kept at every level and an outcome is a short token, so workflow groups show it too
+    dirs = _facet_dirs()  # session_id is kept at every level, so workflow groups can show outcomes; see KNOWN_OUTCOMES
     workflows, tasks = {}, {}
     for (sid, idx), rows in reqs.items():
         text = texts.get((sid, idx))
@@ -193,6 +195,9 @@ def run(db_path, since_bound, level="full"):
     groups = [_summarize("workflow", k, v, dirs) for k, v in workflows.items()]
     groups += [_summarize("task", k, v, dirs) for k, v in tasks.items()
                if len(v) >= TASK_MIN_PROMPTS and len({m[0] for m in v}) >= TASK_MIN_SESSIONS]
+    if level != "full":
+        for g in groups:
+            g["outcomes"] = {k: n for k, n in g["outcomes"].items() if k in KNOWN_OUTCOMES}
     groups.sort(key=lambda g: (-g["in_prompt_usd"], g["key"]))
     return {"since": since_bound, "privacy": level, "groups": groups, "unpriced": note}
 

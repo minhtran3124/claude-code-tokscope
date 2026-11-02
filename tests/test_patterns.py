@@ -348,11 +348,20 @@ class PrivacyLevelTest(Base):
 
     def test_outcomes_shown_at_every_level(self):
         self.prompt("a", 1, "x", skills=["acme-deploy"])
-        (self.facets / "a.json").write_text('{"outcome": "achieved", "brief_summary": "CANARY text"}')
+        (self.facets / "a.json").write_text('{"outcome": "fully_achieved", "brief_summary": "CANARY text"}')
         for level in ("full", "redacted", "numbers"):
             result = self.go(level)
-            self.assertEqual(result["groups"][0]["outcomes"], {"achieved": 1}, level)
+            self.assertEqual(result["groups"][0]["outcomes"], {"fully_achieved": 1}, level)
             self.assertNotIn("canary", json.dumps(result).lower())
+
+    def test_an_unknown_outcome_is_shown_only_at_full(self):
+        self.prompt("a", 1, "x", skills=["acme-deploy"])
+        (self.facets / "a.json").write_text('{"outcome": "acme_private_project"}')
+        self.assertEqual(self.go("full")["groups"][0]["outcomes"], {"acme_private_project": 1})
+        for level in ("redacted", "numbers"):
+            result = self.go(level)
+            self.assertEqual(result["groups"][0]["outcomes"], {}, level)
+            self.assertNotIn("acme_private_project", json.dumps(result))
 
     def test_invalid_level(self):
         with self.assertRaises(ValueError):
