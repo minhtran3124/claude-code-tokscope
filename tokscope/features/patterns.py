@@ -26,14 +26,16 @@ DEFAULT_DAYS = 14
 
 # Stored prompt text is whitespace-collapsed and cut at 160 characters, so a token can be a fragment: the prefix
 # patterns take any tail, including none.
-_MASKS = [re.compile(p, re.I if i >= 3 else 0) for i, p in enumerate((
-    r"\bsk-[\w-]*",                                     # sk-ant- and sk- keys (word boundary: not task-key or risk-free)
-    r"(?<![A-Za-z0-9])(?:ghp|gho|ghs)_\w*",             # GitHub tokens
-    r"(?<![A-Za-z0-9])github_pat_\w*",
-    r"\bBearer\s+\S+",
-    r"\b(?:token|api_key|apikey|secret|password)\s*[=:]\s*\S*",
-    r"[A-Za-z0-9_-]{32,}",                              # any long URL-safe run
-))]
+_MASKS = [re.compile(p, f) for p, f in (
+    (r"\bsk-[\w-]*", 0),                                # sk-ant- and sk- keys (word boundary: not task-key or risk-free)
+    (r"(?<![A-Za-z0-9])(?:ghp|gho|ghs)_\w*", 0),         # GitHub tokens
+    (r"(?<![A-Za-z0-9])github_pat_\w*", 0),
+    (r"(?<![A-Za-z0-9])(?:AKIA|ASIA)[A-Z0-9]{0,16}", 0),  # AWS access key ids (a cut one keeps the prefix)
+    (r"\bBearer\s+\S+", re.I),
+    (r"\b(?:token|api[_-]?key|secret|password|passwd|pwd)\s*[=:]\s*\S*", re.I),
+    (r"\b(?:password|passwd|passphrase|secret)\s+is\s+\S*", re.I),  # "password is hunter2"
+    (r"[A-Za-z0-9_-]{32,}", re.I),                        # any long URL-safe run
+)]
 _OUTCOME = re.compile(r"[a-z_]{1,40}")
 _SESSION_FILE = re.compile(r"[\w][\w.-]*")
 

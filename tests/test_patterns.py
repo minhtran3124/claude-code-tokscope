@@ -23,6 +23,13 @@ class TextTest(unittest.TestCase):
             self.assertIn("[masked]", patterns.mask(f"use {raw} now"), raw)
             self.assertNotIn(raw, patterns.mask(f"use {raw} now"))
 
+    def test_mask_aws_and_phrased_secrets(self):
+        for raw in ("AKIAIOSFODNN7EXAMPLE", "ASIAIOSFODNN7EXAMPLE", "password is hunter2", "api-key: abc123",
+                    "API-KEY=abc123", "passwd: x1"):
+            out = patterns.mask(f"use {raw} now")
+            self.assertIn("[masked]", out, raw)
+            self.assertNotIn(raw.split()[-1], out, raw)
+
     def test_mask_fragments_and_boundary(self):
         self.assertEqual(patterns.mask("key sk-"), "key [masked]")
         self.assertEqual(patterns.mask("see ghp_"), "see [masked]")
