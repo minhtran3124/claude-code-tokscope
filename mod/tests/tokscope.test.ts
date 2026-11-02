@@ -21,9 +21,9 @@ const PANE = {
 } as const
 
 async function start($: Parameters<Parameters<typeof test>[1]>[0], on: Parameters<Parameters<typeof test>[1]>[1],
-                     opts: { exitCode?: number; paneOn?: boolean; env?: Record<string, string>; source?: { view: unknown }; files?: string[]; ingestOut?: string } = {}) {
+                     opts: { exitCode?: number; paneOn?: boolean; env?: Record<string, string>; source?: { view: unknown }; files?: string[]; ingestOut?: string; sessionId?: string; nudge?: boolean } = {}) {
   const runs: Run[] = []
-  const store: Record<string, unknown> = opts.paneOn ? { pane: true } : {}
+  const store: Record<string, unknown> = { ...(opts.paneOn ? { pane: true } : {}), ...(opts.nudge === undefined ? {} : { nudge: opts.nudge }) }
   const panes: string[] = []
   const toasts: string[] = []
   on('ui.toast', (_, e) => { toasts.push((e as unknown as { text: string }).text); return { value: undefined } })
@@ -31,7 +31,7 @@ async function start($: Parameters<Parameters<typeof test>[1]>[0], on: Parameter
   on('env.get', (_, e) => ({ value: env[e.name] }))
   const files = opts.files ?? ['/home/u/.local/bin/tokscope']
   on('fs.exists', (_, e) => ({ value: files.includes(e.path) }))
-  on('session.id', () => ({ value: 'live-session' }))
+  on('session.id', () => ({ value: opts.sessionId ?? 'live-session' }))
   on('session.cwd', () => ({ value: '/home/u/work/app' }))
   on('command.register', () => ({ value: { command: 'tokscope' } }))
   on('store.get', (_, e) => ({ value: store[e.key] }))
@@ -59,13 +59,13 @@ async function start($: Parameters<Parameters<typeof test>[1]>[0], on: Parameter
 
 const sessionRuns = (runs: Run[]) => runs.filter(r => r.argv[1] === 'session')
 
-test('the pane is off by default: no pane opens and turns run no CLI', async ($, on) => {
+test('the pane is off by default: no pane opens; a turn reads the session once, quietly, for the nudge', async ($, on) => {
   const { runs, panes } = await start($, on)
 
   await $.turn.complete({ answer: 'x', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
 
   expect(panes).toEqual([])
-  expect(sessionRuns(runs)).toEqual([])
+  expect(sessionRuns(runs).map(r => r.argv.slice(1))).toEqual([['session', 'live-session', '--json']])
 })
 
 test('/tokscope pane on opens the pane, remembers it, and refreshes after each main-loop turn', async ($, on) => {
@@ -92,7 +92,9 @@ test('/tokscope pane off closes it and turns stop refreshing', async ($, on) => 
 
   expect(store.pane).toBe(false)
   expect(panes).toContain('close:tokscope')
-  expect(sessionRuns(runs).length).toBe(before)
+  // the pane stays closed; the quiet read for the nudge is the only run
+  expect(sessionRuns(runs).length).toBe(before + 1)
+  expect(panes).toEqual(['open:tokscope', 'close:tokscope'])
 })
 
 test('a session starts with the pane open when it was left on', async ($, on) => {
@@ -337,4 +339,109 @@ test('a session end with no budget line shows no toast', async ($, on) => {
   const { toasts } = await start($, on)
   await $.session.end({ reason: 'prompt_input_exit', sessionId: 'ended', resume: { sessionId: 'ended' } as never })
   expect(toasts).toEqual([])
+})
+
+const turn = ($: Parameters<Parameters<typeof test>[1]>[0], id: string, agentId?: string) =>
+  $.turn.complete({ answer: 'x', durationMs: 1, isAborted: false, turnId: id, reason: 'answer', ...(agentId ? { agentId } : {}) })
+const at = (context: number) => ({ view: { ...VIEW, context } })
+const CONTEXT_LINE = { type: 'Text', text: /context 300\.0K — consider \/compact/ } as const
+
+test('nudge: 300K context toasts once per session and adds a pane line', async ($, on) => {
+  const { toasts, clock } = await start($, on, { source: at(300_000), sessionId: 'n1' })
+  await $.command.run({ command: 'tokscope', args: 'pane on' })
+  await turn($, 't1')
+  await turn($, 't2')
+  await clock.advance(5000)
+
+  expect(toasts.filter(t => t.includes('context is 300.0K'))).toHaveLength(1)
+  expect(toasts[0]).toContain('/tokscope nudge off')
+  const ui = await $.ui.mount(PANE)
+  expect(await ui.find(CONTEXT_LINE)).toBeTruthy()
+  await ui.unmount()
+})
+
+test('nudge: 299999 tokens is quiet', async ($, on) => {
+  const { toasts, clock } = await start($, on, { source: at(299_999), sessionId: 'n2' })
+  await $.command.run({ command: 'tokscope', args: 'pane on' })
+  await turn($, 't1')
+  await clock.advance(5000)
+
+  expect(toasts).toEqual([])
+  const ui = await $.ui.mount(PANE)
+  expect(await ui.find({ type: 'Text', text: /consider \/compact/ })).toBeFalsy()
+  await ui.unmount()
+})
+
+test('/tokscope nudge off silences the toast and the line, stores false; on restores both', async ($, on) => {
+  const { toasts, store, clock } = await start($, on, { source: at(300_000), sessionId: 'n3' })
+  await $.command.run({ command: 'tokscope', args: 'pane on' })
+  expect((await $.command.run({ command: 'tokscope', args: 'nudge off' })).text).toContain('tokscope nudge off.')
+  await turn($, 't1')
+  await clock.advance(5000)
+
+  expect(store.nudge).toBe(false)
+  expect(toasts).toEqual([])
+  let ui = await $.ui.mount(PANE)
+  expect(await ui.find(CONTEXT_LINE)).toBeFalsy()
+  await ui.unmount()
+
+  expect((await $.command.run({ command: 'tokscope', args: 'nudge on' })).text).toContain('tokscope nudge on')
+  await turn($, 't2')
+  expect(store.nudge).toBe(true)
+  expect(toasts).toHaveLength(1)
+  ui = await $.ui.mount(PANE)
+  expect(await ui.find(CONTEXT_LINE)).toBeTruthy()
+  await ui.unmount()
+})
+
+test('/tokscope nudge with no or another state reports the setting and writes nothing', async ($, on) => {
+  const { store } = await start($, on, { nudge: false })
+
+  expect((await $.command.run({ command: 'tokscope', args: 'nudge' })).text).toContain('nudge is off')
+  expect((await $.command.run({ command: 'tokscope', args: 'nudge maybe' })).text).toContain('nudge on|off')
+  expect(store.nudge).toBe(false)
+})
+
+test('nudge: an off setting from an earlier session stays off; an unset key counts as on', async ($, on) => {
+  const quiet = await start($, on, { source: at(400_000), sessionId: 'n5a', nudge: false })
+  await turn($, 't1')
+  expect(quiet.toasts).toEqual([])
+})
+
+test('nudge: an unset setting is on without any setup', async ($, on) => {
+  const { toasts, store } = await start($, on, { source: at(400_000), sessionId: 'n5b' })
+  await turn($, 't1')
+
+  expect(store.nudge).toBeUndefined()
+  expect(toasts).toHaveLength(1)
+})
+
+test('nudge: a compact and a second crossing in the same session does not toast again', async ($, on) => {
+  const opts = { source: at(350_000), sessionId: 'n6' }
+  const { toasts } = await start($, on, opts)
+  await turn($, 't1')
+  expect(toasts).toHaveLength(1)
+  // the mock CLI answers with the current source: 10K after a compact, then 400K again
+  opts.source = at(10_000)
+  await turn($, 't2')
+  opts.source = at(400_000)
+  await turn($, 't3')
+
+  expect(toasts).toHaveLength(1)
+})
+
+test('nudge: with the pane closed it toasts without opening the pane or starting motion', async ($, on) => {
+  const { toasts, panes, runs, clock } = await start($, on, { source: at(310_000), sessionId: 'n7' })
+  await turn($, 't1')
+  await turn($, 't2', 'a1')  // a subagent turn does nothing
+
+  expect(toasts).toHaveLength(1)
+  expect(panes.filter(p => p.startsWith('open:'))).toEqual([])
+  expect(sessionRuns(runs)).toHaveLength(1)
+  // no spinner or tween ran: the pane, mounted later, is at rest (no NEW badge, no updating spinner)
+  await clock.advance(5000)
+  const ui = await $.ui.mount(PANE)
+  expect(await ui.find({ type: 'Text', text: /#3 latest/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /NEW|updating/ })).toBeFalsy()
+  await ui.unmount()
 })
