@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-11-02 · The OTel receiver reads a refused body before it answers
+
+| Decision | Why | Rejected |
+| --- | --- | --- |
+| A body over `--max-body` is read and dropped, up to 8 MiB more, then gets its 413. This changes the immediate refusal of the size caps (#50): the cap on what is kept is the same, and nothing dropped stays in memory. | Closing while the client is still sending gave it a broken pipe, not the 413, so an exporter could not tell a refused body from a network fault, and the test failed CI at random. | Changing only the test, which hides the fault. A 64 MiB drain, which reads 8x the cap for no known exporter. |
+
 ## 2026-10-25 · macOS app is a personal arm64 build with bundled Python (issue #147)
 
 | Decision | Why | Rejected |

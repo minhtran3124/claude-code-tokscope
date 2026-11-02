@@ -91,7 +91,7 @@ class ProjectsTest(unittest.TestCase):
     def test_a_deleted_worktree_or_eval_copy_folds_into_its_repository_by_name(self):
         for cwd in (self.home / "work" / "app-worktrees" / "gone", self.app / ".claude" / "skills" / "x" / "eval",
                     self.home / "old" / "repo-worktrees" / "t1", self.home / "old" / "repo-worktrees" / "t2"):
-            self.assertEqual(projects.root_of(cwd), self.app if "app" in str(cwd) else self.home / "old" / "repo")
+            self.assertEqual(projects.root_of(cwd), self.app if cwd.is_relative_to(self.home / "work") else self.home / "old" / "repo")
         # a hidden folder of the home folder is not cut off
         self.assertEqual(projects.root_of(self.home / ".local" / "state" / "bot"), self.home / ".local" / "state" / "bot")
 
