@@ -18,7 +18,7 @@ from .. import paths
 
 SIGNALS = {"/v1/logs": "logs", "/v1/metrics": "metrics", "/v1/traces": "traces"}
 DEFAULT_MAX_BODY = 8 * 1024 * 1024
-DRAIN_MAX = 64 * 1024 * 1024  # how much of a refused body is read and dropped, so the client can finish sending and see the 413
+DRAIN_MAX = DEFAULT_MAX_BODY  # how much of a refused body is read and dropped, so the client can finish sending and see the 413
 
 
 def default_dir():

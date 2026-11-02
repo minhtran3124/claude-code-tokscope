@@ -165,6 +165,15 @@ class ReceiverTest(unittest.TestCase):
         self.assertEqual(self.chunked([bomb], {"Content-Encoding": "gzip"}), 413)
         self.assertEqual(self.files(), [])
 
+    def test_a_body_larger_than_the_socket_buffers_still_gets_its_413(self):
+        big = b"a" * 4_000_000
+        c = http.client.HTTPConnection("127.0.0.1", self.srv.server_address[1], timeout=5)
+        c.request("POST", "/v1/logs", big, {"Content-Type": "application/json"})
+        self.assertEqual(c.getresponse().status, 413)
+        c.close()
+        self.assertEqual(self.chunked([big]), 413)
+        self.assertEqual(self.files(), [])
+
     def test_a_refused_chunked_body_is_read_to_its_end(self):
         wire = b"".join(b"%x\r\n%s\r\n" % (len(c), c) for c in (b"a" * 8, b"b" * 8)) + b"0\r\n\r\n"
         rest = io.BytesIO(wire + b"next")
