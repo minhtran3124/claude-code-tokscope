@@ -462,3 +462,18 @@ test('nudge: with the pane closed, a session already nudged is not read again', 
   expect(toasts).toHaveLength(1)
   expect(sessionRuns(runs)).toHaveLength(1)
 })
+
+test('nudge: opening the pane after quiet reads shows the session at rest, with no NEW badge or spinner', async ($, on) => {
+  const source = at(310_000)
+  const { toasts } = await start($, on, { source, sessionId: 'n10' })
+  await turn($, 't1')  // quiet read: toasts, leaves a view behind
+  source.view = { ...VIEW, context: 310_000, tokens: 5_000_000, turns: [{ ...VIEW.turns[0], i: 4 }, VIEW.turns[1]] } as never
+  await turn($, 't2')  // already nudged: no read, so the stored view is now stale
+  await $.command.run({ command: 'tokscope', args: 'pane on' })
+
+  expect(toasts).toHaveLength(1)
+  const ui = await $.ui.mount(PANE)
+  expect(await ui.find({ type: 'Text', text: /#4 latest/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /NEW|updating/ })).toBeFalsy()
+  await ui.unmount()
+})

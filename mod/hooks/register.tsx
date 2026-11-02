@@ -202,7 +202,10 @@ async function setPane($: EngineInterface, cli: string, on: boolean): Promise<st
     return 'tokscope pane off. Turn it back on with /tokscope pane on.'
   }
   const opened = await $.ui.open({ id: PANE, title: 'Tokens' })
-  await refresh($, cli)
+  // a quiet read (nudge, pane closed) left a view behind: animating against it would flag changes the person never
+  // saw as NEW, so the pane opens at rest on a fresh read; with no view yet it counts up from zero as usual
+  if (await read($, view)) await readView($, cli)
+  else await refresh($, cli)
   return opened.isPlaced
     ? 'tokscope pane on; it updates after each turn and stays on for new sessions.'
     : `tokscope pane on, but it is not shown yet: ${opened.reason}`
