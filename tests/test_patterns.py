@@ -42,6 +42,24 @@ class TextTest(unittest.TestCase):
             out = patterns.mask(f"set {raw} now")
             self.assertEqual(out, "set [masked] now", raw)
 
+    def test_mask_quoted_keys_key_suffixes_and_other_credentials(self):
+        for raw, secret in (('"password": "hunter2sekret"', "hunter2sekret"), ("'api_key': 'abc123def456'", "abc123def456"),
+                            ("AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "wJalrXUtnFEMI"),
+                            ("secret_key=abc123", "abc123"), ("PRIVATE_KEY=abc123", "abc123"), ("access_key: abc123", "abc123"),
+                            ("postgres://admin:hunter2sekret@db.example.com:5432/app", "hunter2sekret"),
+                            ("glpat-AbCdEfGhIjKlMnOpQrSt", "AbCdEfGhIjKl"), ("xoxb-123456789012-abcdefghijkl", "123456789012"),
+                            ("sk_live_4eC39HqLyjWDarjtT1zdp7dc", "4eC39Hq"), ("npm_abcdefghijklmnop1234", "abcdefghijkl"),
+                            ("Authorization: Basic dXNlcjpwYXNzd29yZA==", "dXNlcjpwYXNz"),
+                            ('"Authorization": "Basic dXNlcjpwYXNzd29yZA=="', "dXNlcjpwYXNz")):
+            out = patterns.mask(f"use {raw} now")
+            self.assertIn("[masked]", out, raw)
+            self.assertNotIn(secret, out, raw)
+
+    def test_mask_leaves_plain_words_alone(self):
+        for ok in ("basic setup instructions", "the secret garden", "a token count of five", "see https://example.com/a/b",
+                   "user:name mail@example.com", "max_tokens is 4000"):
+            self.assertEqual(patterns.mask(ok), ok)
+
     def test_mask_fragments_and_boundary(self):
         self.assertEqual(patterns.mask("key sk-"), "key [masked]")
         self.assertEqual(patterns.mask("see ghp_"), "see [masked]")
@@ -107,6 +125,18 @@ class FacetsTest(unittest.TestCase):
         (self.facets / "bytes.json").write_bytes(b"\xff\xfe")
         self.assertIsNone(self.outcome("bytes"))
 
+    def test_a_deeply_nested_file_a_symlink_and_a_huge_file_give_no_outcome(self):
+        self.write("deep.json", "[" * 200_000)
+        self.assertIsNone(self.outcome("deep"))  # RecursionError is caught, not raised
+        real = self.root / "real.json"
+        real.write_text('{"outcome": "fully_achieved"}')
+        (self.facets / "link.json").symlink_to(real)
+        self.assertIsNone(self.outcome("link"))
+        self.write("huge.json", '{"outcome": "fully_achieved", "pad": "' + "x" * patterns.MAX_FACETS_BYTES + '"}')
+        self.assertIsNone(self.outcome("huge"))
+        self.write("fine.json", '{"outcome": "fully_achieved"}')
+        self.assertEqual(self.outcome("fine"), "fully_achieved")
+
     def test_session_id_cannot_leave_the_folder(self):
         (self.root / "usage-data" / "evil.json").write_text('{"outcome": "x"}')
         self.assertIsNone(self.outcome("../evil"))
@@ -167,11 +197,14 @@ class Base(unittest.TestCase):
             self.conn.execute("INSERT INTO skill_calls (session_id, ts, skill, prompt_idx, agent_id, failed) "
                               "VALUES (?, ?, ?, ?, 'ag1', 0)", (sid, stamp(days, 5), skill, idx))
 
-    def request(self, sid, idx, model="claude-opus-5-5", cost=1.0, cr=0, inp=10, w5=0, w1=0, agent=None, days=1, minutes=0):
+    def request(self, sid, idx, model="claude-opus-5-5", cost=1.0, cr=0, inp=10, w5=0, w1=0, agent=None, days=1, minutes=0,
+                speed=None, geo=None):
         self.n += 1
         self.conn.execute("INSERT INTO requests (session_id, request_key, ts, model, agent_id, prompt_idx, input, output, "
-                          "cache_read, cache_write_5m, cache_write_1h, cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)",
-                          (sid, f"k{self.n}", stamp(days, minutes + self.n / 100), model, agent, idx, inp, cr, w5, w1, cost))
+                          "cache_read, cache_write_5m, cache_write_1h, cost_usd, speed, inference_geo) "
+                          "VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)",
+                          (sid, f"k{self.n}", stamp(days, minutes + self.n / 100), model, agent, idx, inp, cr, w5, w1, cost,
+                           speed, geo))
 
     def go(self, level="full", since=None):
         self.conn.commit()
@@ -242,14 +275,26 @@ class GroupingTest(Base):
         self.assertEqual(g["start_context_median"], 5 + 1_000_000 + 7 + 11)
         self.assertIn("mystery-model", self.go()["unpriced"])
 
+    def test_inherited_reads_carry_fast_mode_and_us_factors(self):
+        # opus-5-5 reads at 0.20/M, fast mode x2 and US-only x1.1: a repeated 1M-token read costs 0.44 per request, as stored
+        reqs = [dict(cost=0.20, cr=1_000_000, inp=0)] + [dict(cost=0.44, cr=1_000_000, inp=0, speed="fast", geo="us")] * 3
+        self.prompt("s", 1, LONG, skills=["sk1"], reqs=reqs)
+        self.assertAlmostEqual(self.go()["groups"][0]["in_prompt_usd"], 0.0)
+
+    def test_inherited_reads_carry_the_long_haiku_prompt_factor(self):
+        # haiku-5-5 over 100K tokens costs x5: 1M of reads at 0.01/M is 0.05 per request
+        reqs = [dict(model="claude-haiku-5-5", cost=0.05, cr=1_000_000, inp=0)] * 3
+        self.prompt("s", 1, LONG, skills=["sk1"], reqs=reqs)
+        self.assertAlmostEqual(self.go()["groups"][0]["in_prompt_usd"], 0.0)
+
     def test_first_request_pays_only_its_non_read_cost(self):
         self.prompt("s", 1, LONG, skills=["sk1"], reqs=[dict(cost=0.3 + 0.2, cr=1_000_000)])  # 0.2 is the read at 0.20/M
         self.assertAlmostEqual(self.go()["groups"][0]["in_prompt_usd"], 0.3)
 
     def test_inherited_share_never_exceeds_stored_cost(self):
         # stored cost was priced at ingest; a higher current cache-read rate must not make in_prompt negative
-        rows = [(None, "m", 0.10, 0, 1_000_000, 0, 0), (None, "m", 0.10, 0, 1_000_000, 0, 0)]
-        got = patterns._measure(rows, lambda m: 1e-6)  # 1.00 per request at the current rate, 0.10 stored
+        rows = [(None, "m", 0.10, 0, 1_000_000, 0, 0, None, None), (None, "m", 0.10, 0, 1_000_000, 0, 0, None, None)]
+        got = patterns._measure(rows, lambda r, tokens: tokens * 1e-6)  # 1.00 per request at the current rate, 0.10 stored
         self.assertGreaterEqual(got["in_prompt"], 0.0)
         self.assertAlmostEqual(got["in_prompt"], 0.0)
 
@@ -289,7 +334,7 @@ class GroupingTest(Base):
         edge = (datetime.strptime(bound, "%Y-%m-%dT%H:%M:%S") + timedelta(minutes=1))
         self.session("s")
         self.conn.execute("INSERT INTO prompts VALUES ('s', 1, ?, ?)", (edge.strftime("%Y-%m-%dT%H:%M:%S.000Z"), LONG))
-        for i, cost in enumerate((1.0, 2.0)):  # the first request is before the bound, the second after
+        for i, cost in enumerate((1.0, 2.0)):  # both requests are before the bound; only the prompt is after it
             self.conn.execute("INSERT INTO requests (session_id, request_key, ts, model, prompt_idx, input, cache_read, "
                               "cache_write_5m, cache_write_1h, cost_usd) VALUES ('s', ?, ?, 'claude-opus-5-5', 1, 1, 0, 0, 0, ?)",
                               (f"x{i}", (edge + timedelta(minutes=i - 3)).strftime("%Y-%m-%dT%H:%M:%S.000Z"), cost))

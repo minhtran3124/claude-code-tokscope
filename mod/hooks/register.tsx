@@ -141,7 +141,8 @@ async function findCli($: EngineInterface): Promise<string> {
   return ''
 }
 
-// runs the CLI and stores the result; starts no timer, so a closed pane costs nothing but the process
+// runs the CLI (or stores the no-CLI error when there is none) and stores the result; starts no timer, so a closed pane costs
+// nothing but the process
 async function readView($: EngineInterface, cli: string): Promise<{ prev: SessionView | null; next: SessionView }> {
   let prev: SessionView | null = null
   if (!cli) {
@@ -203,8 +204,8 @@ async function setPane($: EngineInterface, cli: string, on: boolean): Promise<st
     return 'tokscope pane off. Turn it back on with /tokscope pane on.'
   }
   const opened = await $.ui.open({ id: PANE, title: 'Tokens' })
-  // a quiet read (nudge, pane closed) left a view behind: animating against it would flag changes the person never
-  // saw as NEW, so the pane opens at rest on a fresh read; with no view yet it counts up from zero as usual
+  // a view is already stored (a quiet read with the pane closed, or an earlier pane): animating against it would flag
+  // changes the person never saw as NEW, so the pane opens at rest on a fresh read; with no view yet it counts up from zero
   if (await read($, view)) await readView($, cli)
   else await refresh($, cli)
   return opened.isPlaced

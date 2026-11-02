@@ -71,7 +71,8 @@ def summary(args):
 
 
 def patterns_cmd(args):
-    """`tokscope patterns`: read-only, so it ingests nothing and never creates the database file; an existing one is opened with connect() to bring its tables up to date."""
+    """`tokscope patterns`: read-only. It ingests no transcripts and never creates the database file; an existing one is
+    opened with connect(), which brings its tables up to date."""
     from .features import patterns
 
     text = args.since or patterns.default_since()

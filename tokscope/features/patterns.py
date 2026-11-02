@@ -1,6 +1,7 @@
 """`tokscope patterns`: which kinds of prompts cost the most, what they ran and how they ended.
 
-Read-only: it ingests nothing and writes no file. The rules are "Slice 1 grouping rules" in docs/research-prompt-insights.md.
+Read-only: it ingests no transcripts and creates no file; an existing database is opened with connect(), which can
+bring its tables up to date. The rules are "Slice 1 grouping rules" in docs/research-prompt-insights.md.
 Eligibility (bench, machine prompts, `--since`) is one SQL clause on real values. At `full` it filters the query; below
 `full` it is the `where` of privacy.redacted_copy, so one code path groups the rows and the privacy path never reads
 prompt text."""
@@ -32,7 +33,15 @@ _MASKS = [re.compile(p, f) for p, f in (
     (r"(?<![A-Za-z0-9])github_pat_\w*", 0),
     (r"(?<![A-Za-z0-9])(?:AKIA|ASIA)[A-Z0-9]{0,16}", 0),  # AWS access key ids (a cut one keeps the prefix)
     (r"\bBearer\s+\S+", re.I),
-    (r"(?<![A-Za-z0-9])(?:[A-Za-z0-9]+[_-])*(?:token|api[_-]?key|secret|password|passwd|pwd)\s*[=:]\s*\S*", re.I),  # also client_secret=, DB_PASSWORD=
+    (r"(?<![A-Za-z0-9])glpat-[\w-]*", 0),                # GitLab tokens (shorter than the long-run floor)
+    (r"(?<![A-Za-z0-9])xox[abprs]-[\w-]*", 0),           # Slack tokens
+    (r"(?<![A-Za-z0-9])(?:sk|pk|rk)_(?:live|test)_\w*", 0),  # Stripe keys
+    (r"(?<![A-Za-z0-9])(?:npm_|pypi-|AIza)[\w-]*", 0),    # npm, PyPI and Google API keys
+    (r"(?<=://)[^\s/@]+:[^\s/@]+@", 0),                  # user:password@ in a URL
+    (r"\bAuthorization[\"']?\s*[=:]\s*[\"']?(?:Basic|Digest|Token)\s+\S+", re.I),  # Basic dXNlcjpwYXNz...
+    # name = value, also client_secret=, DB_PASSWORD=, AWS_SECRET_ACCESS_KEY=, PRIVATE_KEY= and a quoted "password": "x"
+    (r"(?<![A-Za-z0-9])(?:[A-Za-z0-9]+[_-])*(?:token|api[_-]?key|private[_-]?key|access[_-]?key|secret|password|passwd|pwd)"
+     r"(?:[_-](?:access|key|secret|token))*[\"']?\s*[=:]\s*[\"']?\S*", re.I),
     (r"(?<![A-Za-z0-9])(?:password|passwd|passphrase|secret)(?:\s+for\s+\S+)?(?:\s+(?:is|was)\s*:?|\s*:)\s*\S*", re.I),  # "password is hunter2", "password for bob was: x", "passphrase: x"
     (r"[A-Za-z0-9_-]{32,}", re.I),                        # any long URL-safe run
 )]
@@ -40,6 +49,7 @@ _OUTCOME = re.compile(r"[a-z_]{1,40}")
 # the values Claude Code writes; below `full` only these are shown, because a facets file never went through the redactor
 KNOWN_OUTCOMES = {"fully_achieved", "mostly_achieved", "partially_achieved", "not_achieved", "unclear_from_transcript"}
 _SESSION_FILE = re.compile(r"[\w][\w.-]*")
+MAX_FACETS_BYTES = 1 << 20  # a facets file is a few KB; a bigger one is not read
 
 
 def mask(text):
@@ -78,15 +88,19 @@ def _outcome(session_id, dirs):
     if not isinstance(session_id, str) or not _SESSION_FILE.fullmatch(session_id):
         return None
     for d in dirs:
+        path = Path(d) / f"{session_id}.json"
         try:
-            raw = (Path(d) / f"{session_id}.json").read_text("utf-8")
+            # a plain file only: a symlink or a FIFO could read elsewhere or hang, and a huge file could fill memory
+            if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_FACETS_BYTES:
+                continue  # not in this folder, or not usable: try the next one
+            raw = path.read_text("utf-8")
         except OSError:
-            continue  # not in this folder: try the next one
+            continue
         except ValueError:
             return None  # not UTF-8
         try:
             data = json.loads(raw)
-        except ValueError:
+        except (ValueError, RecursionError):  # bad JSON, or nested past the interpreter's limit
             return None
         value = data.get("outcome") if isinstance(data, dict) else None
         return value if isinstance(value, str) and _OUTCOME.fullmatch(value) else None
@@ -111,12 +125,13 @@ def _load(conn, where, params, with_text):
     """({(session, prompt): [request rows]}, {(session, prompt): [(skill)] main-thread loads first, then in load order}, {(session, prompt): text}).
     Prompt text is selected only when with_text is true, which is only at `full`."""
     reqs = {}
-    for sid, idx, agent, model, cost, inp, cr, w5, w1 in conn.execute(
+    for sid, idx, agent, model, cost, inp, cr, w5, w1, speed, geo in conn.execute(
             "SELECT r.session_id, r.prompt_idx, r.agent_id, r.model, r.cost_usd, r.input, r.cache_read, r.cache_write_5m, "
-            f"r.cache_write_1h FROM requests r JOIN sessions s USING (session_id) {where} ORDER BY r.ts, r.request_key",
+            "r.cache_write_1h, r.speed, r.inference_geo FROM requests r JOIN sessions s USING (session_id) "
+            f"{where} ORDER BY r.ts, r.request_key",
             tuple(params)):
         reqs.setdefault((sid, idx), []).append(
-            (agent, model, cost or 0.0, inp or 0, cr or 0, w5 or 0, w1 or 0))
+            (agent, model, cost or 0.0, inp or 0, cr or 0, w5 or 0, w1 or 0, speed, geo))
     skills = {}
     for sid, idx, skill in conn.execute("SELECT session_id, prompt_idx, skill FROM skill_calls "
                                         "WHERE COALESCE(failed, 0) = 0 AND prompt_idx IS NOT NULL AND skill IS NOT NULL "
@@ -131,17 +146,19 @@ def _load(conn, where, params, with_text):
     return reqs, skills, texts
 
 
-def _measure(rows, rate):
-    """One prompt's numbers. rate(model) is USD per cached token or None.
+def _measure(rows, read_cost):
+    """One prompt's numbers. read_cost(row, tokens) is the USD that `tokens` of cached input cost inside that request
+    (None for a model with no rate); it carries the request's own factors (fast mode, US-only inference, long Haiku
+    prompts), because the stored cost carries them.
 
     in_prompt = cost - inherited. cost sums every request (main thread and subagents, NULL as 0). For each main-thread
-    request, inherited = min(its cache_read, the first main-thread request's cache_read) * the model's cache-read rate, so
-    the first request inherits all of its reads. Each request's inherited share is capped at its own stored cost: cost_usd
-    was priced at ingest and the rate is the current one, so a rate change must not push in_prompt below zero."""
+    request, inherited = the cost of min(its cache_read, the first main-thread request's cache_read) tokens, so the first
+    request inherits all of its reads. Each request's inherited share is capped at its own stored cost: cost_usd was
+    priced at ingest and the rates are the current ones, so a rate change must not push in_prompt below zero."""
     main = [r for r in rows if r[0] is None]
     cost = sum(r[2] for r in rows)
     first_read = main[0][4] if main else 0
-    inherited = sum(min(r[2], min(r[4], first_read) * (rate(r[1]) or 0.0)) for r in main)
+    inherited = sum(min(r[2], read_cost(r, min(r[4], first_read)) or 0.0) for r in main)
     first = main[0] if main else None
     return {"in_prompt": cost - inherited, "steps": len(main), "subagent_requests": len(rows) - len(main),
             "start_context": sum(first[3:7]) if first else None}
@@ -181,13 +198,13 @@ def run(db_path, since_bound, level="full"):
         note = pricing.unpriced_text(pricing.unpriced(conn, filt, fparams))
     finally:
         conn.close()
-    ov, rates = pricing.overrides(), {}
-    rate = lambda m: rates.setdefault(m, pricing.cache_read_rate(m, ov))  # noqa: E731
+    ov = pricing.overrides()
+    read_cost = lambda r, tokens: pricing.cache_read_cost(r[1], tokens, sum(r[3:7]), r[7], r[8], ov)  # noqa: E731
     dirs = _facet_dirs()  # session_id is kept at every level, so workflow groups can show outcomes; see KNOWN_OUTCOMES
     workflows, tasks = {}, {}
     for (sid, idx), rows in reqs.items():
         text = texts.get((sid, idx))
-        member = (sid, idx, _measure(rows, rate), skills.get((sid, idx), []), text)
+        member = (sid, idx, _measure(rows, read_cost), skills.get((sid, idx), []), text)
         if member[3]:
             workflows.setdefault(member[3][0], []).append(member)
         elif text is not None and len(text) >= MIN_CHARS and (key := _task_key(text)):
