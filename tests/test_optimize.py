@@ -115,6 +115,7 @@ class OptimizeTest(unittest.TestCase):
         os.environ["FAKE_SLOW"] = "1"
         self.addCleanup(os.environ.pop, "FAKE_SLOW", None)
         job = optimize.start(self.k, self.found, ["unslop"])
+        thread = optimize._threads[job]  # taken now: the run removes itself from _threads when it ends
         for _ in range(100):
             if optimize.steps(job)[1]:
                 break
@@ -125,7 +126,7 @@ class OptimizeTest(unittest.TestCase):
         skill_page = dashboard.page_library(self.conn, dashboard.Filters({}), {"skill": [self.k["id"]]}, "full")
         self.assertIn("An optimize run is going", skill_page)
         optimize.cancel(job)
-        optimize._threads[job].join(10)
+        thread.join(10)
         data = optimize.status(job)
         self.assertEqual((data["state"], data["cost"]), ("cancelled", 0.05))
         with self.assertRaises(ValueError):

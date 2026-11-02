@@ -18,6 +18,7 @@ from .. import paths
 
 SIGNALS = {"/v1/logs": "logs", "/v1/metrics": "metrics", "/v1/traces": "traces"}
 DEFAULT_MAX_BODY = 8 * 1024 * 1024
+DRAIN_MAX = DEFAULT_MAX_BODY  # how much of a refused body is read and dropped, so the client can finish sending and see the 413
 
 
 def default_dir():
@@ -52,8 +53,20 @@ def host_name(value):
     return value.rsplit(":", 1)[0] if value.count(":") == 1 else value
 
 
-def read_chunked(rfile, limit):
-    """Decode a chunked body, or None when it would pass `limit` bytes. ValueError on bad framing."""
+def drain(rfile, size):
+    """Read and drop up to `size` bytes; returns the number read, less than `size` at the end of the stream."""
+    left = size
+    while left > 0:
+        block = rfile.read(min(left, 64 * 1024))
+        if not block:
+            break
+        left -= len(block)
+    return size - left
+
+
+def read_chunked(rfile, limit, drain_max=DRAIN_MAX):
+    """Decode a chunked body, or None when it would pass `limit` bytes. Past `limit` the chunks are dropped, not kept,
+    up to `drain_max` more bytes, so the client reaches the end and reads the refusal. ValueError on bad framing."""
     out, total = [], 0
     while True:
         size = int(rfile.readline(1026).split(b";")[0].strip() or b"x", 16)
@@ -62,10 +75,15 @@ def read_chunked(rfile, limit):
         if size == 0:
             while rfile.readline(1026).strip():  # trailers
                 pass
-            return b"".join(out)
+            return b"".join(out) if total <= limit else None
         total += size
-        if total > limit:
+        if total > limit + drain_max:
             return None
+        if total > limit:
+            out.clear()
+            if drain(rfile, size) != size or rfile.readline(3).strip():
+                raise ValueError("truncated chunk")
+            continue
         chunk = rfile.read(size)
         if len(chunk) != size or rfile.readline(3).strip():
             raise ValueError("truncated chunk")
@@ -131,6 +149,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_error(400, "bad Content-Length")
                 return
             if size > limit:
+                drain(self.rfile, min(size, DRAIN_MAX))
                 self.send_error(413, "body too large")
                 return
             raw = self.rfile.read(size)
