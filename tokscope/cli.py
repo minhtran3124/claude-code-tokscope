@@ -232,6 +232,9 @@ def session_text(conn, session_id):
     return "\n".join(lines + [f"\n{note}"] * bool(note))
 
 
+NUDGE_CONTEXT = 300_000  # the size the mod's context nudge fires at (mod/hooks/register.tsx NUDGE_AT)
+
+
 def session_json(conn, session_id):
     """Compact per-session numbers for the live pane."""
     tok = "(input + cache_read + cache_write_5m + cache_write_1h + output)"
@@ -247,6 +250,12 @@ def session_json(conn, session_id):
     ctx = conn.execute(
         "SELECT COALESCE(input, 0) + COALESCE(cache_read, 0) + COALESCE(cache_write_5m, 0) + COALESCE(cache_write_1h, 0) "
         "FROM requests WHERE session_id = ? AND agent_id IS NULL ORDER BY ts DESC, rowid DESC LIMIT 1", (session_id,)).fetchone()
+    # a compact the mod may not have seen (pane closed, session already nudged): the context fell below the nudge size after reaching it
+    compacted = conn.execute(
+        "SELECT EXISTS (SELECT 1 FROM (SELECT ctx, MAX(ctx) OVER (ORDER BY ts, rowid ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS peak "
+        "FROM (SELECT ts, rowid, COALESCE(input, 0) + COALESCE(cache_read, 0) + COALESCE(cache_write_5m, 0) + COALESCE(cache_write_1h, 0) AS ctx "
+        "FROM requests WHERE session_id = ? AND agent_id IS NULL)) WHERE peak >= ? AND ctx < ?)",
+        (session_id, NUDGE_CONTEXT, NUDGE_CONTEXT)).fetchone()[0]
     from .core.skills import session_skill_versions
 
     versions = session_skill_versions(conn, session_id)
@@ -263,7 +272,7 @@ def session_json(conn, session_id):
         "budget": _budget_view(conn),
         "id": session_id, "empty": False, "title": title or "", "prompts": prompts or 0, "tokens": tokens, "output": out or 0,
         "usd": usd, "main": main or 0, "agents": agents or 0, "runs": runs,
-        "context": ctx[0] if ctx else 0,
+        "context": ctx[0] if ctx else 0, "compacted": bool(compacted),
         "owners": top("COALESCE(agent_type, 'main thread')"), "skills": [[f"{k} {versions[k][:6]}" if k in versions else k, t] for k, t in top("skill") if k],
         "last": {"i": last[0], "text": last[1] or "", "tokens": last[2] or 0, "agents": last[3] or 0} if last else None,
         "turns": session_turns(conn, session_id),

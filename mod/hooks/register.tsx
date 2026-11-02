@@ -183,7 +183,7 @@ async function refresh($: EngineInterface, cli: string): Promise<void> {
 async function nudge($: EngineInterface, v: SessionView | null): Promise<void> {
   if (!v || v.empty || v.error) return
   const id = await $.session.id()
-  if ((v.context ?? 0) < NUDGE_AT && nudged.has(id)) lineSpent.add(id)
+  if (((v.context ?? 0) < NUDGE_AT || v.compacted) && nudged.has(id)) lineSpent.add(id)
   if ((v.context ?? 0) < NUDGE_AT || !(await isNudgeOn($))) return
   if (nudged.has(id)) return
   nudged.add(id)  // before the toast, so a failing toast cannot repeat
@@ -286,7 +286,7 @@ export const register: Register = on => {
     const v = await read($, view)
     const m = await read($, motion)
     const sid = await $.session.id()
-    if (v && (v.context ?? 0) < NUDGE_AT && nudged.has(sid)) lineSpent.add(sid)
+    if (v && ((v.context ?? 0) < NUDGE_AT || v.compacted) && nudged.has(sid)) lineSpent.add(sid)
     const nudgeOn = (await isNudgeOn($)) && !lineSpent.has(sid)
     const width = Math.max(32, Math.min(MAX_WIDTH, (e.props.bodyColumns ?? 40) - 1))
     const spin = SPIN[m.frame % SPIN.length]

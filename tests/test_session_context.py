@@ -38,5 +38,19 @@ class SessionContextTest(unittest.TestCase):
         self.assertEqual(out["context"], 0)
 
 
+    def test_compacted_is_true_once_the_context_fell_below_300k_after_reaching_it(self):
+        add(self.conn, "a", "2026-10-01T00:00:01Z", cr=350_000)
+        self.assertFalse(cli.session_json(self.conn, "s1")["compacted"])
+        add(self.conn, "b", "2026-10-01T00:00:02Z", cr=10_000)
+        add(self.conn, "c", "2026-10-01T00:00:03Z", cr=400_000)
+        self.assertTrue(cli.session_json(self.conn, "s1")["compacted"])
+
+    def test_a_low_start_and_a_subagent_dip_is_not_a_compact(self):
+        add(self.conn, "a", "2026-10-01T00:00:01Z", cr=10_000)
+        add(self.conn, "b", "2026-10-01T00:00:02Z", cr=350_000)
+        add(self.conn, "c", "2026-10-01T00:00:03Z", agent="ag1", cr=5_000)
+        self.assertFalse(cli.session_json(self.conn, "s1")["compacted"])
+
+
 if __name__ == "__main__":
     unittest.main()

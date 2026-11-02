@@ -47,6 +47,7 @@ export type SessionView = {
   turns?: Turn[]
   budget?: Budget | null
   context?: number  // tokens in the last main-thread request
+  compacted?: boolean  // the context fell below 300K after reaching it, at any point in the session
   updatedAt?: number
   error?: string
 }
