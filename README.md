@@ -69,7 +69,7 @@ tokscope serve               # the live dashboard on http://127.0.0.1:8765
 ```
 
 `tokscope serve` options: `--port N`, `--no-open`, `--interval S` (seconds between background ingests, default 10),
-`--privacy redacted|numbers`, `--projects-dir PATH` (read that transcripts folder, not the default ones). In Claude Code, `/tokscope` shows the current session.
+`--privacy redacted|numbers`, `--projects-dir PATH` (read that transcripts folder, not the default ones). In Claude Code, `/tokscope` shows the current session. `/tokscope nudge on|off` toggles the one-time warning at 300K context (on by default, the setting persists).
 
 ## Desktop app (Linux)
 
