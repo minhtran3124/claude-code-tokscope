@@ -9,17 +9,16 @@ updated_by: claude   # claude | manual
 # claude-code-tokscope — Status
 
 ## Summary
-Milestone 1 (logs to enhancement plan) has nothing merged yet: PR #176 (#171 `tokscope patterns`) and PR #175 (#172) are open against `feat/logs-to-enhancement-plan`, and #173 waits on #171. PR #177 to `main` fixes the three flaky CI tests and is green. The macOS app (#144-#148) is unverified without a Mac.
+Milestone 1 (logs to enhancement plan): #171 `tokscope patterns` and #172 are merged into `feat/logs-to-enhancement-plan`, and #173 is not started. The flaky-test fix (PR #177) is on `main`, and CI is green there. The macOS app (#144-#148) is unverified without a Mac.
 
 ## Next step
-Merge PR #177, merge `main` into the feat branch, accept or change #176's 4 `needs_review` items, merge #175 and #176 into the feat branch by hand, then run #173.
+Run #173 on the feat branch, then open the final PR to `main`. Look at `tokscope patterns` on real data before ticketing the held skill slice.
 
 ## Blockers
-- The flaky-test fix is only in PR #177, so #175 and #176 can still fail CI until it reaches their base.
 - macOS app (#144-#148) cannot be verified without a Mac.
 
 ## Recent
-- 2026-11-02: Autopilot run wf_4df1b949-bd0: PRs #176 and #175 opened, none merged; gates failed on review, intent and needs_review (#176) and flaky CI (#175); #173 skipped. GitHub Actions runs again. Fixed the CI flakes in PR #177 (a refused OTel body is now read before its 413; reviews: 2 Important fixed, 0 security) and #176's facets privacy finding (below `full`, only known outcomes).
+- 2026-11-02: Autopilot run wf_4df1b949-bd0: PRs #176 and #175 opened, none merged; gates failed on review, intent and needs_review (#176) and flaky CI (#175); #173 skipped. GitHub Actions runs again. Fixed the CI flakes in PR #177 (a refused OTel body is now read before its 413; reviews: 2 Important fixed, 0 security) and #176's facets privacy finding (below `full`, only known outcomes). Owner merged #177 into `main` and #175 and #176 into the feat branch, accepting #176's 4 `needs_review` items.
 - 2026-11-02: Research on the logs-to-plan idea: measured repetition on the local database (repeated real tasks are at most 8% of spend; 97% of tokens are cache reads), wrote `docs/research-prompt-insights.md` with the flow, 5 slices and risks (PR #170); no product code changed. An independent review overturned two conclusions, and the note is rewritten around 4 slices for the owner's goals (tokens, workflow, useful features). Trial runs: `/insights` works ($2.10, no token data, facets give a quality signal), `autoCompactWindow` 100000 compacts and 80000 did nothing; numbers re-run and the note is updated. Review of PR #170 (1 consistency reviewer, 3 Important and 2 Nits) and a recent-window re-check changed the plan: grouping rules written down, skill slice held, nudge on with a toast and an off switch; milestone 1 and issues #171-#174 created.
 - 2026-10-28: run 01M602P6H66Q15NXYZ7FJM45GP (default) failed, 4 stage run(s): canary: stage implement needs a fresh canary pass (no canary result)
 - 2026-10-26: Overview gets a Models card (PR #168: models by request count, links to the model filter, region `models`); a follow-up shows exact counts and trims Recent to 10 lines.
