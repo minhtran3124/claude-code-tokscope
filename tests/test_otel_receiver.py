@@ -1,5 +1,6 @@
 import gzip
 import http.client
+import io
 import json
 import os
 import subprocess
@@ -163,6 +164,32 @@ class ReceiverTest(unittest.TestCase):
         bomb = gzip.compress(b'{"x": "' + b"a" * 5_000_000 + b'"}')
         self.assertEqual(self.chunked([bomb], {"Content-Encoding": "gzip"}), 413)
         self.assertEqual(self.files(), [])
+
+    def test_a_body_larger_than_the_socket_buffers_still_gets_its_413(self):
+        big = b"a" * 4_000_000
+        c = http.client.HTTPConnection("127.0.0.1", self.srv.server_address[1], timeout=5)
+        c.request("POST", "/v1/logs", big, {"Content-Type": "application/json"})
+        self.assertEqual(c.getresponse().status, 413)
+        c.close()
+        self.assertEqual(self.chunked([big]), 413)
+        self.assertEqual(self.files(), [])
+
+    def test_a_refused_chunked_body_is_read_to_its_end(self):
+        wire = b"".join(b"%x\r\n%s\r\n" % (len(c), c) for c in (b"a" * 8, b"b" * 8)) + b"0\r\n\r\n"
+        rest = io.BytesIO(wire + b"next")
+        self.assertIsNone(r.read_chunked(rest, 10))
+        self.assertEqual(rest.read(), b"next")
+
+    def test_a_refused_chunked_body_is_dropped_only_up_to_the_drain_limit(self):
+        rest = io.BytesIO(b"8\r\naaaaaaaa\r\n" * 4 + b"0\r\n\r\n")
+        self.assertIsNone(r.read_chunked(rest, 10, drain_max=10))
+        self.assertTrue(rest.read())
+
+    def test_a_refused_content_length_body_is_read_before_the_answer(self):
+        rest = io.BytesIO(b"a" * 100_000 + b"next")
+        self.assertEqual(r.drain(rest, 100_000), 100_000)
+        self.assertEqual(rest.read(), b"next")
+        self.assertEqual(r.drain(io.BytesIO(b"abc"), 10), 3)
 
     def test_bad_port_and_max_body_are_refused(self):
         with self.assertRaises(ValueError):
