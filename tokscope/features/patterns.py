@@ -8,12 +8,12 @@ prompt text."""
 import json
 import os
 import re
+from datetime import timedelta
 from pathlib import Path
 from statistics import median
 
 from ..core import pricing, tz
 from ..core.ingest import open_db
-from ..core.pricing import API_EQ_NOTE
 from ..core.privacy import LEVELS, redacted_copy
 from .changes import BENCH_PROJECT
 
@@ -86,3 +86,108 @@ def _outcome(session_id, dirs):
         value = data.get("outcome") if isinstance(data, dict) else None
         return value if isinstance(value, str) and _OUTCOME.fullmatch(value) else None
     return None
+
+
+def default_since():
+    """The local date 14 days ago, as YYYY-MM-DD."""
+    return (tz.now().date() - timedelta(days=DEFAULT_DAYS)).isoformat()
+
+
+def _where(bound):
+    """One eligibility clause over requests r and sessions s, on real values: not a bench session, and the request's prompt
+    exists, is at or after the bound and is not a machine prompt (starts with <). EXISTS also drops a NULL prompt_idx and a
+    prompt_idx with no prompts row. Selecting by the prompt's time keeps every request of a prompt that crosses the bound."""
+    return ("WHERE COALESCE(s.project, '') NOT LIKE ? AND EXISTS (SELECT 1 FROM prompts p "
+            "WHERE p.session_id = r.session_id AND p.prompt_idx = r.prompt_idx "
+            "AND p.ts >= ? AND substr(COALESCE(p.text, ''), 1, 1) <> '<')", [BENCH_PROJECT, bound])
+
+
+def _load(conn, where, params, with_text):
+    """({(session, prompt): [request rows]}, {(session, prompt): [(skill)] in load order}, {(session, prompt): text}).
+    Prompt text is selected only when with_text is true, which is only at `full`."""
+    reqs = {}
+    for sid, idx, agent, model, cost, inp, cr, w5, w1 in conn.execute(
+            "SELECT r.session_id, r.prompt_idx, r.agent_id, r.model, r.cost_usd, r.input, r.cache_read, r.cache_write_5m, "
+            f"r.cache_write_1h FROM requests r JOIN sessions s USING (session_id) {where} ORDER BY r.ts, r.request_key",
+            tuple(params)):
+        reqs.setdefault((sid, idx), []).append(
+            (agent, model, cost or 0.0, inp or 0, cr or 0, w5 or 0, w1 or 0))
+    skills = {}
+    for sid, idx, skill in conn.execute("SELECT session_id, prompt_idx, skill FROM skill_calls "
+                                        "WHERE COALESCE(failed, 0) = 0 AND prompt_idx IS NOT NULL AND skill IS NOT NULL "
+                                        "ORDER BY ts, rowid"):
+        if (sid, idx) in reqs:  # the join in Python is what drops loads from machine and bench prompts at every level
+            skills.setdefault((sid, idx), []).append(skill)
+    texts = {}
+    if with_text:
+        for sid, idx, text in conn.execute("SELECT session_id, prompt_idx, text FROM prompts"):
+            if (sid, idx) in reqs:
+                texts[(sid, idx)] = text or ""
+    return reqs, skills, texts
+
+
+def _measure(rows, rate):
+    """One prompt's numbers. rate(model) is USD per cached token or None.
+
+    in_prompt = cost - inherited. cost sums every request (main thread and subagents, NULL as 0). For each main-thread
+    request, inherited = min(its cache_read, the first main-thread request's cache_read) * the model's cache-read rate, so
+    the first request inherits all of its reads."""
+    main = [r for r in rows if r[0] is None]
+    cost = sum(r[2] for r in rows)
+    first_read = main[0][4] if main else 0
+    inherited = sum(min(r[4], first_read) * (rate(r[1]) or 0.0) for r in main)
+    first = main[0] if main else None
+    return {"in_prompt": cost - inherited, "steps": len(main), "subagent_requests": len(rows) - len(main),
+            "start_context": sum(first[3:7]) if first else None}
+
+
+def _summarize(kind, key, members, facet_dirs):
+    """members: [(session, prompt_idx, measure, skills, text)]."""
+    costs = [m[2]["in_prompt"] for m in members]
+    sessions = sorted({m[0] for m in members})
+    starts = [m[2]["start_context"] for m in members if m[2]["start_context"] is not None]
+    outcomes = {}
+    for sid in sessions:
+        if (o := _outcome(sid, facet_dirs)):
+            outcomes[o] = outcomes.get(o, 0) + 1
+    costliest = max(members, key=lambda m: m[2]["in_prompt"])  # the first of equals
+    return {"kind": kind, "key": key, "prompts": len(members), "sessions": len(sessions),
+            "in_prompt_usd": sum(costs), "in_prompt_low": min(costs), "in_prompt_median": median(costs),
+            "in_prompt_high": max(costs), "steps_median": median(m[2]["steps"] for m in members),
+            "subagent_requests": sum(m[2]["subagent_requests"] for m in members),
+            "skills": sorted({s for m in members for s in m[3]}),
+            "start_context_median": median(starts) if starts else None,
+            "outcomes": dict(sorted(outcomes.items())),
+            "example": _example(costliest[4]) if costliest[4] is not None else None}
+
+
+def run(db_path, since_bound, level="full"):
+    """{"since", "privacy", "groups", "unpriced"} for prompts at or after since_bound (a tz.utc_bound value)."""
+    if level not in LEVELS:
+        raise ValueError(f"privacy level must be one of {', '.join(LEVELS)}")
+    where, params = _where(since_bound)
+    if level == "full":
+        conn, filt, fparams = open_db(db_path), where, params
+    else:  # the copy is filtered on real values, then redacted; below it there is nothing left to filter
+        conn, filt, fparams = redacted_copy(db_path, level, where, params), "", []
+    try:
+        reqs, skills, texts = _load(conn, filt, fparams, with_text=level == "full")
+        note = pricing.unpriced_text(pricing.unpriced(conn, filt, fparams))
+    finally:
+        conn.close()
+    ov, rates = pricing.overrides(), {}
+    rate = lambda m: rates.setdefault(m, pricing.cache_read_rate(m, ov))  # noqa: E731
+    dirs = _facet_dirs()
+    workflows, tasks = {}, {}
+    for (sid, idx), rows in reqs.items():
+        text = texts.get((sid, idx))
+        member = (sid, idx, _measure(rows, rate), skills.get((sid, idx), []), text)
+        if member[3]:
+            workflows.setdefault(member[3][0], []).append(member)
+        elif text is not None and len(text) >= MIN_CHARS and (key := _task_key(text)):
+            tasks.setdefault(key, []).append(member)
+    groups = [_summarize("workflow", k, v, dirs) for k, v in workflows.items()]
+    groups += [_summarize("task", k, v, dirs) for k, v in tasks.items()
+               if len(v) >= TASK_MIN_PROMPTS and len({m[0] for m in v}) >= TASK_MIN_SESSIONS]
+    groups.sort(key=lambda g: (-g["in_prompt_usd"], g["key"]))
+    return {"since": since_bound, "privacy": level, "groups": groups, "unpriced": note}

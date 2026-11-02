@@ -3,12 +3,14 @@ import contextlib
 import io
 import json
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 
+from tokscope.core import tz
+from tokscope.core.ingest import connect
 from tokscope.features import patterns
 
 
@@ -102,6 +104,217 @@ class FacetsTest(unittest.TestCase):
         self.write("s1.json", '{"outcome": "first"}')
         self.assertEqual(self.outcome(dirs=[self.facets, other]), "first")
         self.assertEqual(self.outcome("s1", [self.root / "absent", other]), "second")
+
+
+LONG = "please refactor the billing module carefully"  # 25 characters or more
+CANARY = "CANARY-PROMPT acme invoices"
+
+
+def stamp(days=1, minutes=0):
+    t = datetime.now(timezone.utc) - timedelta(days=days) + timedelta(minutes=minutes)
+    return t.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
+class Base(unittest.TestCase):
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        for name, value in (("TOKSCOPE_HOME", self.dir / "home"), ("CLAUDE_CONFIG_DIR", self.dir / "claude")):
+            patcher = mock.patch.dict(os.environ, {name: str(value)})
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.facets = self.dir / "claude" / "usage-data" / "facets"
+        self.facets.mkdir(parents=True)
+        self.db = self.dir / "t.db"
+        self.conn = connect(self.db)
+        self.n = 0
+
+    def session(self, sid, project="-home-u-app"):
+        self.conn.execute("INSERT OR IGNORE INTO sessions (session_id, project, cwd, title, prompts) VALUES (?, ?, '/x', 't', 1)",
+                          (sid, project))
+
+    def prompt(self, sid, idx, text, days=1, project="-home-u-app", skills=(), reqs=None, sub_skills=()):
+        """A prompt with its requests (default: one priced main-thread request) and skill loads."""
+        self.session(sid, project)
+        if text is not None:
+            self.conn.execute("INSERT INTO prompts VALUES (?, ?, ?, ?)", (sid, idx, stamp(days), text))
+        for r in reqs if reqs is not None else [dict()]:
+            self.request(sid, idx, days=days, **r)
+        for i, skill in enumerate(skills):
+            self.conn.execute("INSERT INTO skill_calls (session_id, ts, skill, prompt_idx, failed) VALUES (?, ?, ?, ?, 0)",
+                              (sid, stamp(days, i), skill, idx))
+        for skill in sub_skills:
+            self.conn.execute("INSERT INTO skill_calls (session_id, ts, skill, prompt_idx, agent_id, failed) "
+                              "VALUES (?, ?, ?, ?, 'ag1', 0)", (sid, stamp(days, 5), skill, idx))
+
+    def request(self, sid, idx, model="claude-opus-5-5", cost=1.0, cr=0, inp=10, w5=0, w1=0, agent=None, days=1, minutes=0):
+        self.n += 1
+        self.conn.execute("INSERT INTO requests (session_id, request_key, ts, model, agent_id, prompt_idx, input, output, "
+                          "cache_read, cache_write_5m, cache_write_1h, cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)",
+                          (sid, f"k{self.n}", stamp(days, minutes + self.n / 100), model, agent, idx, inp, cr, w5, w1, cost))
+
+    def go(self, level="full", since=None):
+        self.conn.commit()
+        self.conn.close()
+        bound = tz.utc_bound(since or patterns.default_since())
+        result = patterns.run(self.db, bound, level)
+        self.conn = connect(self.db)
+        return result
+
+    def keys(self, level="full", **kw):
+        return {(g["kind"], g["key"]) for g in self.go(level, **kw)["groups"]}
+
+
+class GroupingTest(Base):
+    def test_exclusions(self):
+        self.prompt("b", 1, LONG, skills=["sk1"], project="-home-u-tokscope-bench-1")  # bench session
+        self.prompt("m", 1, "<command-name>x</command-name> and more text", skills=["sk2"])  # machine prompt
+        self.prompt("n", None, None, reqs=[dict()])  # NULL prompt_idx
+        self.conn.execute("UPDATE requests SET prompt_idx = NULL WHERE session_id = 'n'")
+        self.prompt("o", 7, None)  # prompt_idx with no prompts row
+        self.prompt("s", 1, "ok thanks")  # short, no skill
+        for sid in "abc":
+            self.prompt(sid + "t", 1, "tiny")
+        self.assertEqual(self.keys(), set())
+
+    def test_short_prompt_with_skill_is_a_workflow(self):
+        self.prompt("s", 1, "hi", skills=["sk1"])
+        self.assertEqual(self.keys(), {("workflow", "sk1")})
+
+    def test_first_skill_by_ts_and_failed_load_skipped(self):
+        self.prompt("s", 1, LONG, skills=["first", "second"])
+        self.conn.execute("INSERT INTO skill_calls (session_id, ts, skill, prompt_idx, failed) VALUES ('s', ?, 'zero', 1, 1)",
+                          (stamp(1, -5),))
+        self.assertEqual(self.keys(), {("workflow", "first")})
+
+    def test_skill_in_subagent_counts(self):
+        self.prompt("s", 1, LONG, sub_skills=["agent-skill"])
+        self.assertEqual(self.keys(), {("workflow", "agent-skill")})
+
+    def test_task_group_limits(self):
+        for i, sid in enumerate(("a", "a", "b")):
+            self.prompt(sid, i + 1, "Refactor the billing module part %d" % i)
+        self.assertEqual(self.keys(), {("task", "refactor the billing module part")})
+        self.conn.execute("DELETE FROM prompts WHERE session_id = 'b'")
+        self.assertEqual(self.keys(), set())  # two prompts
+        self.conn.execute("INSERT INTO prompts VALUES ('a', 3, ?, 'Refactor the billing module part 9')", (stamp(),))
+        self.conn.execute("UPDATE requests SET session_id = 'a', prompt_idx = 3 WHERE session_id = 'b'")
+        self.assertEqual(self.keys(), set())  # three prompts, one session
+
+    def test_in_prompt_cost_by_hand(self):
+        reqs = [dict(cost=1.0, cr=1_000_000, inp=5, w5=7, w1=11),
+                dict(cost=0.5, cr=500_000),
+                dict(model="claude-sonnet-4-6", cost=1.2, cr=2_000_000),
+                dict(model="claude-sonnet-4-6", cost=0.4, cr=9_000_000, agent="ag1"),
+                dict(model="mystery-model", cost=None, cr=100)]
+        self.prompt("s", 1, LONG, skills=["sk1"], reqs=reqs)
+        self.conn.execute("UPDATE requests SET cost_usd = NULL WHERE model = 'mystery-model'")
+        g = self.go()["groups"][0]
+        # cost 3.1; inherited: 1M*0.20/M (the whole first read) + 0.5M*0.20/M + min(2M, 1M)*0.30/M + 0 (no rate) = 0.6
+        self.assertAlmostEqual(g["in_prompt_usd"], 2.5)
+        self.assertEqual((g["steps_median"], g["subagent_requests"]), (4, 1))
+        self.assertEqual(g["start_context_median"], 5 + 1_000_000 + 7 + 11)
+        self.assertIn("mystery-model", self.go()["unpriced"])
+
+    def test_first_request_pays_only_its_non_read_cost(self):
+        self.prompt("s", 1, LONG, skills=["sk1"], reqs=[dict(cost=0.3 + 0.2, cr=1_000_000)])  # 0.2 is the read at 0.20/M
+        self.assertAlmostEqual(self.go()["groups"][0]["in_prompt_usd"], 0.3)
+
+    def test_group_fields_and_rank(self):
+        self.prompt("a", 1, LONG, skills=["cheap"], reqs=[dict(cost=1.0)])
+        self.prompt("a", 2, LONG, skills=["dear"], reqs=[dict(cost=2.0)])
+        self.prompt("b", 1, LONG, skills=["dear"], reqs=[dict(cost=4.0), dict(cost=2.0)])
+        self.prompt("c", 1, LONG, skills=["dear"], reqs=[dict(cost=0.5, agent="ag1")])  # no main-thread request
+        (self.facets / "a.json").write_text('{"outcome": "achieved"}')
+        (self.facets / "b.json").write_text('{"outcome": "achieved"}')
+        groups = self.go()["groups"]
+        self.assertEqual([g["key"] for g in groups], ["dear", "cheap"])
+        g = groups[0]
+        self.assertEqual((g["prompts"], g["sessions"]), (3, 3))
+        self.assertAlmostEqual(g["in_prompt_usd"], 8.5)
+        self.assertEqual((g["in_prompt_low"], g["in_prompt_median"], g["in_prompt_high"]), (0.5, 2.0, 6.0))
+        self.assertEqual(g["steps_median"], 1)  # steps 1, 2, 0
+        self.assertEqual(g["subagent_requests"], 1)
+        self.assertEqual(g["start_context_median"], 10)  # the prompt with no main-thread request has none
+        self.assertEqual(g["outcomes"], {"achieved": 2})
+        self.assertEqual(g["skills"], ["dear"])
+        self.assertEqual(g["example"], LONG)
+        self.assertEqual(groups[1]["start_context_median"], 10)
+
+    def test_equal_cost_ranks_by_key(self):
+        self.prompt("a", 1, LONG, skills=["zz"])
+        self.prompt("b", 1, LONG, skills=["aa"])
+        self.assertEqual([g["key"] for g in self.go()["groups"]], ["aa", "zz"])
+
+    def test_start_context_none_when_no_main_thread(self):
+        self.prompt("a", 1, LONG, skills=["sk"], reqs=[dict(agent="ag1")])
+        self.assertIsNone(self.go()["groups"][0]["start_context_median"])
+
+    def test_prompt_crossing_the_bound_keeps_all_requests(self):
+        since = (tz.now().date() - timedelta(days=1)).isoformat()
+        bound = tz.utc_bound(since)
+        edge = (datetime.strptime(bound, "%Y-%m-%dT%H:%M:%S") + timedelta(minutes=1))
+        self.session("s")
+        self.conn.execute("INSERT INTO prompts VALUES ('s', 1, ?, ?)", (edge.strftime("%Y-%m-%dT%H:%M:%S.000Z"), LONG))
+        for i, cost in enumerate((1.0, 2.0)):  # the first request is before the bound, the second after
+            self.conn.execute("INSERT INTO requests (session_id, request_key, ts, model, prompt_idx, input, cache_read, "
+                              "cache_write_5m, cache_write_1h, cost_usd) VALUES ('s', ?, ?, 'claude-opus-5-5', 1, 1, 0, 0, 0, ?)",
+                              (f"x{i}", (edge + timedelta(minutes=i - 3)).strftime("%Y-%m-%dT%H:%M:%S.000Z"), cost))
+        self.conn.execute("INSERT INTO skill_calls (session_id, ts, skill, prompt_idx, failed) VALUES ('s', ?, 'sk', 1, 0)", (stamp(),))
+        g = self.go(since=since)["groups"][0]
+        self.assertEqual((g["steps_median"], g["in_prompt_usd"]), (2, 3.0))
+
+    def test_default_window_is_14_days(self):
+        self.prompt("old", 1, LONG, days=15, skills=["old"])
+        self.prompt("new", 1, LONG, days=13, skills=["new"])
+        self.assertEqual(self.keys(), {("workflow", "new")})
+
+    def test_since_bound_excludes_older_prompts(self):
+        self.prompt("a", 1, LONG, days=5, skills=["old"])
+        self.prompt("b", 1, LONG, days=1, skills=["new"])
+        since = (tz.now().date() - timedelta(days=2)).isoformat()
+        self.assertEqual(self.keys(since=since), {("workflow", "new")})
+
+
+class PrivacyLevelTest(Base):
+    def seed(self):
+        self.prompt("a", 1, CANARY + " deploy it", skills=["acme-deploy"], reqs=[dict(cost=2.0)])
+        self.prompt("b", 1, "<local-command-stdout>" + CANARY, skills=["machine-skill"])
+        self.prompt("c", 1, LONG, skills=["bench-skill"], project="-home-u-tokscope-bench-2")
+        for i, sid in enumerate("def"):
+            self.prompt(sid, 1, "CANARY-TASK write the weekly report %d" % i)
+
+    def test_machine_prompt_and_bench_absent_at_every_level(self):
+        self.seed()
+        for level in ("full", "redacted", "numbers"):
+            blob = json.dumps(self.go(level))
+            self.assertNotIn("machine-skill", blob, level)
+            self.assertNotIn("bench-skill", blob, level)
+
+    def test_workflow_numbers_equal_at_full_and_redacted(self):
+        self.seed()
+        strip = lambda g: {k: v for k, v in g.items() if k != "example"}  # noqa: E731
+        full = [strip(g) for g in self.go("full")["groups"] if g["kind"] == "workflow"]
+        redacted = [strip(g) for g in self.go("redacted")["groups"]]
+        self.assertEqual(full, redacted)
+        self.assertEqual(redacted[0]["key"], "acme-deploy")
+
+    def test_numbers_aliases_skills_and_levels_have_no_task_groups_or_text(self):
+        self.seed()
+        full = self.go("full")
+        self.assertIn(("task", "canary-task write the weekly report"), {(g["kind"], g["key"]) for g in full["groups"]})
+        numbers = self.go("numbers")
+        self.assertEqual([g["key"] for g in numbers["groups"]][0][:6], "skill-")
+        for level in ("redacted", "numbers"):
+            result = self.go(level)
+            self.assertEqual({g["kind"] for g in result["groups"]}, {"workflow"})
+            self.assertTrue(all(g["example"] is None for g in result["groups"]))
+            blob = json.dumps(result).lower()
+            self.assertNotIn("canary", blob)
+            self.assertNotIn("weekly report", blob)
+
+    def test_invalid_level(self):
+        with self.assertRaises(ValueError):
+            patterns.run(self.db, "2000-01-01T00:00:00", "bogus")
 
 
 if __name__ == "__main__":
