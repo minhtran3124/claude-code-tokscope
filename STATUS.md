@@ -1,23 +1,27 @@
 ---
-state: active        # active | paused | blocked | done
+state: blocked        # active | paused | blocked | done
 progress: 90          # rough estimate, 0-100
 priority: medium     # high | medium | low
-updated: 2026-10-26
+updated: 2026-11-02
 updated_by: claude   # claude | manual
 ---
 
 # claude-code-tokscope — Status
 
 ## Summary
-OTel receiver (#50, #157) and ingest (#58, #158) are done on `feat/otel-leftovers`: hardened receiver, deduped and linear ingest, prompt.id join; 634 tests, 1 pre-existing failure (`test_week_finding_compares_with_the_week_before`). macOS app #144-#148 is unverified without a Mac.
+OTel receiver and ingest are done and merged, and recent work added dashboard polish: a Models card, Sessions folder filter and open-row panel. The macOS app (#144-#148) is unverified without a Mac. The last recorded run failed at the canary stage. A design for a logs-to-enhancement-plan feature is in `docs/research-prompt-insights.md`, not built yet.
 
 ## Next step
-Review the final PR `feat/otel-leftovers` -> main; on the M2: `cd desktop && npm run dist:mac` and report what fails.
+Fix the failed run 01M602P6H66Q15NXYZ7FJM45GP: get a fresh canary pass for the implement stage, then re-run it.
 
 ## Blockers
-- GitHub Actions jobs did not start on 2026-10-25 (annotation: payment failed or spending limit; the runs on 2026-10-22 passed). Settings > Billing. Until then the new `lint` job and the 3.11 leg have not run on GitHub; both pass locally.
+- GitHub Actions jobs stopped starting on 2026-10-25 (payment or spending limit); the new lint job and the 3.11 leg have not run on GitHub.
+- Run 01M602P6H66Q15NXYZ7FJM45GP failed: the implement stage has no canary result.
+- macOS app (#144-#148) cannot be verified without a Mac.
 
 ## Recent
+- 2026-11-02: Research on the logs-to-plan idea: measured repetition on the local database (repeated real tasks are at most 8% of spend; 97% of tokens are cache reads), wrote `docs/research-prompt-insights.md` with the flow, 5 slices and risks; no product code changed.
+- 2026-10-28: run 01M602P6H66Q15NXYZ7FJM45GP (default) failed, 4 stage run(s): canary: stage implement needs a fresh canary pass (no canary result)
 - 2026-10-26: Overview gets a Models card (PR #168: models by request count, links to the model filter, region `models`); a follow-up shows exact counts and trims Recent to 10 lines.
 - 2026-10-26: Rule added: one assumptions artifact per PR, all that PR's assumptions in it (`.claude/rules/behavior.md` #5); old per-assumption files left as they are.
 - 2026-10-26: Sessions: an opened session is one tinted panel (summary row and body, `--tint` plus a mark left edge, both skins and dark); PR #167, review fixes: dead open-row CSS removed, opened+picked rule.
@@ -26,5 +30,3 @@ Review the final PR `feat/otel-leftovers` -> main; on the M2: `cd desktop && npm
 - 2026-10-26: Overview Today card: heading and "N sessions running" share one row (`.live-head`, wraps on narrow screens); review fixes: region shrinks so a long note wraps inside it, spacing only on `.live-head`, stronger test; 636 tests pass, ruff clean; screenshots in the PR.
 - 2026-10-25: #157/#158 combined on feat/otel-leftovers (PRs 159, 160), final PR to main; checked end to end on ::1 in a temp home (duplicate post ingested once, deep JSON 400, modes 700/600); no UI change.
 - 2026-10-25: #158 OTel ingest: dedupe key plus unique index (migration drops stored duplicates), match() n log n, reader goes line by line, statusline `prompt_id` stored and joined to OTel events in `cache.official_by`; no UI change.
-- 2026-10-25: PR #156 review fix: a malformed or hostile OTel line is skipped per line (offset still advances) and cannot stop the skills steps; a transient DB error (locked, disk full) now propagates so the offset is not advanced; telemetry-only sessions (OTel events, no transcript) are tagged Sessions rows and in the Sessions, Tokens, Output, From cache and API-eq totals at Claude Code's cost_usd, so every #58 criterion is met; 623 tests pass.
-- 2026-10-25: #58 OTel `api_request` events ingested (`core/otel.py`, `otel_requests`, `ingest --otel [DIR]`, matched to requests by session, tokens and time); Cost check card in report and dashboard Overview (drift per model, unmatched, telemetry only); 608 tests pass, ruff clean; checked end to end in a temp home (re-run adds nothing), final PR to main, summary in `specs/otel-ingest/SUMMARY.md`.
