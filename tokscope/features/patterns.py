@@ -149,7 +149,7 @@ def _summarize(kind, key, members, facet_dirs):
     starts = [m[2]["start_context"] for m in members if m[2]["start_context"] is not None]
     outcomes = {}
     for sid in sessions:
-        if (o := _outcome(sid, facet_dirs)):
+        if facet_dirs and (o := _outcome(sid, facet_dirs)):
             outcomes[o] = outcomes.get(o, 0) + 1
     costliest = max(members, key=lambda m: m[2]["in_prompt"])  # the first of equals
     return {"kind": kind, "key": key, "prompts": len(members), "sessions": len(sessions),
@@ -178,7 +178,7 @@ def run(db_path, since_bound, level="full"):
         conn.close()
     ov, rates = pricing.overrides(), {}
     rate = lambda m: rates.setdefault(m, pricing.cache_read_rate(m, ov))  # noqa: E731
-    dirs = _facet_dirs()
+    dirs = _facet_dirs() if level == "full" else []  # below full the privacy path reads no file keyed by a real session id
     workflows, tasks = {}, {}
     for (sid, idx), rows in reqs.items():
         text = texts.get((sid, idx))
