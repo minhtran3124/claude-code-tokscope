@@ -228,6 +228,13 @@ class GroupingTest(Base):
         self.prompt("s", 1, LONG, skills=["sk1"], reqs=[dict(cost=0.3 + 0.2, cr=1_000_000)])  # 0.2 is the read at 0.20/M
         self.assertAlmostEqual(self.go()["groups"][0]["in_prompt_usd"], 0.3)
 
+    def test_inherited_share_never_exceeds_stored_cost(self):
+        # stored cost was priced at ingest; a higher current cache-read rate must not make in_prompt negative
+        rows = [(None, "m", 0.10, 0, 1_000_000, 0, 0), (None, "m", 0.10, 0, 1_000_000, 0, 0)]
+        got = patterns._measure(rows, lambda m: 1e-6)  # 1.00 per request at the current rate, 0.10 stored
+        self.assertGreaterEqual(got["in_prompt"], 0.0)
+        self.assertAlmostEqual(got["in_prompt"], 0.0)
+
     def test_group_fields_and_rank(self):
         self.prompt("a", 1, LONG, skills=["cheap"], reqs=[dict(cost=1.0)])
         self.prompt("a", 2, LONG, skills=["dear"], reqs=[dict(cost=2.0)])

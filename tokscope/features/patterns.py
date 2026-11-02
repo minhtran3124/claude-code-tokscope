@@ -134,11 +134,12 @@ def _measure(rows, rate):
 
     in_prompt = cost - inherited. cost sums every request (main thread and subagents, NULL as 0). For each main-thread
     request, inherited = min(its cache_read, the first main-thread request's cache_read) * the model's cache-read rate, so
-    the first request inherits all of its reads."""
+    the first request inherits all of its reads. Each request's inherited share is capped at its own stored cost: cost_usd
+    was priced at ingest and the rate is the current one, so a rate change must not push in_prompt below zero."""
     main = [r for r in rows if r[0] is None]
     cost = sum(r[2] for r in rows)
     first_read = main[0][4] if main else 0
-    inherited = sum(min(r[4], first_read) * (rate(r[1]) or 0.0) for r in main)
+    inherited = sum(min(r[2], min(r[4], first_read) * (rate(r[1]) or 0.0)) for r in main)
     first = main[0] if main else None
     return {"in_prompt": cost - inherited, "steps": len(main), "subagent_requests": len(rows) - len(main),
             "start_context": sum(first[3:7]) if first else None}
