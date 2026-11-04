@@ -243,7 +243,7 @@ class TestRecover(Base):
         self.assertEqual(apply.reject(RUN, cwd=str(self.cwd))["decision"], "reject")
         self.assertEqual(self.fp(), self.new)
         self.assertEqual(len(self.rows("SELECT * FROM changes WHERE skill='demo'")), 1)
-        self.assertEqual(len(self.rows("SELECT * FROM opt_applied")), 1)
+        self.assertEqual([r[0] for r in self.rows("SELECT action FROM opt_applied ORDER BY rowid")], ["approve", "reject"])
         d = json.loads((self.run_dir / apply.DECISION_JSON).read_text())
         self.assertEqual([d["decision"], d["history"][-1]["decision"]], ["reject", "approve"])
 
@@ -297,7 +297,8 @@ class TestRejectRevert(Base):
         rec = apply.reject(RUN, reason="not now", cwd=str(self.cwd))
         self.assertEqual(rec["reason"], "not now")
         self.assertEqual(self.fp(), self.old)
-        self.assertEqual(self.rows("SELECT * FROM opt_applied") if self._has_table() else [], [])
+        rows = self.rows("SELECT action, skill, reason FROM opt_applied")
+        self.assertEqual(rows, [("reject", "demo", "not now")])
         d = json.loads((self.run_dir / apply.DECISION_JSON).read_text())
         self.assertEqual(d["decision"], "reject")
         apply.reject(RUN, cwd=str(self.cwd))

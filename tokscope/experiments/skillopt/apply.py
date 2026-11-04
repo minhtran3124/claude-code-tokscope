@@ -408,6 +408,14 @@ def reject(run_id, reason=None, cwd=None, now=None):
             record = {"decision": "reject", "run_id": run.name, "skill": plan["skill"], "verdict": v.get("verdict"),
                       "reason": (reason or "").strip() or None, "old_fingerprint": fp, "new_fingerprint": fp,
                       "commit_sha": None, "at": _now(now)}
+            conn = _db()
+            try:
+                conn.execute("INSERT OR IGNORE INTO opt_applied VALUES (?,?,?,?,?,?,?,?,?)",
+                             (run.name, plan["skill"], "reject", fp, fp, None, record["verdict"], record["reason"],
+                              record["at"]))
+                conn.commit()
+            finally:
+                conn.close()
             _push(run, record)
             return {**record, "history": []}
         finally:
