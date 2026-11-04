@@ -253,6 +253,15 @@ class DraftTest(Base):
         for bad in (".env", "id_rsa", "server.pem"):
             self.assertNotIn(bad, copied)
 
+    def test_repo_under_a_secret_named_folder_keeps_fixtures(self):
+        repo = self.tmp / ".config" / "repo"
+        (repo / ".git").mkdir(parents=True)
+        (repo / ".git" / "config").write_text("x")
+        (repo / "notes.txt").write_text("n")
+        self.assertFalse(suite._secret(repo / "notes.txt"))
+        self.assertTrue(suite._secret(repo / ".git" / "config"))
+        self.assertTrue(suite._secret(self.tmp / ".ssh" / "key1"))
+
     def test_n_caps_and_evals_json_is_untouched(self):
         self.write({"evals": [case("keep")]})
         before = (self.skill / "evals" / "evals.json").read_bytes()

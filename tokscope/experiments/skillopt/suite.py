@@ -267,7 +267,12 @@ _SECRET_NAME = re.compile(
 
 def _secret(path):
     """True for a path that looks like a credential or sits in a credentials folder; draft() never copies those."""
-    return bool(_SECRET_NAME.match(path.name)) or any(part in _SECRET_DIRS for part in path.parts)
+    parts = path.parts
+    for anc in path.parents:  # a repo may itself live under .config or .docker: only folders below its root count
+        if (anc / ".git").exists():
+            parts = path.relative_to(anc).parts
+            break
+    return bool(_SECRET_NAME.match(path.name)) or any(part in _SECRET_DIRS for part in parts)
 
 
 def _description(folder):
