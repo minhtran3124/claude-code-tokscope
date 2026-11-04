@@ -218,6 +218,29 @@ class Base(unittest.TestCase):
         return {(g["kind"], g["key"]) for g in self.go(level, **kw)["groups"]}
 
 
+class ColdStartTest(Base):
+    def test_cold_start_counts_later_reads_as_inherited(self):
+        # first request reads 0 and writes 300K (stored 1.875); 9 more read 300K at 0.20/M = 0.06 each, as stored
+        reqs = [dict(cost=1.875, cr=0, inp=0, w5=300_000)] + [dict(cost=0.06, cr=300_000, inp=0)] * 9
+        self.prompt("s", 1, LONG, skills=["sk1"], reqs=reqs)
+        self.assertAlmostEqual(self.go()["groups"][0]["in_prompt_usd"], 1.875)
+
+    def test_cold_start_with_1h_write_uses_both_writes(self):
+        reqs = [dict(cost=1.0, cr=0, inp=0, w5=100_000, w1=200_000)] + [dict(cost=0.06, cr=300_000, inp=0)] * 2
+        self.prompt("s", 1, LONG, skills=["sk1"], reqs=reqs)
+        self.assertAlmostEqual(self.go()["groups"][0]["in_prompt_usd"], 1.0)
+
+    def test_warm_start_is_unchanged(self):
+        reqs = [dict(cost=0.06, cr=300_000, inp=0)] + [dict(cost=0.10, cr=400_000, inp=0)] * 2  # only 300K is inherited
+        self.prompt("s", 1, LONG, skills=["sk1"], reqs=reqs)
+        self.assertAlmostEqual(self.go()["groups"][0]["in_prompt_usd"], 2 * (0.10 - 0.06))
+
+    def test_cold_inherited_share_is_capped_at_stored_cost(self):
+        rows = [(None, "m", 0.5, 0, 0, 300_000, 0, None, None), (None, "m", 0.10, 0, 300_000, 0, 0, None, None)]
+        got = patterns._measure(rows, lambda r, tokens: tokens * 1e-6)  # 0.30 at the current rate, 0.10 stored
+        self.assertAlmostEqual(got["in_prompt"], 0.5)
+
+
 class GroupingTest(Base):
     def test_exclusions(self):
         self.prompt("b", 1, LONG, skills=["sk1"], project="-home-u-tokscope-bench-1")  # bench session
