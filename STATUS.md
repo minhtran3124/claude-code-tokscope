@@ -9,10 +9,10 @@ updated_by: claude   # claude | manual
 # claude-code-tokscope — Status
 
 ## Summary
-Milestone 1 (logs to enhancement plan) is merged into `main` (PR #179): `tokscope patterns`, the automatic `changes` row for Optimize and the 300K context nudge are in the app build. Two follow-ups are open in the milestone: #180 (cold-cache inherited reads) and #181 (Optimize apply when the changes row fails). The macOS app (#144-#148) is unverified without a Mac.
+Milestone 1 (logs to enhancement plan) is merged into `main` (PR #179): `tokscope patterns`, the automatic `changes` row for Optimize and the 300K context nudge are in the app build. Follow-ups #180 and #181 are open in the milestone, and the nudge has not been tried in a live Claude Code session (UAT did not run).
 
 ## Next step
-Try the nudge in a real Claude Code session (UAT did not run) and read `tokscope patterns` on real data, then decide whether to ticket the held skill slice; run `/harness:autopilot "Logs to enhancement plan"` for #180 and #181.
+Run `/harness:autopilot "Logs to enhancement plan"` for #180 and #181.
 
 ## Blockers
 - macOS app (#144-#148) cannot be verified without a Mac.
