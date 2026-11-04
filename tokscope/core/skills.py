@@ -416,13 +416,13 @@ def _evidence(conn, skill, folder):
     return _first(*dates)
 
 
-def scan(conn, now=None):
+def scan(conn, now=None, bench_project="%tokscope%-bench-%"):
     """Hash every skill a transcript has loaded, in the folder its latest session would load it from, and date it."""
     _ensure(conn)
     now = now or datetime.now(timezone.utc).isoformat()
     latest = {}  # skill -> (ts, cwd) of its latest load, by time not by string
     for skill, ts, cwd in conn.execute("SELECT k.skill, k.ts, s.cwd FROM skill_calls k JOIN sessions s USING (session_id) "
-                                           "WHERE COALESCE(k.failed, 0) = 0"):
+                                           "WHERE COALESCE(k.failed, 0) = 0 AND COALESCE(s.project, '') NOT LIKE ?", (bench_project,)):
         if ts and (skill not in latest or _dt(ts) > _dt(latest[skill][0])):
             latest[skill] = (ts, cwd)
     for skill, (_, cwd) in latest.items():
@@ -454,11 +454,11 @@ def load_versions(conn, failed=False):
             "SELECT skill, version, first_seen, body_hash, source FROM skill_versions"):
         body[(skill, version)] = bh
         if bh:
-            by_text.setdefault((skill, bh), version)
+            by_text.setdefault((skill, bh), []).append((first, version))
         # a version rebuilt from a transcript is known only at the loads that kept its text, not over a span of time
         if source != "transcript":
             timeline.setdefault(skill, []).append((first, version))
-    for rows in timeline.values():
+    for rows in (*timeline.values(), *by_text.values()):
         rows.sort(key=lambda r: _dt(r[0]))
     out = []
     for sid, i, skill, ts, text, exact in conn.execute(
@@ -468,7 +468,10 @@ def load_versions(conn, failed=False):
         version = exact
         if version is None and text:
             # the transcript kept the text this load read: the version with that text is it, whatever the dates say
-            version = next((by_text[(skill, h)] for h in text.split() if (skill, h) in by_text), None)
+            cands = next((by_text[(skill, h)] for h in text.split() if (skill, h) in by_text), None)
+            # of several versions with this text, the newest first seen at or before the load, else the earliest
+            at = _dt(ts or "1970-01-01T00:00:00Z")
+            version = next((v for f, v in reversed(cands) if _dt(f) <= at), cands[0][1]) if cands else None
             if version is None:
                 before = [v for first, v in timeline.get(skill, []) if _dt(first) <= _dt(ts or "1970-01-01T00:00:00Z")]
                 version = before[-1] if before and body.get((skill, before[-1])) is None else None
