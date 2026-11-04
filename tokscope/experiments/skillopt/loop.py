@@ -44,7 +44,7 @@ def _front_description(path):
         return None
     out, taking = [], False
     for line in front.splitlines():
-        if taking and line[:1] in (" ", "\t"):
+        if taking and (not line.strip() or line[:1] in (" ", "\t")):  # a blank line stays inside a folded value
             out.append(line.strip())
         elif line.startswith("description:"):
             out, taking = [line.split(":", 1)[1].strip()], True

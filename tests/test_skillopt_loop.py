@@ -678,6 +678,10 @@ class LoopTest(LoopBase):
         p = self.tmp / "S.md"
         p.write_text("---\nname: x\ndescription: >\n  one\n  two\nother: 1\n---\nbody\n")
         self.assertEqual(loop._front_description(p), "> one two")  # the value as written, compared as is
+        p.write_text("---\nname: x\ndescription: >\n  one\n\n  two\nother: 1\n---\nbody\n")
+        self.assertEqual(loop._front_description(p), "> one two")  # a blank line does not end the value
+        p.write_text("---\nname: x\ndescription: >\n  one\n\n  changed\nother: 1\n---\nbody\n")
+        self.assertNotEqual(loop._front_description(p), "> one")
         p.write_text("---\nname: x\n---\nbody\n")
         self.assertIsNone(loop._front_description(p))
 
