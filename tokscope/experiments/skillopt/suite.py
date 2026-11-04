@@ -327,10 +327,13 @@ def draft(skill, n=5, cwd=None, projects_dir=None):
     return {"path": path, "cases": cases, "skipped": skipped, "note": note}
 
 
-def approve(skill, cwd=None):
-    """Copy the draft to evals.json when it passes the checks. ValueError (nothing written) when it does not. The draft
+def approve(skill, cwd=None, force=False):
+    """Copy the draft to evals.json when it passes the checks. Refused (nothing written) when it does not, or when
+    evals.json already exists and force is false (it may hold hand-curated cases and the holdout split). The draft
     stays."""
     folder = _folder(skill, cwd)
+    if (folder / "evals" / NAME).exists() and not force:
+        raise Refused(f"{folder / 'evals' / NAME} already exists; pass --force to overwrite it")
     suite = load(skill, cwd, DRAFT)
     if suite.problems:
         raise Refused("draft has problems: " + "; ".join(suite.problems))

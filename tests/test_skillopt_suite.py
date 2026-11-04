@@ -289,6 +289,20 @@ class DraftTest(Base):
         self.assertTrue(draft.is_file())
         self.assertTrue((self.skill / "ref.md").is_file())
 
+    def test_approve_refuses_to_overwrite_existing_evals_without_force(self):
+        suite.draft("demo", 5, projects_dir=self.projects)
+        draft = self.skill / "evals" / "evals.draft.json"
+        data = json.loads(draft.read_text())
+        data["checks"] = [CHECK]
+        draft.write_text(json.dumps(data))
+        self.write({"evals": [case("curated")]})
+        before = (self.skill / "evals" / "evals.json").read_bytes()
+        with self.assertRaises(suite.Refused):
+            suite.approve("demo")
+        self.assertEqual((self.skill / "evals" / "evals.json").read_bytes(), before)
+        out = suite.approve("demo", force=True)
+        self.assertEqual(json.loads(out.read_text()), data)
+
 
 class CliTest(Base):
     def run_cli(self, *args):

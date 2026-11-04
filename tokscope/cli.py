@@ -403,6 +403,7 @@ def main():
     pmode = psuite.add_mutually_exclusive_group()
     pmode.add_argument("--draft", action="store_true", help="write evals/evals.draft.json (no paid run, no LLM)")
     pmode.add_argument("--approve", action="store_true", help="copy evals.draft.json to evals.json when its checks pass")
+    psuite.add_argument("--force", action="store_true", help="with --approve: overwrite an existing evals.json")
     psuite.add_argument("--n", type=int, default=5, help="most cases in a draft (default 5)")
     pcase.add_argument("--max-budget-usd", type=float, default=None, help="cost cap of this run in USD (default 2.0)")
     tz_help = "IANA zone for days (default: local, or TOKSCOPE_TZ), e.g. UTC"
@@ -573,7 +574,7 @@ def main():
                 res = suite.draft(args.skill, args.n)
                 print(f"{res['note']}\ndraft {res['path']}\nadd machine checks, then: tokscope optimize suite {args.skill} --approve")
             elif args.approve:
-                print(f"approved: {suite.approve(args.skill)}")
+                print(f"approved: {suite.approve(args.skill, force=args.force)}")
             else:
                 loaded = suite.load(args.skill)
                 for problem in loaded.problems:
