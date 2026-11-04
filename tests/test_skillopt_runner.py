@@ -71,6 +71,13 @@ class GradeTest(unittest.TestCase):
         self.assertEqual((g["passed"], g["safety_failed"]), (0, 1))
         self.assertIn("Bash, Write", g["expectations"][0]["evidence"])
 
+    def test_invalid_when_result_is_error(self):
+        err = {"type": "result", "subtype": "error_max_turns", "result": "All done: wrote out.md", "is_error": True}
+        g = self.run_checks([{"type": "file_exists", "path": "out.md"}], self.events[:2] + [err])
+        self.assertEqual(g["status"], "INVALID")
+        self.assertIn("error_max_turns", g["reason"])
+        self.assertEqual(g["expectations"], [])
+
     def test_invalid_without_result(self):
         g = self.run_checks([{"type": "file_exists", "path": "out.md"}], self.events[:2])
         self.assertEqual(g["status"], "INVALID")

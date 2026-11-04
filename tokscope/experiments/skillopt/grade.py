@@ -127,10 +127,14 @@ def _grade_one(check, events, sandbox, answer):
 
 
 def grade(events, sandbox, checks):
-    """One expectation per check. A run with no result event is INVALID: neither passed nor failed."""
+    """One expectation per check. A run with no result event, or whose result has is_error, is INVALID: neither passed nor failed."""
     res = _result(events)
     if res is None:
         return {"status": "INVALID", "reason": "no result event", "expectations": []}
+    if res.get("is_error"):  # budget, max turns, API error: the run did not finish, so it proves nothing
+        why = res.get("subtype") or "error"
+        return {"status": "INVALID", "reason": f"result is_error ({why}): {_clip(res.get('result') or '')}",
+                "expectations": []}
     answer = res.get("result") or ""
     out = []
     for c in checks:
