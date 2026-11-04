@@ -97,7 +97,8 @@ Slice 1 grouping rules (the first scripts were not kept, so these are the defini
 - **Task group:** other prompts, keyed by their first five words in lower case with digits and paths removed. A task group
   needs 3 or more prompts in 2 or more sessions.
 - **In-prompt cost:** the prompt's cost with subagents, minus inherited reads. For each main-thread request, inherited reads are
-  the smaller of its `cache_read` and the `cache_read` of the prompt's first main-thread request, at that model's cache-read rate.
+  the smaller of its `cache_read` and S, at that model's cache-read rate. S is the context the prompt started with: the first
+  main-thread request's `cache_read` when that is above 0, else (a cold cache) its `cache_write_5m + cache_write_1h`.
 - **Each group shows:** prompts, sessions, in-prompt cost, its lowest, median and highest cost per prompt, median steps, subagent
   requests, skills, median start context, facets outcomes and one example.
 - **At `redacted` and `numbers`:** the command reads `privacy.redacted_copy`, which has no prompt text, so only workflow groups appear.
