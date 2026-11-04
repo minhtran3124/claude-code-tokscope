@@ -422,7 +422,7 @@ def scan(conn, now=None, bench_project="%tokscope%-bench-%"):
     now = now or datetime.now(timezone.utc).isoformat()
     latest = {}  # skill -> (ts, cwd) of its latest load, by time not by string
     for skill, ts, cwd in conn.execute("SELECT k.skill, k.ts, s.cwd FROM skill_calls k JOIN sessions s USING (session_id) "
-                                           "WHERE COALESCE(k.failed, 0) = 0 AND s.project NOT LIKE ?", (bench_project,)):
+                                           "WHERE COALESCE(k.failed, 0) = 0 AND COALESCE(s.project, '') NOT LIKE ?", (bench_project,)):
         if ts and (skill not in latest or _dt(ts) > _dt(latest[skill][0])):
             latest[skill] = (ts, cwd)
     for skill, (_, cwd) in latest.items():

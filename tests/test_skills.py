@@ -474,3 +474,9 @@ class VersionHistoryTest(unittest.TestCase):
         self.load("s1", "2026-01-20T00:00:00+00:00", 1, h)
         got = {i: v for _, i, _, _, v, _ in skills.load_versions(self.conn)}
         self.assertEqual(got, {0: v1, 1: v2})
+
+    def test_a_session_with_no_project_still_gets_its_skill_hashed(self):
+        self.conn.execute("INSERT INTO sessions (session_id, project, cwd) VALUES ('np', NULL, ?)", (str(self.repo),))
+        self.load("np", "2026-01-01T00:00:00+00:00", 0)
+        skills.scan(self.conn, now="2026-01-02T00:00:00+00:00")
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM skill_versions").fetchone()[0], 1)
