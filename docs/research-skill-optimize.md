@@ -92,7 +92,15 @@ How a run stays honest:
   without one, and charges and deletes a left-over `.tmp`. An editor round is done when its `result.json` and `editor` line exist; otherwise the round is deleted and run again.
 - The pinned text is proved from the stream: a `Skill` call for the skill and the skill text after it (`Base directory for this skill: …`) whose body hash is the pinned
   copy's. A run with no transcript (`--no-session-persistence`) has nothing for `check_load` to read. `unconfirmed` (a call without the text) and `other text` do not count toward Valid.
-- The editor sees only dev cases: its workspace comes from `suite.editor_workspace` and its prompt from dev records. The `description` in the frontmatter is locked.
+- **Trigger eval** (slice 8). `evals/triggers.json` is `{"triggers": [{"prompt": str, "should_trigger": bool}]}`. A prompt goes to train when
+  `int(sha256(prompt)[:8], 16) % 100 < 60`, else to test, so the split is fixed by the text. The file is usable with at least 5 prompts and both splits non-empty;
+  otherwise the description stays locked and `verdict.json` says `no trigger evidence`. `plan.json` keeps `triggers_hash` (checked by `resume` and `regrade`),
+  `triggers_usable` and `triggers_prompts`. The editor sees train prompts only (`editor_workspace(..., triggers=)`).
+  After the rounds, a draft whose description differs (whitespace aside) from v0 runs the current and the draft arm on each prompt 3 times, test split first, in
+  stage `trigger`. A prompt run is right when the skill was loaded as expected (`run.json` load is not `not loaded`); an INVALID run is wrong. A tie or better on the
+  test split keeps the new description; a drop writes `trigger.json`, then rewrites the `description` block of the draft back to v0's (the rest of the draft stays) before confirm.
+  `verdict.json` `trigger`: `status` (`ran`, `not needed`, `no trigger evidence`, `not finished`), `reason`, `prompts`, `current` and `draft` accuracy per split, `passed`, `reverted`.
+- The editor sees only dev cases: its workspace comes from `suite.editor_workspace` and its prompt from dev records. The `description` is locked unless the trigger eval below applies.
   A draft with no `Hypothesis:` line, the same files as an earlier version, or another description is refused and recorded in `result.json`.
 - `opt_results` is rebuilt from `grading.json` and `run.json` after each result (`DELETE` the run's rows, then `INSERT`), with an index on `session_id`.
 
@@ -157,7 +165,7 @@ First acceptance run after slice 6: a real run on `create-pr`, the skill both ol
 | Point | Choice | Why |
 | --- | --- | --- |
 | Runner | own code, not `claude plugin eval` | no stubs there, and it compares against no plugin, not old against new |
-| Description | locked to the first version until slice 8 | a case that calls `/skill` cannot measure triggering |
+| Description | locked unless `evals/triggers.json` is usable; then a change must not lower test-split trigger accuracy, else the old description is put back | a case that calls `/skill` cannot measure triggering |
 | Approve | replace and commit if in git, no push; outside git keep a snapshot and offer Revert | owner chose commit; user-level skills have no repo |
 | No regression | blocks Approve, like safety | evidence of a drop should not be one click away |
 | STE tab | kept | it only reads; the owner asked to drop the optimize logic |

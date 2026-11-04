@@ -15,7 +15,7 @@ except ImportError:  # no flock on this platform: the link step alone still keep
 
 from ... import paths
 from ...core import ingest, skills
-from . import suite
+from . import suite, trigger
 from .sandbox import MAX_BUDGET_USD, _name
 
 SCHEMA_VERSION = 1
@@ -98,6 +98,8 @@ def check_lock(run):
     plan = json.loads(data.decode())
     if frozen != plan["suite_hash"]:
         raise LockError(f"{run.name}: the frozen suite changed after it was locked; start a new run")
+    if "triggers_hash" in plan and trigger.file_hash(run / "suite") != plan["triggers_hash"]:
+        raise LockError(f"{run.name}: the frozen {trigger.NAME} changed after it was locked; start a new run")
     base = plan.get("base_fingerprint")
     if base and skills.fingerprint(run / "versions" / "v0") != base:
         raise LockError(f"{run.name}: versions/v0 changed after it was locked; start a new run")

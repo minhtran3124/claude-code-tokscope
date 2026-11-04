@@ -16,12 +16,12 @@ from pathlib import Path
 
 from ...core import skills
 from .. import bench
-from . import grade, sandbox, stats, store, suite
+from . import grade, sandbox, stats, store, suite, trigger
 
 MAX_ROUNDS = 3
 PREFLIGHT_TRIES = 2
 RESAMPLES, CI = 1000, 95
-VERDICT, BENCHMARK = "verdict.json", "benchmark.json"
+VERDICT, BENCHMARK, TRIGGER = "verdict.json", "benchmark.json", "trigger.json"
 EDITOR_TIMEOUT = 20 * 60
 
 
@@ -71,12 +71,18 @@ class Ctx:
         self.suite = suite.load_folder(self.run / "suite", self.skill)
         self.dev, self.holdout = self.plan["dev"], self.plan["holdout"]
         self.cases = self.dev + self.holdout
+        self.triggers = trigger.load(self.run / "suite") if self.plan.get("triggers_usable") else []
 
     def inputs(self, cid):
         """(case, checks, fixtures) from the frozen suite."""
         case = next(c for c in self.suite.cases if str(c["id"]) == cid)
         checks = [grade.check_shape(c) for c in (case.get("checks") or []) + (self.suite.data.get("checks") or [])]
         return case, checks, suite._fixture_paths(self.suite.folder, case)[0]
+
+    def trigger_input(self, cid):
+        """(case, checks, fixtures) of a trigger prompt: the bare prompt, nothing checked, no fixtures."""
+        item = next(i for i in self.triggers if i["id"] == cid)
+        return {"id": cid, "prompt": item["prompt"]}, [], []
 
     def source(self, arm):
         """Folder an arm pins, None for the no-skill arm."""
@@ -108,7 +114,7 @@ def run_one(ctx, stage, case, arm, i):
     if not store.can_spend(run, plan):
         raise Stop(_stage_name(stage))
     cap = store.start(run, plan, *args)
-    case_, checks, fixtures = ctx.inputs(case)
+    case_, checks, fixtures = ctx.trigger_input(case) if stage == trigger.STAGE else ctx.inputs(case)
     source = ctx.source(arm)
     tmp = store.tmp_dir(run, *args)
     tmp.parent.mkdir(parents=True, exist_ok=True)
@@ -183,7 +189,10 @@ def build_prompt(ctx, n, base):
     out = [f"Improve the Claude Code skill in this folder (SKILL.md and the files next to it) so it passes more of its "
            f"eval cases. This is edit round {n} of {MAX_ROUNDS}; you start from {base}.", "",
            "Rules:", "- Edit only the skill's files. `evals/` shows the dev cases for reference; changes there are ignored.",
-           "- Do not change the `description` in the SKILL.md frontmatter.",
+           *(["- The `description` in the SKILL.md frontmatter may change. `evals/triggers.json` lists prompts that should "
+              "and should not make Claude load this skill. A changed description is checked on other, held-out "
+              "prompts, and goes back to the old text when it loads the skill less accurately."]
+             if ctx.triggers else ["- Do not change the `description` in the SKILL.md frontmatter."]),
            "- Make a small, general change that fixes the failures below; do not copy a case into the skill.",
            "- End your final answer with one line that starts with `Hypothesis:` and says what you changed and why it "
            "should help.", "", "## Failed dev cases"]
@@ -276,7 +285,8 @@ def ensure_editor(ctx, n):
     base = _best_base(ctx, n)
     ed.mkdir(parents=True)
     ws = ed / "workspace"
-    suite.editor_workspace(ctx.skill, ws, source=run / "versions" / base, suite=ctx.suite)
+    suite.editor_workspace(ctx.skill, ws, source=run / "versions" / base, suite=ctx.suite,
+                           triggers=trigger.train_items(ctx.triggers) if ctx.triggers else None)
     prompt = build_prompt(ctx, n, base)
     (ed / "prompt.md").write_text(prompt)
     events = _run_editor(sandbox.command(prompt, ws, cap, plan["model"]), ws, ed)
@@ -307,8 +317,10 @@ def ensure_editor(ctx, n):
             reason = "no SKILL.md left"
         elif fp in earlier:
             reason = f"same files as {earlier[fp]}"
-        elif _front_description(tmp / "SKILL.md") != plan["description"]:
+        elif _front_description(tmp / "SKILL.md") != plan["description"] and not ctx.triggers:
             reason = "the description changed (locked)"
+        elif ctx.triggers and _front_description(tmp / "SKILL.md") is None:
+            reason = "the description was removed"
         if reason:
             shutil.rmtree(tmp, ignore_errors=True)
         else:
@@ -340,6 +352,63 @@ def rounds(ctx):
     return max(drafts, key=lambda a: (lambda s: (s[0], -s[1]))(stats.score(ctx.records(f"r{a[1:]}", a, ctx.dev))))
 
 
+def _trigger_runs(ctx, arm, split):
+    for i, a in bench.schedule(["current", arm], trigger.TRIGGER_RUNS):
+        for item in trigger.by_split(ctx.triggers, split):
+            run_one(ctx, trigger.STAGE, item["id"], a, i)
+
+
+def trigger_gate(ctx, arm):
+    """A draft that changes the description must not lower test-split trigger accuracy; else the old description is
+    put back and the rest of the draft is kept. Runs nothing when the description is the same (whitespace aside) or
+    there is no usable trigger set. The result is saved to trigger.json before the rewrite, so a stop between the
+    two is finished on resume."""
+    run, path = ctx.run, ctx.run / TRIGGER
+    draft_dir = run / "versions" / arm
+    if not path.is_file():
+        if not ctx.triggers or not trigger.description_changed(
+                ctx.plan["description"], _front_description(draft_dir / "SKILL.md")):
+            return
+        acc = {a: {s: None for s in trigger.SPLITS} for a in ("current", "draft")}
+        for split in trigger.SPLITS:  # test first: a budget stop in train keeps the test verdict
+            try:
+                _trigger_runs(ctx, arm, split)
+            except Stop:
+                if split == "test":
+                    raise
+            recs = ctx.records(trigger.STAGE)
+            acc["current"][split] = trigger.accuracy(recs, ctx.triggers, "current", split)
+            acc["draft"][split] = trigger.accuracy(recs, ctx.triggers, arm, split)
+        passed = trigger.decide(acc["current"]["test"], acc["draft"]["test"])
+        _write_json(path, {"status": "ran", "reason": "test accuracy " + ("kept" if passed else "dropped") + "; "
+                           + ("new description kept" if passed else "old description put back"),
+                           "prompts": trigger.counts(ctx.triggers), "current": acc["current"], "draft": acc["draft"],
+                           "passed": passed, "reverted": not passed, "draft_version": arm})
+    res = json.loads(path.read_text())
+    if res.get("reverted") and draft_dir.is_dir():
+        trigger.revert_description(draft_dir, run / "versions" / "v0")
+
+
+def trigger_block(ctx, stopped=None):
+    """verdict.json's `trigger` block, from trigger.json and the plan."""
+    plan = ctx.plan
+    prompts = plan.get("triggers_prompts") or {s: 0 for s in trigger.SPLITS}
+    try:
+        return json.loads((ctx.run / TRIGGER).read_text())
+    except (OSError, ValueError):
+        pass
+    if stopped == "trigger":
+        status, reason = "not finished", "the budget ended the run in the trigger eval"
+    elif plan.get("triggers_usable"):
+        status, reason = "not needed", "the draft did not change the description"
+    else:
+        status = "no trigger evidence"
+        reason = (f"evals/triggers.json needs at least {trigger.MIN_PROMPTS} prompts with train and test both "
+                  "non-empty" if plan.get("triggers_hash") else "no evals/triggers.json")
+    return {"status": status, "reason": reason, "prompts": prompts, "current": None, "draft": None,
+            "passed": None, "reverted": False}
+
+
 def confirm(ctx, arm):
     for i, a in bench.schedule(["current", arm], ctx.plan["runs"]):
         for case in ctx.cases:
@@ -364,7 +433,8 @@ def finalize(ctx, stopped=None, draft=None, log=True):
                "draft_version": draft,
                "draft_fingerprint": skills.fingerprint(ctx.run / "versions" / draft) if draft else None,
                "base_fingerprint": plan["base_fingerprint"], "spent_usd": round(store.spent(ctx.run), 6),
-               "budget_usd": plan["budget_usd"], "run_id": ctx.run.name, "skill": ctx.skill}
+               "budget_usd": plan["budget_usd"], "run_id": ctx.run.name, "skill": ctx.skill,
+               "trigger": trigger_block(ctx, stopped)}
     _write_json(ctx.run / VERDICT, verdict)
     _write_json(ctx.run / BENCHMARK, benchmark(ctx, draft))
     store.index(ctx.run)
@@ -443,6 +513,7 @@ def drive(path, log=print):
         if draft is None:
             finalize(ctx, "rounds")
             return ctx.run
+        trigger_gate(ctx, draft)
         confirm(ctx, draft)
         finalize(ctx, None, draft)
     except Stop as e:
@@ -466,6 +537,7 @@ def start(skill, budget, runs=3, model="sonnet", cwd=None, log=print):
     for case in live.cases:
         _plain(str(case["id"]))
     description = _front_description(live.folder / "SKILL.md")
+    trigger.load(live.folder)  # a bad triggers.json is a load error, before any paid run
     run = store.new_run(skill)
     store.acquire(run)
     try:
@@ -478,9 +550,12 @@ def start(skill, budget, runs=3, model="sonnet", cwd=None, log=print):
         base = skills.fingerprint(v0)
         if base != skills.fingerprint(live.folder):
             raise ValueError(f"{skill}: the copy of the skill is not the same version")
+        items = trigger.load(run / "suite")
         store.write_plan(run, {
             "schema": store.SCHEMA_VERSION, "skill": skill, "run_id": run.name, "base_fingerprint": base,
-            "description": description, "suite_hash": suite.suite_hash(live.data), "dev": dev, "holdout": hold,
+            "description": description, "triggers_hash": trigger.file_hash(run / "suite"),
+            "triggers_usable": trigger.usable(items) and description is not None,
+            "triggers_prompts": trigger.counts(items), "suite_hash": suite.suite_hash(live.data), "dev": dev, "holdout": hold,
             "runs": runs, "model": model, "claude_version": _claude_version(), "budget_usd": float(budget),
             "per_run_cap_usd": min(sandbox.MAX_BUDGET_USD, float(budget)), "max_rounds": MAX_ROUNDS,
             "seed": random.SystemRandom().getrandbits(32), "resamples": RESAMPLES, "ci": CI, "gates": stats.GATES,
@@ -516,7 +591,7 @@ def regrade(run_id, log=print):
             if folder.name.endswith(".tmp"):
                 continue
             case = g.parts[-4]
-            _, checks, _ = ctx.inputs(case)
+            _, checks, _ = ctx.trigger_input(case) if g.parts[-5] == trigger.STAGE else ctx.inputs(case)
             events = grade.parse((folder / "stream.jsonl").read_text().splitlines())
             grade.write(folder, grade.grade(events, folder / "files", checks))
             n += 1
