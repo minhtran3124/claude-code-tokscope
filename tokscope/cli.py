@@ -406,6 +406,15 @@ def main():
     psuite.add_argument("--force", action="store_true", help="with --approve: overwrite an existing evals.json")
     psuite.add_argument("--n", type=int, default=5, help="most cases in a draft (default 5)")
     pcase.add_argument("--max-budget-usd", type=float, default=None, help="cost cap of this run in USD (default 2.0)")
+    prun = po_sub.add_parser("run", help="optimize a skill: lock a plan, then preflight, baseline, up to 3 edit rounds, confirm and a verdict (paid claude -p runs); exit 0 Apply, 1 Not enough evidence or Reject, 2 load, plan-lock or run-lock error")
+    prun.add_argument("skill")
+    prun.add_argument("--budget", type=float, required=True, help="most to spend in USD; the run stops before passing it")
+    prun.add_argument("--runs", type=int, default=3, help="runs per case and arm (default 3)")
+    prun.add_argument("--model", default="sonnet", help="model of every run and of the editor (default sonnet)")
+    pres = po_sub.add_parser("resume", help="continue a stopped optimize run; refuses when plan.json or the frozen suite changed; same exit codes as run")
+    pres.add_argument("run_id")
+    preg = po_sub.add_parser("regrade", help="grade the stored results of an optimize run again and recompute its verdict (no claude call, no cost)")
+    preg.add_argument("run_id")
     tz_help = "IANA zone for days (default: local, or TOKSCOPE_TZ), e.g. UTC"
     pv = sub.add_parser("serve", help="live dashboard on 127.0.0.1 that ingests new transcripts as they land")
     pv.add_argument("--port", type=int, default=8765)
@@ -589,6 +598,21 @@ def main():
         except ValueError as e:
             print(f"tokscope: {e}", file=sys.stderr)
             sys.exit(2)
+    elif args.cmd == "optimize" and args.optimize_cmd in ("run", "resume", "regrade"):
+        from .experiments.skillopt import loop
+
+        try:
+            if args.optimize_cmd == "run":
+                run = loop.start(args.skill, args.budget, args.runs, args.model)
+            elif args.optimize_cmd == "resume":
+                run = loop.resume(args.run_id)
+            else:
+                run = loop.regrade(args.run_id)
+        except ValueError as e:  # a load, plan-lock or run-lock error, before any paid run
+            print(f"tokscope: {e}", file=sys.stderr)
+            sys.exit(2)
+        print("\n".join(loop.report(run)[1:] if args.optimize_cmd == "run" else loop.report(run)))
+        sys.exit(loop.exit_code(run))
     elif args.cmd == "optimize":
         from .experiments.skillopt import sandbox
 

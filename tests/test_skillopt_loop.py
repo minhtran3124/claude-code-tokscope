@@ -733,5 +733,58 @@ class ResumeTest(LoopBase):
             loop.regrade(run.name)
 
 
+class CliTest(LoopBase):
+    def cli(self, *args, **env):
+        env = {**os.environ, "PYTHONPATH": str(ROOT), **env}
+        return subprocess.run([sys.executable, "-m", "tokscope.cli", "optimize", *args], cwd=self.proj, env=env,
+                              capture_output=True, text=True, timeout=120)
+
+    def test_run_prints_folder_spent_and_gates_and_exits_0_on_apply(self):
+        r = self.cli("run", "demo", "--budget", "50", "--runs", "1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn(str(store.runs_dir() / "demo-"), r.stdout)
+        self.assertRegex(r.stdout, r"spent \$[\d.]+ of \$50\.00")
+        for gate in ("Valid", "Meaningful suite", "Safety", "No regression", "Benefit"):
+            self.assertIn(gate, r.stdout)
+        self.assertIn("verdict: Apply", r.stdout)
+
+    def test_exit_1_for_not_enough_evidence_and_reject(self):
+        self.set_cfg(k={"none": 2})
+        r = self.cli("run", "demo", "--budget", "50", "--runs", "1")
+        self.assertEqual(r.returncode, 1, r.stderr)
+        self.assertIn("Not enough evidence", r.stdout)
+        self.set_cfg(deny={"draft": {"default": True}}, k={"none": 0})
+        r = self.cli("run", "demo", "--budget", "50", "--runs", "1")
+        self.assertEqual((r.returncode, "Reject" in r.stdout), (1, True), r.stdout)
+
+    def test_load_errors_exit_2_before_any_paid_run(self):
+        for args in (("run", "nosuch", "--budget", "5"), ("resume", "nosuch-run"), ("regrade", "nosuch-run")):
+            r = self.cli(*args)
+            self.assertEqual(r.returncode, 2, args)
+            self.assertIn("tokscope:", r.stderr)
+        self.assertEqual(self.calls(), [])
+        self.assertEqual(self.cli("run", "demo").returncode, 2)  # --budget is required (argparse)
+
+    def test_edited_plan_makes_resume_exit_2_and_regrade_exits_with_the_verdict(self):
+        self.cli("run", "demo", "--budget", "50", "--runs", "1")
+        (run,) = store.runs_dir().iterdir()
+        g = self.cli("regrade", run.name)
+        self.assertEqual(g.returncode, 0, g.stderr)
+        self.assertIn("verdict: Apply", g.stdout)
+        text = (run / "plan.json").read_text()
+        (run / "plan.json").write_text(text.replace('"runs": 1', '"runs": 9'))
+        n = len(self.calls())
+        e = self.cli("resume", run.name)
+        self.assertEqual(e.returncode, 2)
+        self.assertIn("changed after it was locked", e.stderr)
+        self.assertEqual(len(self.calls()), n)
+
+    def test_help_lists_the_new_commands(self):
+        out = self.cli("--help").stdout
+        for word in ("run", "resume", "regrade"):
+            self.assertIn(word, out)
+        self.assertIn("--budget", self.cli("run", "--help").stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
