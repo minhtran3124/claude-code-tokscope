@@ -91,10 +91,12 @@ def gates(plan, baseline, confirm, stopped=None):
         out.append(_gate("Valid", None, None, g["valid_min"], "not run"))
     # Meaningful suite
     meaningful = None
+    no_data = False
     if ran_baseline:
         cur, _ = per_case(_arm(baseline, "current"))
         none, _ = per_case(_arm(baseline, "none"))
         diff = paired_bootstrap(none, cur, seed, n)
+        no_data = diff is None
         meaningful = diff is not None and diff["mean"] >= g["meaningful_min_points"]
         out.append(_gate("Meaningful suite", meaningful, diff and round(diff["mean"], 2), g["meaningful_min_points"],
                          "current minus no skill, points, all cases" if diff else "no case counted in both arms"))
@@ -134,12 +136,16 @@ def gates(plan, baseline, confirm, stopped=None):
                                                        "holdout": g["holdout_rule"]}, "not run"))
         out.append(_gate("Benefit", None, None, g["benefit"], "not run"))
     valid, meaning, safety, regress, benefit = out
-    if meaningful is False:
+    if meaningful is False and no_data:
+        verdict, reason = NOT_ENOUGH, "Meaningful suite could not be checked: no case counted in both baseline arms"
+    elif meaningful is False:
         verdict, reason = NOT_ENOUGH, "Meaningful suite failed: the skill does not beat no skill on this suite; stopped at baseline"
     elif stopped == "preflight":
         verdict, reason = NOT_ENOUGH, "Valid failed at preflight: the pinned skill did not load or the run was invalid"
     elif stopped == "rounds":
         verdict, reason = NOT_ENOUGH, "no draft to confirm: the budget ended, or no edit passed the editor checks"
+    elif stopped == "baseline":
+        verdict, reason = NOT_ENOUGH, "stopped at baseline: the budget ended before the baseline finished"
     elif stopped:
         verdict, reason = NOT_ENOUGH, f"stopped at {stopped}: the budget ended before the confirm finished"
     elif not ran_confirm:

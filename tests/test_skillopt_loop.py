@@ -132,6 +132,16 @@ class StatsTest(unittest.TestCase):
         self.assertTrue(next(g for g in out["gates"] if g["name"] == "Meaningful suite")["passed"])
         self.assertEqual([g["passed"] for g in out["gates"] if g["name"] != "Meaningful suite"], [None] * 4)
 
+    def test_baseline_budget_stop_and_empty_baseline_reasons(self):
+        base = arm_recs("current", 4) + arm_recs("none", 0)
+        out = stats.gates(PLAN, base, [], stopped="baseline")
+        self.assertIn("baseline finished", out["reason"])
+        self.assertNotIn("confirm", out["reason"])
+        out = stats.gates(PLAN, [rec("a", "current", 4)] + [rec("b", "none", 0)], [])
+        self.assertEqual(out["verdict"], stats.NOT_ENOUGH)
+        self.assertIn("could not be checked", out["reason"])
+        self.assertNotIn("does not beat", out["reason"])
+
     def test_no_holdout_evidence_is_not_a_pass(self):
         base = arm_recs("current", 4) + arm_recs("none", 0)
         conf = [r for r in arm_recs("current", 2) + arm_recs("draft", 4) if r["case"].startswith("d")]
