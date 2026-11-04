@@ -54,12 +54,23 @@ def load_case(skill, case_id, cwd=None):
         raise ValueError(f"{skill}: no {path}") from None
     except ValueError as e:
         raise ValueError(f"{path}: not valid JSON ({e})") from None
-    case = next((c for c in data.get("evals") or [] if isinstance(c, dict) and str(c.get("id")) == str(case_id)), None)
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: top level must be an object")
+    for key in ("evals", "checks"):
+        if data.get(key) is not None and not isinstance(data[key], list):
+            raise ValueError(f"{path}: {key!r} must be a list")
+    cases = [c for c in data.get("evals") or [] if isinstance(c, dict)]
+    case = next((c for c in cases if str(c.get("id")) == str(case_id)), None)
     if case is None:
-        ids = ", ".join(str(c.get("id")) for c in data.get("evals") or [] if isinstance(c, dict)) or "none"
+        ids = ", ".join(str(c.get("id")) for c in cases) or "none"
         raise ValueError(f"{skill}: no case {case_id!r} in {path} (cases: {ids})")
     if not case.get("prompt"):
         raise ValueError(f"{skill} case {case_id}: no prompt")
+    for key in ("checks", "files"):
+        if case.get(key) is not None and not isinstance(case[key], list):
+            raise ValueError(f"{skill} case {case_id}: {key!r} must be a list")
+    if not all(isinstance(r, str) for r in case.get("files") or []):
+        raise ValueError(f"{skill} case {case_id}: 'files' must be a list of paths")
     checks = [grade.check_shape(c) for c in (case.get("checks") or []) + (data.get("checks") or [])]
     if not checks:
         raise ValueError(f"{skill} case {case_id}: no machine checks under 'checks'")

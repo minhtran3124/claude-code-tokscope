@@ -262,6 +262,18 @@ class SandboxTest(RunnerBase):
             with self.assertRaises(ValueError):
                 sandbox.load_case("demo", "1")
 
+    def test_malformed_shapes_are_value_errors(self):
+        path = self.skill / "evals" / "evals.json"
+        def one(**kw):
+            e = json.loads(json.dumps(EVALS))
+            e["evals"][0].update(kw)
+            return e
+        for data in ([], "x", 3, {"evals": {"a": 1}}, {**EVALS, "checks": "x"}, one(checks="x"), one(checks=5),
+                     one(files="in.txt"), one(files=[3]), one(files={"a": 1})):
+            path.write_text(json.dumps(data))
+            with self.assertRaises(ValueError, msg=data):
+                sandbox.load_case("demo", "1")
+
 
 class CliTest(RunnerBase):
     def cli(self, *args, **extra):
