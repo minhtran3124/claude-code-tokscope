@@ -1,5 +1,6 @@
 """tokscope patterns: text helpers, facets, grouping, privacy levels and the command."""
 import contextlib
+import gc
 import io
 import json
 import os
@@ -440,6 +441,7 @@ class CliTest(Base):
     def cli(self, *argv):
         self.conn.commit()
         self.conn.close()
+        gc.collect()  # Python 3.13 warns when a connection another test leaked is collected; do not let that land in err
         out, err = io.StringIO(), io.StringIO()
         with mock.patch.object(cli, "DB", self.db), mock.patch.object(sys, "argv", ["tokscope", "patterns", *argv]), \
                 contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
