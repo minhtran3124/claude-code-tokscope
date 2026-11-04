@@ -62,13 +62,14 @@ Without the script: `pipx install .` (or `uv tool install .`), then add the full
 tokscope ingest              # read your transcripts into the database (see below for other folders)
 tokscope summary --by phase  # a table in the terminal (--by skill | agent | model)
 tokscope summary --by skill --format csv > skills.csv   # or --format json: only the rows on stdout
+tokscope patterns [--since DATE] [--format json] [--privacy redacted]   # which kinds of prompts cost the most (read-only, last 14 days)
 tokscope skills --format csv > versions.csv   # each skill version: loads, tokens, errors, regression (or --format json)
 tokscope open                # write the HTML report and open it
 tokscope serve               # the live dashboard on http://127.0.0.1:8765
 ```
 
 `tokscope serve` options: `--port N`, `--no-open`, `--interval S` (seconds between background ingests, default 10),
-`--privacy redacted|numbers`, `--projects-dir PATH` (read that transcripts folder, not the default ones). In Claude Code, `/tokscope` shows the current session.
+`--privacy redacted|numbers`, `--projects-dir PATH` (read that transcripts folder, not the default ones). In Claude Code, `/tokscope` shows the current session. `/tokscope nudge on|off` toggles the one-time warning at 300K context (on by default, the setting persists).
 
 ## Desktop app (Linux)
 

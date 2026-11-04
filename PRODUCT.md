@@ -110,10 +110,16 @@ reads again.
 | `/tokscope open` | Opens the report (`/tokscope report` does the same) |
 | `/tokscope skills [name]` | Lists skill versions |
 | `/tokscope pane on\|off` | Shows or closes the live pane |
+| `/tokscope nudge on\|off` | Turns the 300K context warning on or off |
 
 The **live pane** shows the session tokens (main thread and subagents), the last 8 turns with tokens, list price,
 subagents, MCP servers and tools, and the tokens by owner and by skill. It updates after each turn; press `r` to
 refresh and `o` to open the report. It is off by default and remembers your last choice.
+
+The **context nudge**: when the last main-thread request of a session reaches 300K tokens of context, the mod shows a
+toast, once per session, and the pane shows a line whenever the context is 300K or more. It spends no tokens, works
+with the pane closed, and is on by default.
+`/tokscope nudge off` turns it off, and the off setting persists across sessions.
 
 The mod finds the CLI in `TOKSCOPE_CLI`, then on `PATH`, then in `~/.local/bin/tokscope`. It writes a mark for each
 Skill and Agent call to `data/marks/` and ingests the session when it ends.
@@ -195,6 +201,7 @@ Built-in tool and agent names and phase names do not change.
 | `tokscope ingest [--project TEXT] [--session ID]` | Reads new transcripts into the database (incremental) |
 | `tokscope session ID [--json]` | Ingests one session and shows its tokens |
 | `tokscope summary [--by phase\|skill\|agent\|model] [--format table\|json\|csv] [--since DATE] [--project TEXT] [--limit N]` | Shows a table in the terminal; json and csv print only the rows (keys `key, requests, prompt_tokens, output_tokens, cost_usd, carried_cost_usd`), the notes go to stderr |
+| `tokscope patterns [--since DATE] [--format table\|json] [--privacy full\|redacted\|numbers]` | Read-only: shows which kinds of prompts cost the most, what they ran and how they ended. Groups are workflows (keyed by the first skill a prompt loads) and repeated tasks (3 or more prompts in 2 or more sessions), ranked by in-prompt cost (the prompt with its subagents, minus reads inherited from its first request). Reads the last 14 days unless `--since` is given. `redacted` and `numbers` read a redacted copy and show only workflow groups, with no prompt text; their outcomes come from the facets files and only known values are shown. json prints only the groups (keys `kind, key, prompts, sessions, in_prompt_usd, in_prompt_low, in_prompt_median, in_prompt_high, steps_median, subagent_requests, skills, start_context_median, outcomes, example`), the notes go to stderr |
 | `tokscope report [--out FILE] [--privacy LEVEL] [--since DATE] [--project TEXT]` | Writes the HTML report |
 | `tokscope open [same options as report]` | Ingests, writes the report and opens it |
 | `tokscope serve [--port N] [--interval S] [--no-open] [--privacy LEVEL] [--projects-dir PATH]` | Starts the live dashboard |

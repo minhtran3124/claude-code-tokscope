@@ -46,6 +46,7 @@ export type SessionView = {
   last?: { i: number; text: string; tokens: number; agents: number } | null
   turns?: Turn[]
   budget?: Budget | null
+  context?: number  // tokens in the last main-thread request
   updatedAt?: number
   error?: string
 }

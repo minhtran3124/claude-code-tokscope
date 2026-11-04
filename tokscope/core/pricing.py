@@ -89,6 +89,32 @@ def fingerprint():
     return hashlib.sha1(blob.encode()).hexdigest()
 
 
+def _multiplier(key, context, speed, geo, fast, us):
+    """The factor on a request's token cost: a long Haiku prompt, fast mode, US-only inference."""
+    mult = 1.0
+    if key in LONG_PROMPT:
+        limit, m = LONG_PROMPT[key]
+        if context > limit:
+            mult *= m
+    if speed == "fast" and fast:
+        mult *= fast
+    if geo == "us" and us:
+        mult *= us
+    return mult
+
+
+def cache_read_cost(model, tokens, context, speed=None, geo=None, ov=None):
+    """USD for `tokens` of cached input inside one request whose whole input (input + reads + writes) is `context`
+    tokens. It carries the same factors as cost_usd, so it can be subtracted from that request's stored cost.
+    None when the model has no known rate."""
+    ov = overrides() if ov is None else ov
+    key = normalize(model or "")
+    rates = _model_rates(key, ov)
+    if rates is None:
+        return None
+    return tokens * rates[2] * _multiplier(key, context, speed, geo, rates[3], rates[4]) / 1_000_000
+
+
 def cost_usd(model, inp, out, cache_read, cw5m, cw1h, speed=None, geo=None, searches=0, ov=None):
     """Return list-price cost, or None when the model has no known rate."""
     ov = overrides() if ov is None else ov
@@ -97,15 +123,7 @@ def cost_usd(model, inp, out, cache_read, cw5m, cw1h, speed=None, geo=None, sear
     if rates is None:
         return None
     r_in, r_out, r_read, fast, us = rates
-    mult = 1.0
-    if key in LONG_PROMPT:
-        limit, m = LONG_PROMPT[key]
-        if inp + cache_read + cw5m + cw1h > limit:
-            mult *= m
-    if speed == "fast" and fast:
-        mult *= fast
-    if geo == "us" and us:
-        mult *= us
+    mult = _multiplier(key, inp + cache_read + cw5m + cw1h, speed, geo, fast, us)
     web = _num(ov.get("web_search_per_1000"))
     web = WEB_SEARCH_PER_1000 if web is None else web
     return (

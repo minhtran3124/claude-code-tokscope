@@ -70,6 +70,28 @@ def summary(args):
         print(note, file=note_out)
 
 
+def patterns_cmd(args):
+    """`tokscope patterns`: read-only. It ingests no transcripts and never creates the database file; an existing one is
+    opened with connect(), which brings its tables up to date."""
+    from .features import patterns
+
+    text = args.since or patterns.default_since()
+    try:
+        bound = tz.utc_bound(text)
+    except ValueError:
+        sys.exit(f"tokscope: bad date {text!r}, use YYYY-MM-DD")
+    if Path(DB).exists():
+        connect(DB).close()
+        result = patterns.run(DB, bound, args.privacy)
+    else:  # no database yet: nothing to read, and a read must not create one
+        result = {"since": bound, "privacy": args.privacy, "groups": [], "unpriced": ""}
+    # the notes are not data: with json, stdout holds only the JSON
+    note_out = sys.stdout if args.format == "table" else sys.stderr
+    print(patterns.to_json(result) if args.format == "json" else patterns.to_table(result))
+    for line in patterns.notes(result):
+        print(line, file=note_out)
+
+
 def _budgets(args):
     """The loaded budgets (None when there is no file); a bad file ends the command with its message, exit 2."""
     from .core import budgets
@@ -220,8 +242,12 @@ def session_json(conn, session_id):
         f"count(DISTINCT agent_id) FROM requests r JOIN sessions s USING (session_id) WHERE session_id = ?",
         (session_id,)).fetchone()
     if not row or row[2] is None:
-        return {"id": session_id, "empty": True}
+        return {"id": session_id, "empty": True, "context": 0}
     title, prompts, tokens, out, usd, main, agents, runs = row
+    # the context the last main-thread request was sent with (what the mod's 300K nudge reads); output is not part of it
+    ctx = conn.execute(
+        "SELECT COALESCE(input, 0) + COALESCE(cache_read, 0) + COALESCE(cache_write_5m, 0) + COALESCE(cache_write_1h, 0) "
+        "FROM requests WHERE session_id = ? AND agent_id IS NULL ORDER BY ts DESC, rowid DESC LIMIT 1", (session_id,)).fetchone()
     from .core.skills import session_skill_versions
 
     versions = session_skill_versions(conn, session_id)
@@ -238,6 +264,7 @@ def session_json(conn, session_id):
         "budget": _budget_view(conn),
         "id": session_id, "empty": False, "title": title or "", "prompts": prompts or 0, "tokens": tokens, "output": out or 0,
         "usd": usd, "main": main or 0, "agents": agents or 0, "runs": runs,
+        "context": ctx[0] if ctx else 0,
         "owners": top("COALESCE(agent_type, 'main thread')"), "skills": [[f"{k} {versions[k][:6]}" if k in versions else k, t] for k, t in top("skill") if k],
         "last": {"i": last[0], "text": last[1] or "", "tokens": last[2] or 0, "agents": last[3] or 0} if last else None,
         "turns": session_turns(conn, session_id),
@@ -391,6 +418,11 @@ def main():
     ps.add_argument("--errors", action="store_true", help="count failed and repeated tool calls, interrupts, API errors "
                     "and retries instead of cost (--by skill, agent or phase)")
     ps.add_argument("--format", choices=("table", "json", "csv"), default="table", help="json or csv print only the rows")
+    ppt = sub.add_parser("patterns", help="which kinds of prompts cost the most, what they ran and how they ended (read-only)")
+    ppt.add_argument("--since", metavar="YYYY-MM-DD", help="first day to read (default: the last 14 days)")
+    ppt.add_argument("--format", choices=("table", "json"), default="table", help="json prints only the groups")
+    ppt.add_argument("--privacy", choices=LEVELS, default="full",
+                     help="redacted or numbers: workflow groups only, no prompt text (default full)")
     pr = sub.add_parser("report", help="write the HTML report")
     po = sub.add_parser("open", help="ingest new transcripts, rebuild the HTML report and open it in the browser")
     for q in (pr, po):
@@ -530,6 +562,8 @@ def main():
             print(bench.diff(DB, task["name"]))
     elif args.cmd == "summary":
         summary(args)
+    elif args.cmd == "patterns":
+        patterns_cmd(args)
     elif args.cmd in ("report", "open"):
         from .web.report import write_report
 

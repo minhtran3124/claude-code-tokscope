@@ -7,6 +7,9 @@ import type { Call, Motion, Run, SessionView, Totals, Turn } from '../types'
 const MARKED_TOOLS = new Set(['Skill', 'Agent'])
 const PANE = 'tokscope'
 const PANE_KEY = 'pane'
+// the context nudge is on unless the stored value is false
+const NUDGE_KEY = 'nudge'
+const NUDGE_AT = 300_000
 // cobalt = main thread, amber = subagents: the same two series colors as the HTML report
 const MAIN = '#0398cd'
 const AGENT = '#c68206'
@@ -41,6 +44,8 @@ const motion = atom({ plugin: 'tokscope', key: 'motion' } as const,
 let spinner: Timer | undefined
 let tween: Timer | undefined
 let glow: Timer | undefined
+// session ids already nudged: one toast per session, even after a compact and a second crossing
+const nudged = new Set<string>()
 
 type MarkedInput = { skill?: string; subagent_type?: string; description?: string }
 
@@ -77,6 +82,10 @@ function calls(items: Call[], width: number, estimated: boolean): string {
 
 async function isOn($: EngineInterface): Promise<boolean> {
   return (await $.store.get(PANE_KEY)) === true
+}
+
+async function isNudgeOn($: EngineInterface): Promise<boolean> {
+  return (await $.store.get(NUDGE_KEY)) !== false
 }
 
 // ease-out cubic: fast start, soft landing
@@ -132,12 +141,18 @@ async function findCli($: EngineInterface): Promise<string> {
   return ''
 }
 
-async function refresh($: EngineInterface, cli: string): Promise<void> {
+// runs the CLI (or stores the no-CLI error when there is none) and stores the result; starts no timer, so a closed pane costs
+// nothing but the process
+async function readView($: EngineInterface, cli: string): Promise<{ prev: SessionView | null; next: SessionView }> {
+  let prev: SessionView | null = null
   if (!cli) {
-    await update($, view, () => ({ id: '', empty: true, error: NO_CLI }))
-    return
+    const next: SessionView = { id: '', empty: true, error: NO_CLI }
+    await update($, view, old => {
+      prev = old
+      return next
+    })
+    return { prev, next }
   }
-  await setBusy($, true)
   const ran = await $.process.run([cli, 'session', await $.session.id(), '--json'])
   let next: SessionView
   try {
@@ -145,14 +160,32 @@ async function refresh($: EngineInterface, cli: string): Promise<void> {
   } catch {
     next = { id: '', empty: true, error: 'tokscope returned no JSON' }
   }
-  let prev: SessionView | null = null
   await update($, view, old => {
     prev = old
     return { ...next, updatedAt: Date.now() }
   })
+  return { prev, next }
+}
+
+async function refresh($: EngineInterface, cli: string): Promise<void> {
+  if (!cli) {
+    await readView($, cli)
+    return
+  }
+  await setBusy($, true)
+  const { prev, next } = await readView($, cli)
   await setBusy($, false)
-  const before = prev as SessionView | null
-  if (totalsOf(next)) await animate($, totalsOf(before), next, before?.turns?.[0]?.i)
+  if (totalsOf(next)) await animate($, totalsOf(prev), next, prev?.turns?.[0]?.i)
+}
+
+// one toast per session when its last request reaches NUDGE_AT; spends no tokens
+async function nudge($: EngineInterface, v: SessionView | null): Promise<void> {
+  if (!v || v.empty || v.error) return
+  const id = await $.session.id()
+  if ((v.context ?? 0) < NUDGE_AT || !(await isNudgeOn($))) return
+  if (nudged.has(id)) return
+  nudged.add(id)  // before the toast, so a failing toast cannot repeat
+  $.ui.toast(`tokscope: context is ${fmt(v.context)} tokens. Consider /compact or a fresh session. /tokscope nudge off hides this.`)
 }
 
 async function openReport($: EngineInterface, cli: string): Promise<string> {
@@ -171,7 +204,10 @@ async function setPane($: EngineInterface, cli: string, on: boolean): Promise<st
     return 'tokscope pane off. Turn it back on with /tokscope pane on.'
   }
   const opened = await $.ui.open({ id: PANE, title: 'Tokens' })
-  await refresh($, cli)
+  // a view is already stored (a quiet read with the pane closed, or an earlier pane): animating against it would flag
+  // changes the person never saw as NEW, so the pane opens at rest on a fresh read; with no view yet it counts up from zero
+  if (await read($, view)) await readView($, cli)
+  else await refresh($, cli)
   return opened.isPlaced
     ? 'tokscope pane on; it updates after each turn and stays on for new sessions.'
     : `tokscope pane on, but it is not shown yet: ${opened.reason}`
@@ -184,7 +220,7 @@ export const register: Register = on => {
     cli = await findCli($)
     await $.command.register({
       name: 'tokscope',
-      description: 'Token use of this session; "/tokscope pane on|off" toggles the live pane, "/tokscope open" opens the HTML report, "/tokscope skills [name]" lists skill versions',
+      description: 'Token use of this session; "/tokscope pane on|off" toggles the live pane, "/tokscope open" opens the HTML report, "/tokscope skills [name]" lists skill versions, "/tokscope nudge on|off" toggles the 300K context warning',
     })
     const ran = await next(e)
     if (await isOn($)) {
@@ -202,6 +238,15 @@ export const register: Register = on => {
       const want = state === 'on' ? true : state === 'off' ? false : !(await isOn($))
       return { text: await setPane($, cli, want) }
     }
+    if (word === 'nudge') {
+      if (state !== 'on' && state !== 'off') {
+        return { text: `tokscope nudge is ${(await isNudgeOn($)) ? 'on' : 'off'}. Use /tokscope nudge on|off.` }
+      }
+      await $.store.set(NUDGE_KEY, state === 'on')
+      return { text: state === 'on'
+        ? 'tokscope nudge on. You get one warning per session when its context reaches 300K tokens.'
+        : 'tokscope nudge off. Turn it back on with /tokscope nudge on.' }
+    }
     // same words as the shell CLI: `tokscope open`, `tokscope session <id>`; "report" is the old name of open
     if (word === 'open' || word === 'report') return { text: await openReport($, cli) }
     if (!cli) return { text: NO_CLI }
@@ -218,7 +263,11 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
     const ran = await next(e)
     // subagent turns end too; only the main loop's end means new numbers for the session
-    if (!e.agentId && (await isOn($))) await refresh($, cli)
+    if (!e.agentId) {
+      if (await isOn($)) await refresh($, cli)
+      else if ((await isNudgeOn($)) && !nudged.has(await $.session.id())) await readView($, cli)  // nothing else needs the read
+      await nudge($, await read($, view))
+    }
 
     return ran
   }).catch(($, e, next) => next(e))
@@ -234,6 +283,7 @@ export const register: Register = on => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const v = await read($, view)
     const m = await read($, motion)
+    const nudgeOn = await isNudgeOn($)
     const width = Math.max(32, Math.min(MAX_WIDTH, (e.props.bodyColumns ?? 40) - 1))
     const spin = SPIN[m.frame % SPIN.length]
     if (!v) return <Text><Text color={MAIN}>{spin}</Text> <Text dimColor>Reading this session…</Text></Text>
@@ -281,6 +331,7 @@ export const register: Register = on => {
           <Text color={MAIN}>■</Text> main {fmt(shown.main)} <Text dimColor>{share(v.main)}</Text>{'   '}
           <Text color={AGENT}>■</Text> subagents {fmt(shown.agents)} <Text dimColor>{share(v.agents)}</Text>
         </Text>
+        {(v.context ?? 0) >= NUDGE_AT && nudgeOn && <Text color={AGENT}>⚠ context {fmt(v.context)} — consider /compact</Text>}
         {v.budget?.error && <Text color="red">✗ {v.budget.error}</Text>}
         {(v.budget?.warn ?? []).map(w => (
           <Text color={w.state === 'over' ? 'red' : AGENT}>{w.state === 'over' ? '✗ OVER' : '⚠ near'} {clip(w.text, width - 8)}</Text>

@@ -24,7 +24,7 @@ from .. import paths
 from ..core import skills
 from ..core.ingest import connect
 from . import bench
-from ..features import library
+from ..features import changes as changes_log, library
 
 GUIDES = {
     "optimize-skill": "Run the optimize-skill skill on it: fewer tokens, the same output. Save its test outputs under runs/, "
@@ -326,6 +326,7 @@ def apply(conn, job):
     conn.commit()
     data.update(state="applied", applied=now, old_version=old, new_version=new)
     _write(job, data)
+    changes_log.add_change(conn, "Optimize applied", skill=data["skill"], at=now)
     return old, new
 
 
