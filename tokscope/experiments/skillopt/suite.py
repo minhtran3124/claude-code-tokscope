@@ -259,6 +259,17 @@ def _touched(session_id, prompt_idx, projects_dir):
     return out
 
 
+_SECRET_DIRS = {".ssh", ".aws", ".gnupg", ".kube", ".docker", ".config", ".netrc", ".git", ".azure", ".gcloud"}
+_SECRET_NAME = re.compile(
+    r"^(\.env.*|\.netrc|\.npmrc|\.pypirc|id_(rsa|dsa|ecdsa|ed25519).*|credentials.*|secrets?(\..*)?|.*\.(pem|key|p12|pfx|keystore|kdbx))$",
+    re.I)
+
+
+def _secret(path):
+    """True for a path that looks like a credential or sits in a credentials folder; draft() never copies those."""
+    return bool(_SECRET_NAME.match(path.name)) or any(part in _SECRET_DIRS for part in path.parts)
+
+
 def _description(folder):
     text = (folder / "SKILL.md").read_text(errors="replace")
     m = re.search(r"^description:\s*(.+)$", text, re.M)
@@ -292,6 +303,8 @@ def draft(skill, n=5, cwd=None, projects_dir=None):
         files = []
         for raw in _touched(sid, pidx, projects_dir):
             src = Path(raw)
+            if _secret(src) or _secret(src.resolve()):
+                continue
             if not src.is_file() or src.resolve().is_relative_to(folder.resolve()):
                 continue
             rel = Path("evals") / "fixtures" / cid / src.name

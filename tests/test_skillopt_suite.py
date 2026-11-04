@@ -237,6 +237,22 @@ class DraftTest(Base):
             self.assertTrue((self.skill / f).is_file())
         self.assertFalse((self.skill / "evals" / "evals.json").exists())
 
+    def test_draft_never_copies_secrets(self):
+        (self.work / ".ssh").mkdir()
+        for name in (".env", ".ssh/id_rsa", "server.pem"):
+            (self.work / name).write_text("SECRET")
+        extra = "".join(
+            '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"s%d","name":"Read",'
+            '"input":{"file_path":"%s/%s"}}]}}\n' % (i, self.work, n) for i, n in enumerate((".env", ".ssh/id_rsa", "server.pem")))
+        tr = self.projects / "p" / "sess1234abcd.jsonl"
+        lines = tr.read_text().splitlines(keepends=True)
+        tr.write_text("".join(lines[:3]) + extra + "".join(lines[3:]))
+        suite.draft("demo", 5, projects_dir=self.projects)
+        copied = [p.name for p in (self.skill / "evals" / "fixtures").rglob("*") if p.is_file()]
+        self.assertIn("notes.txt", copied)
+        for bad in (".env", "id_rsa", "server.pem"):
+            self.assertNotIn(bad, copied)
+
     def test_n_caps_and_evals_json_is_untouched(self):
         self.write({"evals": [case("keep")]})
         before = (self.skill / "evals" / "evals.json").read_bytes()
