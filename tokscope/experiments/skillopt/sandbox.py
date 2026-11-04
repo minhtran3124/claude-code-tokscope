@@ -170,8 +170,8 @@ def run_case(skill, case_id, version=None, cwd=None):
                         proc.kill()
                     proc.stdout.close()
                     proc.wait()
-        except OSError as e:  # no claude binary
-            err = str(e)
+        except OSError as e:  # no claude binary, or the run folder could not be written
+            err = str(e) if proc is None else f"could not write stream.jsonl: {e}"
         events = grade.parse(lines)
         grading = grade.grade(events, sandbox, checks)
         if grading["status"] == "INVALID":

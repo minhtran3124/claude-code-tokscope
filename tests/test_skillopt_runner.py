@@ -273,6 +273,32 @@ class SandboxTest(RunnerBase):
         self.assertIn("absent", g["reason"])
         self.assertEqual(json.loads((run / "plugins.json").read_text())["init"], False)
 
+    def test_stream_write_failure_is_not_reported_as_missing_binary(self):
+        class Full:
+            def write(self, _):
+                raise OSError(28, "No space left on device")
+
+            def flush(self):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        real = Path.open
+
+        def fake_open(path, *a, **k):
+            return Full() if path.name == "stream.jsonl" else real(path, *a, **k)
+
+        with mock.patch.object(Path, "open", fake_open):
+            run = sandbox.run_case("demo", "1")
+        g = json.loads((run / "grading.json").read_text())
+        self.assertEqual(g["status"], "INVALID")
+        self.assertIn("stream.jsonl", g["reason"])
+        self.assertIn("No space left", g["reason"])
+
     def test_version_pins_snapshot(self):
         v = skills.fingerprint(self.skill)
         skills._snapshot("demo", v, self.skill)
