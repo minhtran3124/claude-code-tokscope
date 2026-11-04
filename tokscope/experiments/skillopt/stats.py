@@ -79,9 +79,14 @@ def gates(plan, baseline, confirm, stopped=None):
     out = []
     # Valid
     if ran_confirm:
-        share = sum(counts(r) for r in confirm) / len(confirm)
+        # Per arm, so a mostly invalid draft cannot hide behind many valid current runs.
+        arms = {a: _arm(confirm, a) for a in ("current", "draft")}
+        shares = {a: sum(counts(r) for r in rs) / len(rs) for a, rs in arms.items() if rs}
+        share = min(shares.values())
+        worst = min(shares, key=shares.get)
         out.append(_gate("Valid", share >= g["valid_min"], round(share, 4), g["valid_min"],
-                         f"{sum(counts(r) for r in confirm)}/{len(confirm)} confirm runs counted"))
+                         f"{sum(counts(r) for r in arms[worst])}/{len(arms[worst])} {worst} confirm runs counted "
+                         "(lowest arm)"))
     else:
         out.append(_gate("Valid", None, None, g["valid_min"], "not run"))
     # Meaningful suite

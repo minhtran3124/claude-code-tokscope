@@ -116,6 +116,15 @@ class StatsTest(unittest.TestCase):
         self.assertFalse(valid["passed"])
         self.assertEqual(out["verdict"], stats.NOT_ENOUGH)
 
+    def test_valid_is_checked_per_arm_not_pooled(self):
+        base = arm_recs("current", 4) + arm_recs("none", 0)
+        draft = [rec(c, "draft", 4, status="INVALID" if i == 0 and c in CASES[:3] else "ok")
+                 for c in CASES for i in range(2)]
+        current = arm_recs("current", 2) * 4  # pooled share 57/60 = 95%, draft alone 75%
+        valid = stats.gates(PLAN, base, current + draft)["gates"][0]
+        self.assertFalse(valid["passed"])
+        self.assertEqual(valid["value"], 0.75)
+
     def test_budget_stop_leaves_gates_unrun(self):
         base = arm_recs("current", 4) + arm_recs("none", 0)
         out = stats.gates(PLAN, base, [], stopped="confirm")
