@@ -13,6 +13,7 @@ import re
 import os
 import shutil
 import signal
+import sqlite3
 import subprocess
 import threading
 import time
@@ -326,7 +327,11 @@ def apply(conn, job):
     conn.commit()
     data.update(state="applied", applied=now, old_version=old, new_version=new)
     _write(job, data)
-    changes_log.add_change(conn, "Optimize applied", skill=data["skill"], at=now)
+    try:
+        changes_log.add_change(conn, "Optimize applied", skill=data["skill"], at=now)
+    except sqlite3.Error as e:  # the apply worked; keep it and note why the row is missing
+        data["change_error"] = str(e)
+        _write(job, data)
     return old, new
 
 

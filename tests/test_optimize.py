@@ -1,5 +1,6 @@
 import json
 import os
+import sqlite3
 import stat
 import tempfile
 import threading
@@ -243,6 +244,33 @@ class ApplyChangeRowTest(OptimizeTest):
         r = changes.impact(self.conn, self.rows()[0])
         self.assertGreater(r["before"]["n"], 0)
         self.assertGreater(r["after"]["n"], 0)
+
+
+class ApplyChangeFailureTest(OptimizeTest):
+    def test_a_failed_changes_row_keeps_the_apply_and_records_change_error(self):
+        job = optimize.start(self.k, self.found, ["unslop"], wait=True)
+        with mock.patch.object(changes, "add_change", side_effect=sqlite3.OperationalError("database is locked")):
+            old, new = optimize.apply(self.conn, job)
+        data = optimize.status(job)
+        self.assertEqual((data["old_version"], data["new_version"]), (old, new))
+        self.assertEqual(data["state"], "applied")
+        self.assertIn("database is locked", data["change_error"])
+        self.assertIn("Short text.", (self.src / "SKILL.md").read_text())
+        self.assertEqual(changes.list_changes(self.conn), [])
+
+    def test_a_working_changes_row_leaves_no_change_error(self):
+        job = optimize.start(self.k, self.found, ["unslop"], wait=True)
+        optimize.apply(self.conn, job)
+        self.assertNotIn("change_error", optimize.status(job))
+        self.assertEqual(len(changes.list_changes(self.conn)), 1)
+
+    def test_a_refused_apply_raises_and_writes_no_change_error(self):
+        job = optimize.start(self.k, self.found, ["unslop"], wait=True)
+        (self.src / "SKILL.md").write_text("---\nname: mine-a\n---\nEdited by hand meanwhile.\n")
+        with self.assertRaises(ValueError):
+            optimize.apply(self.conn, job)
+        self.assertNotIn("change_error", optimize.status(job))
+        self.assertEqual(changes.list_changes(self.conn), [])
 
 
 class CompareAndBenchTest(OptimizeTest):
