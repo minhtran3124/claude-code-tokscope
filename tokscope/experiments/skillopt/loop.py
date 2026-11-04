@@ -370,12 +370,8 @@ def trigger_gate(ctx, arm):
                 ctx.plan["description"], _front_description(draft_dir / "SKILL.md")):
             return
         acc = {a: {s: None for s in trigger.SPLITS} for a in ("current", "draft")}
-        for split in trigger.SPLITS:  # test first: a budget stop in train keeps the test verdict
-            try:
-                _trigger_runs(ctx, arm, split)
-            except Stop:
-                if split == "test":
-                    raise
+        for split in ("test", "train"):  # test first; a budget stop in either split ends the stage unsaved (runs are kept)
+            _trigger_runs(ctx, arm, split)
             recs = ctx.records(trigger.STAGE)
             acc["current"][split] = trigger.accuracy(recs, ctx.triggers, "current", split)
             acc["draft"][split] = trigger.accuracy(recs, ctx.triggers, arm, split)

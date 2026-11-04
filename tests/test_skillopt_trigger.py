@@ -263,6 +263,25 @@ class GateTest(TriggerBase):
         loop._trigger_runs(ctx, "v1", "test")  # a second call runs nothing
         self.assertEqual(len(self.calls()), before)
 
+    def test_budget_stop_in_the_train_split_writes_no_trigger_json_and_resume_finishes_train(self):
+        self.set_cfg(editor={"default": "baddesc"})
+        real = store.can_spend
+
+        def limited(run, plan):
+            train = {i["id"] for i in loop.Ctx(run).triggers if i["split"] == "train"}
+            started = [c for c, _, _ in self.trigger_lines(run, "start") if c in train]
+            return len(started) < 2 and real(run, plan)  # stops after the test split, inside train
+
+        with mock.patch.object(store, "can_spend", limited):
+            run, v = self.go()
+        self.assertEqual(v["trigger"]["status"], "not finished")
+        self.assertFalse((run / "trigger.json").exists())
+        (run / "verdict.json").unlink()
+        loop.resume(run.name, log=lambda *_: None)
+        t = json.loads((run / "trigger.json").read_text())
+        self.assertIsNotNone(t["draft"]["train"])
+        self.assertIsNotNone(t["current"]["train"])
+
 
 class WorkspaceTest(unittest.TestCase):
     def test_workspace_writes_only_the_given_trigger_items(self):
