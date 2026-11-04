@@ -221,6 +221,16 @@ class SandboxTest(RunnerBase):
         with self.assertRaisesRegex(ValueError, "wins over"):
             sandbox.run_case("demo", "1")
 
+    def test_personal_only_skill_runs(self):
+        personal = self.home / ".claude" / "skills" / "solo"
+        make_skill(personal, "SOLO-MARKER")
+        sb = Path(tempfile.mkdtemp())
+        pinned, fp = sandbox.pin_copy("solo", personal, sb)
+        self.assertEqual(fp, skills.fingerprint(personal))
+        self.assertTrue((pinned / "SKILL.md").is_file())
+        with self.assertRaisesRegex(ValueError, "wins over"):  # a kept version is not what the personal skill loads
+            sandbox.pin_copy("solo", personal, Path(tempfile.mkdtemp()), expect="abc123")
+
     def test_pinned_copy_has_no_evals(self):
         sb = Path(tempfile.mkdtemp())
         pinned, fp = sandbox.pin_copy("demo", self.skill, sb)
