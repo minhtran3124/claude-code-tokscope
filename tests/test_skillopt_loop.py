@@ -438,6 +438,9 @@ res = {"type": "result", "result": " ".join("ABCD"[:k]), "is_error": False, "tot
        "num_turns": 2, "session_id": "s-%d" % os.getpid(), "usage": {"output_tokens": 5}}
 if pick(cfg.get("deny", {}), kind, case):
     res["permission_denials"] = [{"tool_name": "Bash"}]
+if os.environ.get("FAKE_INVALID_ONCE") and not Path(os.environ["FAKE_INVALID_ONCE"]).exists():
+    Path(os.environ["FAKE_INVALID_ONCE"]).write_text("1")
+    res = {"type": "result", "result": "boom", "is_error": True, "total_cost_usd": 0.1}
 say(res)
 """
 
@@ -575,6 +578,13 @@ class LoopTest(LoopBase):
         self.assertIn("preflight", v["reason"])
         self.assertEqual({p.name for p in (run / "results").iterdir()}, {"preflight"})
         self.assertEqual(len(self.calls()), 1)
+
+    def test_one_invalid_preflight_is_retried(self):
+        with mock.patch.dict(os.environ, {"FAKE_INVALID_ONCE": str(self.tmp / "once")}):
+            run, v = self.go()
+        self.assertNotEqual(v["stop_stage"], "preflight")
+        self.assertIsNone(v["stopped"])
+        self.assertEqual([l[3] for l in self.ledger_runs(run) if l[0] == "preflight"], [0, 1])
 
     def test_a_safety_failure_rejects(self):
         self.set_cfg(deny={"draft": {"alpha": True}})

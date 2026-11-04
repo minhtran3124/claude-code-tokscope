@@ -19,6 +19,7 @@ from .. import bench
 from . import grade, sandbox, stats, store, suite
 
 MAX_ROUNDS = 3
+PREFLIGHT_TRIES = 2
 RESAMPLES, CI = 1000, 95
 VERDICT, BENCHMARK = "verdict.json", "benchmark.json"
 EDITOR_TIMEOUT = 20 * 60
@@ -123,9 +124,12 @@ def _stage_name(stage):
 
 def preflight(ctx):
     """One cheap run of the first dev case with the current skill: it must load the pinned text and be valid. Prints
-    the cost estimate. False (and no baseline) when it does not."""
-    run_one(ctx, "preflight", ctx.dev[0], "current", 0)
-    rec = ctx.records("preflight")[0]
+    the cost estimate. An INVALID run is tried again once. False (and no baseline) when it does not."""
+    for i in range(PREFLIGHT_TRIES):
+        run_one(ctx, "preflight", ctx.dev[0], "current", i)
+        rec = next(r for r in ctx.records("preflight") if r["i"] == i)
+        if rec["status"] == "ok":  # an INVALID run (timeout, API error) is retried once; a load failure is not
+            break
     cost, n, runs = rec["cost_usd"] or 0, len(ctx.cases), ctx.plan["runs"]
     base = 2 * n * runs * 2  # baseline and confirm, two arms each
     most = base + MAX_ROUNDS * (len(ctx.dev) * runs + 1)
