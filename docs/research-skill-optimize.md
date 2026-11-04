@@ -51,7 +51,7 @@ Locked in `plan.json`. Verdicts: Apply, Not enough evidence, Reject.
 | Gate | Passes when | Else |
 | --- | --- | --- |
 | Valid | at least 90% of runs valid; only runs that read the pinned version count | Not enough evidence |
-| Meaningful suite | current version beats no-skill by at least 20 pass-rate points | stop at step 4 |
+| Meaningful suite | current version beats no-skill by at least 20 pass-rate points | Not enough evidence, stopped at baseline (step 4); no draft, so Approve is not offered |
 | Safety | 0 safety failures on the draft, every run | Reject |
 | No regression | 95% CI lower bound of the pass-rate difference ≥ −5 points, and holdout not lower | Reject |
 | Benefit | CI upper bound of the cost difference < 0, or CI lower bound of pass difference > 0 | Not enough evidence |
@@ -71,7 +71,8 @@ bench/optimize/runs/<run-id>/
   benchmark.json (skill-creator schema)  verdict.json  ledger.jsonl  apply.json  decision.json
 ```
 
-The suite lives in `<skill>/evals/`, which the fingerprint already skips. JSON, not YAML (stdlib only). Tables `opt_results`
+The suite lives in `<skill>/evals/`, which the fingerprint already skips (with the other top-level test folders in
+`BENCH_DIRS`: `eval/`, `tests/`, `test/`, `fixtures/`, `results/`). JSON, not YAML (stdlib only). Tables `opt_results`
 (joins `requests` by `session_id`) and `opt_applied`. The worker is a separate CLI process (`tokscope optimize run|resume|regrade`,
 new names), so a run survives a dashboard stop.
 
@@ -82,7 +83,8 @@ Nothing in the real skill changes before Approve. Approve keeps the measured fin
 1. The skill's current fingerprint equals the run's base, else refuse (rerun).
 2. The draft's fingerprint equals the one confirmed in `verdict.json`.
 3. Write `apply.json`; `skills.record` the old version so its snapshot is kept.
-4. Replace only files the fingerprint covers, each through a temp file and rename (`evals/`, hidden and >1 MB files stay).
+4. Replace only files the fingerprint covers, each through a temp file and rename (the top-level `BENCH_DIRS` folders `eval/`, `evals/`, `tests/`, `test/`, `fixtures/`, `results/`, hidden files and
+   files over 1 MB stay as they are).
 5. The new fingerprint must equal the measured one; else restore from the snapshot and report.
 6. Commit when the skill's real path is in a git repo: `git commit --only -- <skill files>` on the current branch, message
    `optimize(<skill>): <old> → <new>` with verdict and run id; no push, no `--no-verify`; a failing hook restores the snapshot.
@@ -97,7 +99,7 @@ disabled. Reject is always allowed and recorded. Library shows Verified (fingerp
 or Not verified.
 
 Known bugs to fix on the way: `apply` copies `library.files` while the fingerprint uses `skills._files`, so a draft without
-`evals/` deletes the suite (`optimize.py`); no check after writing; `skills.scan` does not skip bench sessions; `by_text` picks the
+the `BENCH_DIRS` folders (`evals/`, `tests/`, `fixtures/` and the rest) deletes them from the skill (`optimize.py`); no check after writing; `skills.scan` does not skip bench sessions; `by_text` picks the
 first version with the same body; a restore to a known version does not move `first_seen`.
 
 ## Refactor
