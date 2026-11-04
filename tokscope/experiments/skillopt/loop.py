@@ -71,7 +71,8 @@ class Ctx:
         self.suite = suite.load_folder(self.run / "suite", self.skill)
         self.dev, self.holdout = self.plan["dev"], self.plan["holdout"]
         self.cases = self.dev + self.holdout
-        self.triggers = trigger.load(self.run / "suite") if self.plan.get("triggers_usable") else []
+        items = trigger.load(self.run / "suite") if self.plan.get("triggers_usable") else []
+        self.triggers = items if trigger.usable(items) else []  # train-only or too few: no evidence, nothing reverts
 
     def inputs(self, cid):
         """(case, checks, fixtures) from the frozen suite."""
@@ -414,7 +415,7 @@ def trigger_block(ctx, stopped=None):
         pass
     if stopped == "trigger":
         status, reason = "not finished", "the budget ended the run in the trigger eval"
-    elif plan.get("triggers_usable"):
+    elif plan.get("triggers_usable") and ctx.triggers:
         status, reason = "not needed", "the draft did not change the description"
     else:
         status = "no trigger evidence"

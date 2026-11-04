@@ -239,6 +239,18 @@ class GateTest(TriggerBase):
             loop.start("demo", 50.0, runs=2, cwd=str(self.proj), log=lambda *_: None)
         self.assertEqual(self.calls(), [])
 
+    def test_unusable_frozen_triggers_are_no_evidence_not_a_revert(self):
+        self.set_cfg(editor={"default": "baddesc"})
+        run, _ = self.go()
+        (run / "trigger.json").unlink()
+        train = [r for r in ROWS if trigger.split_of(r["prompt"]) == "train"]
+        write(run / "suite", train)  # plan still says usable, but only train items are left
+        ctx = loop.Ctx(run)
+        self.assertEqual(ctx.triggers, [])
+        loop.trigger_gate(ctx, "v1")
+        self.assertFalse((run / "trigger.json").exists())
+        self.assertEqual(loop.trigger_block(ctx)["status"], "no trigger evidence")
+
     def test_lock_refuses_a_changed_frozen_trigger_file(self):
         self.set_cfg(editor={"default": "gooddesc"})
         run, _ = self.go()
