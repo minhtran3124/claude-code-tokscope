@@ -116,9 +116,18 @@ Path(os.environ["FAKE_ARGS"]).write_text(json.dumps(sys.argv[1:]))
 say = lambda ev: print(json.dumps(ev), flush=True)
 cwd = os.getcwd()
 say({"type": "system", "subtype": "init", "model": "claude-sonnet-5-5", "plugins": [{"name": "p1"}, {"name": "p2"}]})
-text = Path(".claude/skills/demo/SKILL.md").read_text()
-say({"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Skill", "input": {"skill": "demo"}}]}})
-say({"type": "user", "message": {"content": [{"type": "tool_result", "content": cwd + "/.claude/skills/demo\\n" + text}]}})
+skill = Path(".claude/skills/demo/SKILL.md")
+if os.environ.get("FAKE_LEAK"):
+    say({"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t0", "name": "Skill", "input": {"skill": "demo"}}]}})
+if skill.exists() and not os.environ.get("FAKE_NO_CALL"):
+    text = skill.read_text().split("---\\n", 2)[2].strip()  # the body, as Claude Code puts it in the context
+    if os.environ.get("FAKE_OTHER_TEXT"):
+        text = "SOMETHING ELSE"
+    say({"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t1", "name": "Skill", "input": {"skill": "demo"}}]}})
+    block = [{"type": "tool_result", "tool_use_id": "t1", "content": "Launching skill: demo"}]
+    if not os.environ.get("FAKE_NO_TEXT"):
+        block.append({"type": "text", "text": "Base directory for this skill: " + cwd + "/.claude/skills/demo\\n\\n" + text})
+    say({"type": "user", "message": {"content": block}})
 say({"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Read", "input": {"file_path": "in.txt"}}]}})
 say({"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Write", "input": {"file_path": "out.md"}}]}})
 Path("out.md").write_text("# Title\\n" + Path("in.txt").read_text())
@@ -237,6 +246,57 @@ class SandboxTest(RunnerBase):
         self.assertFalse((pinned / "evals").exists())
         self.assertTrue((pinned / "ref.md").is_file())
         self.assertEqual(fp, skills.fingerprint(self.skill))
+
+    def load_of(self, **env):
+        with mock.patch.dict(os.environ, env):
+            run = sandbox.run_case("demo", "1")
+        return json.loads((run / "run.json").read_text())["load"]
+
+    def test_load_is_read_from_the_stream(self):
+        self.assertEqual(self.load_of(), "ok")
+        self.assertEqual(self.load_of(FAKE_OTHER_TEXT="1"), "other text")
+        self.assertEqual(self.load_of(FAKE_NO_CALL="1"), "not loaded")
+        self.assertEqual(self.load_of(FAKE_NO_TEXT="1"), "unconfirmed")
+
+    def test_load_accepts_the_text_inside_the_tool_result(self):
+        want = skills._sha(skills._body((self.skill / "SKILL.md").read_text()))
+        body = (self.skill / "SKILL.md").read_text().split("---\n", 2)[2].strip()
+        events = [use("Skill", skill="demo"),
+                  {"type": "user", "message": {"content": [
+                      {"type": "tool_result", "content": [{"type": "text", "text": "Base directory for this skill: /x\n\n" + body}]}]}}]
+        self.assertEqual(sandbox.stream_load(events, "demo", want), "ok")
+        self.assertEqual(sandbox.stream_load(events, "other", want), "not loaded")
+
+    def test_no_skill_arm_flags_a_leaked_skill_call(self):
+        case, checks, _folder, fixtures = sandbox.load_case("demo", "1")
+        with mock.patch.dict(os.environ, {"FAKE_LEAK": "1"}):
+            run = sandbox.execute("demo", case, checks, fixtures, self.tmp / "out" / "leak", source=None, arm="none")
+        self.assertEqual(json.loads((run / "run.json").read_text())["load"], "leaked")
+
+    def test_no_skill_arm_pins_nothing(self):
+        case, checks, _folder, fixtures = sandbox.load_case("demo", "1")
+        dest = self.tmp / "out" / "0"
+        run = sandbox.execute("demo", case, checks, fixtures, dest, source=None, model="haiku", budget=0.5, arm="none")
+        self.assertEqual(run, dest)
+        meta = json.loads((run / "run.json").read_text())
+        self.assertEqual((meta["arm"], meta["load"], meta["model"], meta["fingerprint"], meta["pinned"]),
+                         ("none", "n/a", "haiku", None, None))
+        self.assertEqual(meta["cost_usd"], 0.01)
+        for name in ("stream.jsonl", "grading.json", "run.json", "final.md"):
+            self.assertTrue((run / name).is_file(), name)
+        argv = json.loads(self.args.read_text())
+        self.assertEqual(argv[argv.index("--model") + 1], "haiku")
+        self.assertEqual(argv[argv.index("--max-budget-usd") + 1], "0.5")
+        for flag in ("--strict-mcp-config", "--no-session-persistence"):
+            self.assertIn(flag, argv)
+        self.assertNotIn(".claude", (run / "stream.jsonl").read_text().split("Skill")[0])
+        self.assertFalse(any("skills" in a for a in argv if a.startswith("/") and a != argv[0]))
+
+    def test_model_flag_only_when_given(self):
+        self.assertNotIn("--model", sandbox.command("hi", "/tmp/sb"))
+        self.assertEqual(sandbox.command("hi", "/tmp/sb", model="sonnet")[-2:], ["--model", "sonnet"])
+        sandbox.run_case("demo", "1")
+        self.assertNotIn("--model", json.loads(self.args.read_text()))
 
     def test_argv_isolation_flags(self):
         sb = "/tmp/sb"
@@ -408,6 +468,9 @@ class LiveIsolationTest(unittest.TestCase):
         argv = sandbox.command(f"Use the {name} skill and do what it says.", sb, budget=0.5) + ["--model", "haiku"]
         out = subprocess.run(argv, cwd=sb, capture_output=True, text=True, timeout=300).stdout
         self.assertIn(marker, out)
+        # the load check of the optimize loop reads the stream, so stream-json must carry the skill text
+        want = skills._sha(skills._body((copy / "SKILL.md").read_text()))
+        self.assertEqual(sandbox.stream_load(grade.parse(out.splitlines()), name, want), "ok")
 
 
 if __name__ == "__main__":
