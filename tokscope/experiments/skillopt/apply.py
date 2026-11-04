@@ -239,40 +239,61 @@ class _Locked:
         store.release(self.dir)
 
 
-def recover(log=print):
-    """Finish or undo every apply that stopped half way. Returns the run ids it handled."""
+def _related(state, run_id):
+    """True when a stuck apply is the target run's own or touches the target run's skill."""
+    if run_id is None or state.get("run_id") == run_id:
+        return True
+    try:
+        return store.read_plan(store.find_run(run_id)).get("skill") == state.get("skill")
+    except (ValueError, OSError):
+        return True
+
+
+def recover(log=print, run_id=None):
+    """Finish or undo every apply that stopped half way. Returns the run ids it handled. With `run_id`, a stuck apply
+    that cannot be recovered and belongs to another run of another skill is reported and skipped, not raised."""
     done = []
     for f in sorted(store.runs_dir().glob(f"*/{APPLY_JSON}")):
         state = _read_json(f)
         if not state or "folder" not in state:
             f.unlink(missing_ok=True)
             continue
-        folder = Path(state["folder"])
-        live = skills.fingerprint(folder)
-        committed = state.get("phase") == "committed"  # files installed and committed (or nothing to commit)
-        sha = state.get("commit_sha") if committed else None
-        sha = sha or _found_commit(state)
-        if sha or committed:
-            if live != state["new"]:
-                what = f"commit {sha} was made" if sha else "the apply was installed"
-                raise Refused(f"{state['run_id']}: {what} but {folder} no longer matches it "
-                              f"(fingerprint {live}); fix the folder by hand, then delete {f}")
-            conn = _db()
-            try:
-                _finish({**state, "commit_sha": sha}, conn)
-            finally:
-                conn.close()
-            log(f"tokscope: finished the interrupted {state['action']} of {state['run_id']}")
-        else:
-            if state.get("git_top"):
-                _git(state["git_top"], "reset", "-q", "--", *state["paths"])
-            if live != state["old"]:
-                _restore(state)
-            _clean_tmp(folder)
-            f.unlink(missing_ok=True)
-            log(f"tokscope: undid the interrupted {state['action']} of {state['run_id']}; {state['skill']} is at {state['old']}")
+        try:
+            _recover_one(f, state, log)
+        except Refused as e:
+            if _related(state, run_id):
+                raise
+            log(f"tokscope: skipped the stuck apply of {state['run_id']}: {e}")
+            continue
         done.append(state["run_id"])
     return done
+
+
+def _recover_one(f, state, log):
+    folder = Path(state["folder"])
+    live = skills.fingerprint(folder)
+    committed = state.get("phase") == "committed"  # files installed and committed (or nothing to commit)
+    sha = state.get("commit_sha") if committed else None
+    sha = sha or _found_commit(state)
+    if sha or committed:
+        if live != state["new"]:
+            what = f"commit {sha} was made" if sha else "the apply was installed"
+            raise Refused(f"{state['run_id']}: {what} but {folder} no longer matches it "
+                          f"(fingerprint {live}); fix the folder by hand, then delete {f}")
+        conn = _db()
+        try:
+            _finish({**state, "commit_sha": sha}, conn)
+        finally:
+            conn.close()
+        log(f"tokscope: finished the interrupted {state['action']} of {state['run_id']}")
+    else:
+        if state.get("git_top"):
+            _git(state["git_top"], "reset", "-q", "--", *state["paths"])
+        if live != state["old"]:
+            _restore(state)
+        _clean_tmp(folder)
+        f.unlink(missing_ok=True)
+        log(f"tokscope: undid the interrupted {state['action']} of {state['run_id']}; {state['skill']} is at {state['old']}")
 
 
 # the pipeline shared by approve and revert
@@ -341,7 +362,7 @@ def _run_lock(run_id):
 
 def approve(run_id, reason=None, cwd=None, now=None):
     with _Locked():
-        recover()
+        recover(run_id=run_id)
         run = _run_lock(run_id)
         try:
             v = _read_json(run / "verdict.json")
@@ -375,7 +396,7 @@ def approve(run_id, reason=None, cwd=None, now=None):
 
 def reject(run_id, reason=None, cwd=None, now=None):
     with _Locked():
-        recover()
+        recover(run_id=run_id)
         run = _run_lock(run_id)
         try:
             plan = store.read_plan(run)
@@ -395,7 +416,7 @@ def reject(run_id, reason=None, cwd=None, now=None):
 
 def revert(run_id, cwd=None, now=None):
     with _Locked():
-        recover()
+        recover(run_id=run_id)
         run = _run_lock(run_id)
         try:
             last = _latest_applied(run)

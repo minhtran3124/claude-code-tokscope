@@ -277,6 +277,19 @@ class TestRecover(Base):
                 call()
         self.assertTrue((self.run_dir / apply.APPLY_JSON).exists())
 
+    def test_stuck_apply_of_another_skill_does_not_block(self):
+        with self.interrupt("_commit"), self.assertRaises(KeyboardInterrupt):
+            self.approve()
+        shutil.rmtree(skills.snapshot_dir("demo", self.old))
+        other = store.runs_dir() / "other-20260101T000000Z"
+        other.mkdir(parents=True)
+        (other / "plan.json").write_text(json.dumps({"skill": "other", "base_fingerprint": "x"}))
+        d = apply.reject(other.name, cwd=str(self.cwd))
+        self.assertEqual(d["decision"], "reject")
+        self.assertTrue((self.run_dir / apply.APPLY_JSON).exists())
+        with self.assertRaisesRegex(apply.Refused, "snapshot"):
+            apply.reject(RUN)
+
 
 class TestRejectRevert(Base):
     def test_reject(self):
