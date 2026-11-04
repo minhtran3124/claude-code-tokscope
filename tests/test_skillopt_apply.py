@@ -240,12 +240,12 @@ class TestRecover(Base):
         with self.interrupt("_finish"), self.assertRaises(KeyboardInterrupt):
             self.approve()
         self.assertEqual(json.loads((self.run_dir / apply.APPLY_JSON).read_text())["phase"], "committed")
-        with self.assertRaisesRegex(apply.Refused, "already approved"):
-            apply.reject(RUN, cwd=str(self.cwd))
+        self.assertEqual(apply.reject(RUN, cwd=str(self.cwd))["decision"], "reject")
         self.assertEqual(self.fp(), self.new)
         self.assertEqual(len(self.rows("SELECT * FROM changes WHERE skill='demo'")), 1)
         self.assertEqual(len(self.rows("SELECT * FROM opt_applied")), 1)
-        self.assertEqual(json.loads((self.run_dir / apply.DECISION_JSON).read_text())["decision"], "approve")
+        d = json.loads((self.run_dir / apply.DECISION_JSON).read_text())
+        self.assertEqual([d["decision"], d["history"][-1]["decision"]], ["reject", "approve"])
 
     def test_committed_phase_without_a_commit_completes(self):
         with self.interrupt("_finish"), self.assertRaises(KeyboardInterrupt):
@@ -319,22 +319,21 @@ class TestRejectRevert(Base):
 
     def test_revert_after_reject_still_works(self):
         self.approve()
-        with self.assertRaisesRegex(apply.Refused, "already approved"):
-            apply.reject(RUN, cwd=str(self.cwd))
+        rec = apply.reject(RUN, cwd=str(self.cwd))
+        self.assertEqual(rec["decision"], "reject")
         self.assertEqual(self.fp(), self.new)
         apply.revert(RUN, cwd=str(self.cwd))
         self.assertEqual(self.fp(), self.old)
         apply.reject(RUN, cwd=str(self.cwd))
 
-    def test_reject_after_approve_refuses_in_cli(self):
+    def test_reject_after_approve_is_recorded_in_cli(self):
         self.approve()
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), \
                 mock.patch("sys.argv", ["tokscope", "optimize", "reject", RUN]), \
-                mock.patch("os.getcwd", return_value=str(self.cwd)), self.assertRaises(SystemExit) as cm:
+                mock.patch("os.getcwd", return_value=str(self.cwd)):
             cli.main()
-        self.assertEqual(cm.exception.code, 2)
-        self.assertNotIn("unchanged", out.getvalue())
+        self.assertIn("rejected", out.getvalue())
         self.assertEqual(self.fp(), self.new)
 
     def test_revert_refusals(self):

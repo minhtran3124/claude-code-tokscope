@@ -399,9 +399,6 @@ def reject(run_id, reason=None, cwd=None, now=None):
         recover(run_id=run_id)
         run = _run_lock(run_id)
         try:
-            last = _latest_applied(run)
-            if last and last.get("decision") == "approve":
-                raise Refused(f"{run_id}: already approved and applied; `tokscope optimize revert {run_id}` undoes it")
             plan = store.read_plan(run)
             v = _read_json(run / "verdict.json") or {}
             try:
