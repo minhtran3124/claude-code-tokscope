@@ -285,6 +285,50 @@ class StoreTest(Home):
         store.acquire(run)  # a dead pid's lock is taken over
         self.assertEqual((run / "run.lock").read_text(), str(os.getpid()))
 
+    def test_run_lock_takeover_has_one_winner(self):
+        dead = subprocess.Popen(["true"])
+        dead.wait()
+        code = (
+            "import sys\nfrom pathlib import Path\nfrom tokscope.experiments.skillopt import store\n"
+            "while not Path(sys.argv[2]).exists(): pass\n"
+            "try:\n    store.acquire(sys.argv[1]); print('won', flush=True)\n"
+            "except store.LockError:\n    print('lost', flush=True)\n"
+            "sys.stdin.read()\n")
+        root = str(Path(__file__).resolve().parent.parent)
+        for _ in range(15):
+            run, _ = seed_run()
+            (run / "run.lock").write_text(str(dead.pid))
+            go = run / "go"
+            procs = [subprocess.Popen([sys.executable, "-c", code, str(run), str(go)], cwd=root, text=True,
+                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE) for _ in range(8)]
+            try:
+                go.write_text("")
+                out = [p.stdout.readline().strip() for p in procs]
+            finally:
+                for p in procs:
+                    p.stdin.close()
+                    p.wait()
+            self.assertEqual(out.count("won"), 1, out)
+
+    def test_run_lock_is_never_seen_empty(self):
+        """A lock created but not yet written must not look stale to a second process."""
+        run, _ = seed_run()
+        code = ("import sys\nfrom tokscope.experiments.skillopt import store\n"
+                "try:\n    store.acquire(sys.argv[1]); print('won')\nexcept store.LockError:\n    print('lost')\n")
+        root = str(Path(__file__).resolve().parent.parent)
+        seen = []
+        real = os.fdopen
+
+        def fdopen(fd, *a, **k):
+            r = subprocess.run([sys.executable, "-c", code, str(run)], cwd=root, text=True, capture_output=True)
+            seen.append(r.stdout.strip())
+            return real(fd, *a, **k)
+
+        with mock.patch("os.fdopen", fdopen):
+            store.acquire(run)
+        self.assertNotIn("won", seen)
+        self.assertEqual((run / "run.lock").read_text(), str(os.getpid()))
+
     def test_index_is_rebuilt_from_files(self):
         run, _ = seed_run()
         make_result(run, "baseline", "a", "current", 0, passed=3)

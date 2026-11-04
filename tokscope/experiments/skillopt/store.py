@@ -4,9 +4,14 @@ import hashlib
 import json
 import os
 import shutil
-import time
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:  # no flock on this platform: the link step alone still keeps the lock whole
+    fcntl = None
 
 from ... import paths
 from ...core import ingest
@@ -267,26 +272,46 @@ def _alive(pid):
     return True
 
 
+def _publish(path, tmp):
+    """Hard-link the finished pid file to run.lock: it appears at once, complete, and only if absent."""
+    try:
+        os.link(tmp, path)
+        return True
+    except FileExistsError:
+        return False
+
+
+def _holder(path):
+    try:
+        return int(path.read_text().strip())
+    except (OSError, ValueError):
+        return 0
+
+
 def acquire(run):
-    """Take run.lock with this pid (O_EXCL). A live pid in it refuses; a dead pid's lock is taken over."""
-    path = Path(run) / LOCK
-    for _ in range(3):
-        try:
-            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
-            try:
-                pid = int(path.read_text().strip())
-            except (OSError, ValueError):
-                pid = 0
-            if pid and _alive(pid) and pid != os.getpid():
-                raise LockError(f"{Path(run).name}: another process (pid {pid}) is running it") from None
-            path.unlink(missing_ok=True)
-            time.sleep(0.01)
-            continue
-        with os.fdopen(fd, "w") as f:
-            f.write(str(os.getpid()))
-        return path
-    raise LockError(f"{Path(run).name}: could not take {LOCK}")
+    """Take run.lock with this pid. The pid is written to a private file first and linked in, so the lock is never
+    seen empty. A live pid in it refuses; a dead pid's lock is taken over under a flock guard, so one process wins."""
+    run = Path(run)
+    path = run / LOCK
+    tmp = run / f".{LOCK}.{os.getpid()}.{threading.get_ident()}"
+    tmp.write_text(str(os.getpid()))
+    try:
+        for _ in range(3):
+            if _publish(path, tmp):
+                return path
+            with open(run / (LOCK + ".guard"), "a") as guard:
+                if fcntl:
+                    fcntl.flock(guard, fcntl.LOCK_EX)
+                pid = _holder(path)
+                if pid and _alive(pid) and pid != os.getpid():
+                    raise LockError(f"{run.name}: another process (pid {pid}) is running it")
+                if _holder(path) == pid:
+                    path.unlink(missing_ok=True)
+                if _publish(path, tmp):
+                    return path
+        raise LockError(f"{run.name}: could not take {LOCK}")
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def release(run):
