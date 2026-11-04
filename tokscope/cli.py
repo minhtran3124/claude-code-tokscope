@@ -1,4 +1,5 @@
 import argparse
+from contextlib import closing
 import json
 import os
 import sys
@@ -40,8 +41,12 @@ def summary_errors(conn, args, where, params, fmt):
 
 
 def summary(args):
+    with closing(connect(DB)) as conn:
+        return _summary(args, conn)
+
+
+def _summary(args, conn):
     where, params = _filters(args)
-    conn = connect(DB)  # creates the tables on a fresh install
     fmt = getattr(args, "format", "table")
     if getattr(args, "errors", False):
         return summary_errors(conn, args, where, params, fmt)
@@ -107,7 +112,8 @@ def check(args):
     """`tokscope check --once`: print the budget state, exit 0 ok / 10 near / 11 over / 30 no data."""
     from .core import budgets
 
-    result = budgets.check(connect(DB), _budgets(args))
+    with closing(connect(DB)) as conn:
+        result = budgets.check(conn, _budgets(args))
     print(json.dumps(result, indent=2) if args.json else budgets.text(result))
     return result["exit"]
 
@@ -125,11 +131,13 @@ def statusline(args):
             pass
     colour = {"near": "33", "over": "31", "ok": "32"}
     try:
-        cache.record_snapshot(connect(DB), snapshot)  # the official prompt_cache counters, for Breakdowns
+        with closing(connect(DB)) as conn:
+            cache.record_snapshot(conn, snapshot)  # the official prompt_cache counters, for Breakdowns
     except Exception:
         pass
     try:
-        result = budgets.check(connect(DB), budgets.load())
+        with closing(connect(DB)) as conn:
+            result = budgets.check(conn, budgets.load())
     except budgets.BudgetError:
         return "\033[31mtokscope: budgets.json is invalid (run tokscope check --once)\033[0m"
     warn = budgets.warnings(result)
@@ -147,7 +155,8 @@ def _budget_line(session_id):
 
     try:
         found = budgets.load()
-        hit = budgets.crossed(connect(DB), found, session_id) if found else []
+        with closing(connect(DB)) as conn:
+            hit = budgets.crossed(conn, found, session_id) if found else []
     except budgets.BudgetError:
         return
     if hit:
@@ -162,17 +171,18 @@ def record_skill_versions(lines):
     marks = [m for m in marks if m.get("tool") == "Skill" and m.get("skill") and not m.get("is_error")]
     if not marks:
         return
-    conn = connect(DB)
-    now = datetime.now(timezone.utc).isoformat()
-    for m in marks:
-        record_load(conn, m.get("session_id"), m.get("tool_use_id"), m["skill"], m.get("cwd"), now)
-    conn.commit()
+    with closing(connect(DB)) as conn:
+        now = datetime.now(timezone.utc).isoformat()
+        for m in marks:
+            record_load(conn, m.get("session_id"), m.get("tool_use_id"), m["skill"], m.get("cwd"), now)
+        conn.commit()
 
 
 def skills_text(skill=None, fmt="table"):
     from .core import skills as sk
 
-    rows = sk.versions(connect(DB), skill)
+    with closing(connect(DB)) as conn:
+        rows = sk.versions(conn, skill)
     if fmt == "json":
         return json.dumps(sk.export_rows(rows), indent=2)
     if fmt == "csv":
@@ -382,6 +392,29 @@ def main():
     pb.add_argument("task", help="task name under bench/tasks/ or a path to its JSON")
     pb.add_argument("--runs", type=int, default=3)
     pb.add_argument("--variants", help="comma-separated subset of the task's variants")
+    po_ = sub.add_parser("optimize", help="evaluate a skill: run one eval case in an isolated session and grade it by machine")
+    po_sub = po_.add_subparsers(dest="optimize_cmd", required=True)
+    pcase = po_sub.add_parser("case", help="run one case of <skill>/evals/evals.json (paid claude -p run); exit 0 all checks passed, 1 failed or INVALID, 2 load error")
+    pcase.add_argument("skill")
+    pcase.add_argument("case_id")
+    pcase.add_argument("--version", help="kept version (hash prefix) of the skill to pin; default: the skill folder as it is")
+    psuite = po_sub.add_parser("suite", help="check <skill>/evals/evals.json and print its dev/holdout split; --draft writes evals.draft.json from real calls, --approve copies a passing draft to evals.json; exit 0 ok, 1 problems, 2 load error")
+    psuite.add_argument("skill")
+    pmode = psuite.add_mutually_exclusive_group()
+    pmode.add_argument("--draft", action="store_true", help="write evals/evals.draft.json (no paid run, no LLM)")
+    pmode.add_argument("--approve", action="store_true", help="copy evals.draft.json to evals.json when its checks pass")
+    psuite.add_argument("--force", action="store_true", help="with --approve: overwrite an existing evals.json")
+    psuite.add_argument("--n", type=int, default=5, help="most cases in a draft (default 5)")
+    pcase.add_argument("--max-budget-usd", type=float, default=None, help="cost cap of this run in USD (default 2.0)")
+    prun = po_sub.add_parser("run", help="optimize a skill: lock a plan, then preflight, baseline, up to 3 edit rounds, confirm and a verdict (paid claude -p runs); exit 0 Apply, 1 Not enough evidence or Reject, 2 load, plan-lock or run-lock error")
+    prun.add_argument("skill")
+    prun.add_argument("--budget", type=float, required=True, help="most to spend in USD; the run stops before passing it")
+    prun.add_argument("--runs", type=int, default=3, help="runs per case and arm (default 3)")
+    prun.add_argument("--model", default="sonnet", help="model of every run and of the editor (default sonnet)")
+    pres = po_sub.add_parser("resume", help="continue a stopped optimize run; refuses when plan.json or the frozen suite changed; same exit codes as run")
+    pres.add_argument("run_id")
+    preg = po_sub.add_parser("regrade", help="grade the stored results of an optimize run again and recompute its verdict (no claude call, no cost)")
+    preg.add_argument("run_id")
     tz_help = "IANA zone for days (default: local, or TOKSCOPE_TZ), e.g. UTC"
     pv = sub.add_parser("serve", help="live dashboard on 127.0.0.1 that ingests new transcripts as they land")
     pv.add_argument("--port", type=int, default=8765)
@@ -484,8 +517,8 @@ def main():
         print(statusline(args))
     elif args.cmd == "session":
         ingest_session(DB, PHASES, args.session_id)
-        conn = connect(DB)  # creates the tables on a fresh install
-        print(json.dumps(session_json(conn, args.session_id)) if args.json else session_text(conn, args.session_id))
+        with closing(connect(DB)) as conn:  # creates the tables on a fresh install
+            print(json.dumps(session_json(conn, args.session_id)) if args.json else session_text(conn, args.session_id))
     elif args.cmd == "mark":
         lines = sys.stdin.readlines()
         append_marks(lines, paths.marks())
@@ -503,7 +536,8 @@ def main():
         if args.skill == "import":
             from .core.skills import import_from_transcripts
 
-            done = import_from_transcripts(connect(DB), None, args.name)
+            with closing(connect(DB)) as conn:
+                done = import_from_transcripts(conn, None, args.name)
             for sk, version, first, n in done:
                 print(f"kept {sk} {version}: SKILL.md from {n} load(s), first {first[:16].replace('T', ' ')}")
             print(f"{len(done)} older version(s) kept" if done else "no older version found in the transcripts")
@@ -512,15 +546,15 @@ def main():
     elif args.cmd == "change":
         from .features.changes import add_change, impact_text, list_changes
 
-        conn = connect(DB)  # creates the tables on a fresh install
-        if args.note:
-            try:
-                cid = add_change(conn, args.note, args.agent, args.skill, args.at)
-            except ValueError as e:
-                sys.exit(f"tokscope: {e}")
-            print(f"recorded change #{cid}")
-        for change in list_changes(conn):
-            print(impact_text(conn, change, args.days))
+        with closing(connect(DB)) as conn:  # creates the tables on a fresh install
+            if args.note:
+                try:
+                    cid = add_change(conn, args.note, args.agent, args.skill, args.at)
+                except ValueError as e:
+                    sys.exit(f"tokscope: {e}")
+                print(f"recorded change #{cid}")
+            for change in list_changes(conn):
+                print(impact_text(conn, change, args.days))
     elif args.cmd == "replay":
         from .experiments import replay
 
@@ -541,6 +575,59 @@ def main():
             print(replay.diff(DB, args.session_id))
         else:
             print(replay.diff(DB, args.session_id))
+    elif args.cmd == "optimize" and args.optimize_cmd == "suite":
+        from .experiments.skillopt import suite
+
+        try:
+            if args.draft:
+                res = suite.draft(args.skill, args.n)
+                print(f"{res['note']}\ndraft {res['path']}\nadd machine checks, then: tokscope optimize suite {args.skill} --approve")
+            elif args.approve:
+                print(f"approved: {suite.approve(args.skill, force=args.force)}")
+            else:
+                loaded = suite.load(args.skill)
+                for problem in loaded.problems:
+                    print(problem)
+                if loaded.problems:
+                    sys.exit(1)
+                dev, hold = suite.split(loaded)
+                print(f"{len(dev)} dev, {len(hold)} holdout\nholdout: {', '.join(hold)}")
+        except suite.Refused as e:
+            print(f"tokscope: {e}", file=sys.stderr)
+            sys.exit(1)
+        except ValueError as e:
+            print(f"tokscope: {e}", file=sys.stderr)
+            sys.exit(2)
+    elif args.cmd == "optimize" and args.optimize_cmd in ("run", "resume", "regrade"):
+        from .experiments.skillopt import loop
+
+        try:
+            if args.optimize_cmd == "run":
+                run = loop.start(args.skill, args.budget, args.runs, args.model)
+            elif args.optimize_cmd == "resume":
+                run = loop.resume(args.run_id)
+            else:
+                run = loop.regrade(args.run_id)
+        except ValueError as e:  # a load, plan-lock or run-lock error, before any paid run
+            print(f"tokscope: {e}", file=sys.stderr)
+            sys.exit(2)
+        print("\n".join(loop.report(run)[1:] if args.optimize_cmd == "run" else loop.report(run)))
+        sys.exit(loop.exit_code(run))
+    elif args.cmd == "optimize":
+        from .experiments.skillopt import sandbox
+
+        try:
+            run = sandbox.run_case(args.skill, args.case_id, args.version, budget=args.max_budget_usd)
+        except ValueError as e:  # a load error, before any paid run
+            print(f"tokscope: {e}", file=sys.stderr)
+            sys.exit(2)
+        g = json.loads((run / "grading.json").read_text())
+        print(f"run {run}")
+        if g["status"] == "INVALID":
+            print(f"INVALID: {g['reason']}")
+            sys.exit(1)
+        print(f"passed {g['passed']}/{g['total']}" + (f" · safety failed {g['safety_failed']}" if g["safety_failed"] else ""))
+        sys.exit(0 if g["passed"] == g["total"] else 1)
     elif args.cmd == "bench":
         from .experiments import bench
 

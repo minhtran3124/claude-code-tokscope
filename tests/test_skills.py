@@ -432,3 +432,51 @@ class SkillsExportTest(SkillsTest):
                "loads": 1, "exact": 0, "tokens_median": 5, "calls": 0, "errors": 0, "repeats": 0, "interrupts": 0, "failed_loads": 0}
         cells = skills.to_csv([row]).splitlines()[1].split(",")
         self.assertEqual(cells[:4], ["'=cmd", "'+x", "'-1", "'@s"])
+
+
+class VersionHistoryTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        env = mock.patch.dict(os.environ, {"HOME": str(self.tmp / "home"), "TOKSCOPE_HOME": str(self.tmp / "data-home")})
+        env.start()
+        self.addCleanup(env.stop)
+        self.repo = self.tmp / "repo"
+        self.skill = write_skill(self.repo / ".claude" / "skills" / "review", "# v1\n")
+        skills.canonical_name.cache_clear()
+        self.conn = connect(self.tmp / "t.db")
+
+    def session(self, sid, project, cwd=None):
+        self.conn.execute("INSERT INTO sessions (session_id, project, cwd) VALUES (?, ?, ?)", (sid, project, str(cwd or self.repo)))
+
+    def load(self, sid, ts, prompt, text_hash=None):
+        self.conn.execute("INSERT INTO skill_calls (session_id, ts, skill, phase, source, prompt_idx, tool_use_id, text_hash) "
+                          "VALUES (?, ?, 'review', 'review', 'tool', ?, NULL, ?)", (sid, ts, prompt, text_hash))
+
+    def test_bench_session_adds_no_version(self):
+        self.session("real", "-home-me-proj")
+        bench = self.tmp / "bench"
+        write_skill(bench / ".claude" / "skills" / "review", "# rejected draft\n")
+        self.session("bench", "-home-me-tokscope-bench-1", bench)
+        self.load("real", "2026-01-01T00:00:00+00:00", 0)
+        skills.scan(self.conn, now="2026-01-02T00:00:00+00:00")
+        before = self.conn.execute("SELECT COUNT(*) FROM skill_versions").fetchone()[0]
+        self.load("bench", "2026-01-03T00:00:00+00:00", 0)
+        skills.scan(self.conn, now="2026-01-04T00:00:00+00:00")
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM skill_versions").fetchone()[0], before)
+
+    def test_newest_same_body_version_before_the_load_wins(self):
+        self.session("s1", "p")
+        v1 = skills.record(self.conn, "review", write_skill(self.skill, "# same\n", {"ref/a.md": "A"}), "2026-01-01T00:00:00+00:00", "scan")
+        v2 = skills.record(self.conn, "review", write_skill(self.skill, "# same\n", {"ref/a.md": "B"}), "2026-01-10T00:00:00+00:00", "scan")
+        self.assertNotEqual(v1, v2)
+        h = skills.body_hash(self.skill)
+        self.load("s1", "2026-01-05T00:00:00+00:00", 0, h)
+        self.load("s1", "2026-01-20T00:00:00+00:00", 1, h)
+        got = {i: v for _, i, _, _, v, _ in skills.load_versions(self.conn)}
+        self.assertEqual(got, {0: v1, 1: v2})
+
+    def test_a_session_with_no_project_still_gets_its_skill_hashed(self):
+        self.conn.execute("INSERT INTO sessions (session_id, project, cwd) VALUES ('np', NULL, ?)", (str(self.repo),))
+        self.load("np", "2026-01-01T00:00:00+00:00", 0)
+        skills.scan(self.conn, now="2026-01-02T00:00:00+00:00")
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM skill_versions").fetchone()[0], 1)

@@ -65,14 +65,39 @@ results and says Not enough evidence.
 Files are the source of truth; SQLite is an index. One run holds all it needs to regrade and review.
 
 ```
-bench/optimize/runs/<run-id>/
-  plan.json  suite/  versions/v0 v1 …/  rounds/<n>/editor/
-  results/<round>/<case>/<arm>/<i>/{stream.jsonl,final.md,files/,grading.json}
-  benchmark.json (skill-creator schema)  verdict.json  ledger.jsonl  apply.json  decision.json
+bench/optimize/runs/<run-id>/            run-id = <skill>-<UTC yyyymmddThhmmssZ>
+  plan.json  ledger.jsonl  run.lock  suite/  versions/v0 v1 …/  rounds/<n>/editor/{workspace/,prompt.md,stream.jsonl,hypothesis.txt,result.json}
+  results/<stage>/<case>/<arm>/<i>/{stream.jsonl,stderr.log,final.md,files/,grading.json,run.json}
+  benchmark.json (skill-creator schema)  verdict.json  apply.json  decision.json
 ```
 
+`<stage>` is `preflight`, `baseline`, `r1`..`r3` or `confirm`; `<arm>` is `current`, `none` or `vN`.
+
+Commands (built in #189; Approve and Reject are #190, the page #192):
+
+- `tokscope optimize run <skill> --budget USD [--runs N] [--model M]`: lock, preflight, baseline, up to 3 edit rounds, confirm, verdict.
+  The budget is required. Exit 0 Apply; 1 Not enough evidence or Reject (a budget stop and a baseline stop too); 2 a load, plan-lock or run-lock error, before any paid run.
+- `tokscope optimize resume <run-id>`: continues a run that has no verdict yet (a kill, a crash). A run with a verdict is printed, not run again.
+- `tokscope optimize regrade <run-id>`: grades the stored results again and recomputes `verdict.json`, `benchmark.json` and the index. No claude call.
+
+How a run stays honest:
+
+- `plan.json` (suite hash, dev and holdout ids, model, Claude Code version, budget, seed, gates) is written before any paid run. Its sha256 is the first
+  `ledger.jsonl` line, outside the plan; `resume` and `regrade` refuse (exit 2) when plan.json or the frozen `suite/` no longer match.
+  `suite/` holds `evals/` and every fixture a case names, at the same relative path, with the split written in.
+- `ledger.jsonl` is append-only, one fsynced line per run (`run`), editor call (`editor`), call start (`start`) and killed call (`lost`, charged at the cap it started with).
+  Before each paid call the run needs `spent + reserve <= budget`, where reserve is the highest cost of a run or editor line so far (before any, the lower of
+  the per-run cap and the budget). The call gets `--max-budget-usd min(cap, budget - spent)`. Real `claude` checks its cap between turns, so one real run can end slightly over it.
+- A result is written to `<i>.tmp/`, renamed to `<i>/` when whole, and only then gets its ledger line. Resume skips a folder with a line, adds the line to a folder
+  without one, and charges and deletes a left-over `.tmp`. An editor round is done when its `result.json` and `editor` line exist; otherwise the round is deleted and run again.
+- The pinned text is proved from the stream: a `Skill` call for the skill and the skill text after it (`Base directory for this skill: …`) whose body hash is the pinned
+  copy's. A run with no transcript (`--no-session-persistence`) has nothing for `check_load` to read. `unconfirmed` (a call without the text) and `other text` do not count toward Valid.
+- The editor sees only dev cases: its workspace comes from `suite.editor_workspace` and its prompt from dev records. The `description` in the frontmatter is locked.
+  A draft with no `Hypothesis:` line, the same files as an earlier version, or another description is refused and recorded in `result.json`.
+- `opt_results` is rebuilt from `grading.json` and `run.json` after each result (`DELETE` the run's rows, then `INSERT`), with an index on `session_id`.
+
 The suite lives in `<skill>/evals/`, which the fingerprint already skips (with the other top-level test folders in
-`BENCH_DIRS`: `eval/`, `tests/`, `test/`, `fixtures/`, `results/`). JSON, not YAML (stdlib only). Tables `opt_results`
+`BENCH_DIRS`: `eval/`, `tests/`, `test/`, `fixtures/`, `results/`). JSON, not YAML (stdlib only). `evals.json` keeps `evals` and `checks` and gains `split: {hash, holdout: [ids]}` (hash = sha256 of `evals`+`checks`; kept while it matches, redone after an edit; holdout is the first ceil(n/3) ids of a hash-seeded shuffle). Tables `opt_results`
 (joins `requests` by `session_id`) and `opt_applied`. The worker is a separate CLI process (`tokscope optimize run|resume|regrade`,
 new names), so a run survives a dashboard stop.
 
