@@ -14,7 +14,7 @@ except ImportError:  # no flock on this platform: the link step alone still keep
     fcntl = None
 
 from ... import paths
-from ...core import ingest
+from ...core import ingest, skills
 from . import suite
 from .sandbox import MAX_BUDGET_USD, _name
 
@@ -81,8 +81,8 @@ def write_plan(run, plan):
 
 
 def check_lock(run):
-    """LockError when plan.json no longer has the hash locked in the ledger, or the frozen suite no longer has the
-    plan's suite hash. Run before every resume and regrade."""
+    """LockError when plan.json no longer has the hash locked in the ledger, the frozen suite no longer has the
+    plan's suite hash, or versions/v0 no longer has the plan's base fingerprint. Run before every resume and regrade."""
     run = Path(run)
     first = next(iter(lines(run)), {})
     try:
@@ -95,8 +95,12 @@ def check_lock(run):
         frozen = suite.suite_hash(json.loads((run / "suite" / "evals" / suite.NAME).read_text()))
     except (OSError, ValueError):
         raise LockError(f"{run.name}: the frozen suite is missing or unreadable") from None
-    if frozen != json.loads(data.decode())["suite_hash"]:
+    plan = json.loads(data.decode())
+    if frozen != plan["suite_hash"]:
         raise LockError(f"{run.name}: the frozen suite changed after it was locked; start a new run")
+    base = plan.get("base_fingerprint")
+    if base and skills.fingerprint(run / "versions" / "v0") != base:
+        raise LockError(f"{run.name}: versions/v0 changed after it was locked; start a new run")
 
 
 # ledger

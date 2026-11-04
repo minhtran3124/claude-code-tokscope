@@ -210,6 +210,19 @@ class StoreTest(Home):
         with self.assertRaisesRegex(store.LockError, "frozen suite"):
             store.check_lock(run)
 
+    def test_lock_detects_a_changed_base_version(self):
+        run, plan = seed_run()
+        v0 = run / "versions" / "v0"
+        v0.mkdir(parents=True)
+        (v0 / "SKILL.md").write_text("---\nname: demo\ndescription: d\n---\nbody\n")
+        plan["base_fingerprint"] = skills.fingerprint(v0)
+        (run / store.LEDGER).unlink()
+        store.write_plan(run, plan)
+        store.check_lock(run)
+        (v0 / "SKILL.md").write_text("---\nname: demo\ndescription: d\n---\nedited\n")
+        with self.assertRaisesRegex(store.LockError, "versions/v0"):
+            store.check_lock(run)
+
     def test_ledger_spent_and_torn_line(self):
         run, _ = seed_run()
         store.append(run, {"kind": "run", "cost_usd": 0.25})
