@@ -150,7 +150,6 @@ class RunnerBase(unittest.TestCase):
         patch = mock.patch.dict(os.environ, self.env)
         patch.start()
         self.addCleanup(patch.stop)
-        make_skill(self.home / ".claude" / "skills" / "demo", "PERSONAL-MARKER")
         self.skill = self.proj / ".claude" / "skills" / "demo"
         make_skill(self.skill, "PROJECT-MARKER")
         (self.skill / "evals" / "files").mkdir(parents=True)
@@ -165,11 +164,10 @@ class SandboxTest(RunnerBase):
     def test_run_pins_project_copy_and_grades(self):
         with mock.patch.object(skills, "check_pinnable") as cp, mock.patch.object(skills, "pin") as pn:
             run = sandbox.run_case("demo", "1")
-            cp.assert_not_called()
+            cp.assert_called_once_with("demo")
             pn.assert_not_called()
         stream = (run / "stream.jsonl").read_text()
         self.assertIn("PROJECT-MARKER", stream)
-        self.assertNotIn("PERSONAL-MARKER", stream)
         self.assertRegex(stream, r"tokscope-skillopt-[^/]+/\.claude/skills/demo")
         g = json.loads((run / "grading.json").read_text())
         self.assertEqual((g["status"], g["passed"], g["total"]), ("ok", 6, 6))  # 5 case checks + 1 file-level
@@ -182,6 +180,15 @@ class SandboxTest(RunnerBase):
         self.assertEqual(meta["usage"], {"output_tokens": 5})
         self.assertFalse(Path(meta["pinned"]).exists())  # sandbox removed
         self.assertFalse((Path(meta["pinned"]).parents[2] / "evals").exists())
+
+    def test_personal_skill_blocks_pin_copy(self):
+        make_skill(self.home / ".claude" / "skills" / "demo", "PERSONAL-MARKER")
+        sb = Path(tempfile.mkdtemp())
+        with self.assertRaisesRegex(ValueError, "wins over a pinned project copy"):
+            sandbox.pin_copy("demo", self.skill, sb)
+        self.assertFalse((sb / ".claude").exists())
+        with self.assertRaisesRegex(ValueError, "wins over"):
+            sandbox.run_case("demo", "1")
 
     def test_pinned_copy_has_no_evals(self):
         sb = Path(tempfile.mkdtemp())

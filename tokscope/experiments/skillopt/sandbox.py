@@ -90,7 +90,9 @@ def source_folder(skill, folder, version):
 
 def pin_copy(skill, source, sandbox, expect=None):
     """Copy exactly the fingerprint file set of `source` to <sandbox>/.claude/skills/<skill> (so evals/ and its
-    checks never reach the model) and check the copy is the same version. Does not use skills.pin."""
+    checks never reach the model) and check the copy is the same version. Does not use skills.pin. ValueError when a
+    personal skill of the same name would win over the copy."""
+    skills.check_pinnable(skill)
     source, dest = Path(source), Path(sandbox) / ".claude" / "skills" / skill
     want = expect or skills.fingerprint(source)
     if want is None:
