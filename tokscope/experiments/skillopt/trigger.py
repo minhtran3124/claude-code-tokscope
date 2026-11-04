@@ -170,5 +170,8 @@ def revert_description(draft_dir, v0_dir):
 
 
 def decide(current_test, draft_test):
-    """Pass when the draft's test accuracy is not below the current one's (a tie passes)."""
+    """Pass when the draft's test accuracy is not below the current one's (a tie passes). An accuracy that is None
+    (no test prompt, or a missing run) cannot be compared, so the draft fails and the old description is put back."""
+    if current_test is None or draft_test is None:
+        return False
     return draft_test >= current_test

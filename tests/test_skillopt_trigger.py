@@ -73,6 +73,15 @@ class LoadTest(unittest.TestCase):
         self.assertEqual(set(trigger.train_items(items)[0]), {"prompt", "should_trigger"})
 
 
+class DecideTest(unittest.TestCase):
+    def test_none_accuracy_fails_instead_of_raising(self):
+        self.assertFalse(trigger.decide(None, None))
+        self.assertFalse(trigger.decide(0.5, None))
+        self.assertFalse(trigger.decide(None, 0.5))
+        self.assertTrue(trigger.decide(0.5, 0.5))
+        self.assertFalse(trigger.decide(0.6, 0.5))
+
+
 class DescriptionTest(unittest.TestCase):
     def test_normalize_and_changed_ignore_whitespace(self):
         self.assertEqual(trigger.normalize("  a \n  b\tc "), "a b c")
