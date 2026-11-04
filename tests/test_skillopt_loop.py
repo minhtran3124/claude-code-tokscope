@@ -375,6 +375,8 @@ if editor:
         time.sleep(30)
     n = int(re.search(r"edit round (\d+)", prompt).group(1))
     mode = pick(cfg["editor"], str(n))
+    if mode == "crash":
+        sys.exit(1)
     text = Path("SKILL.md").read_text()
     if mode in ("edit", "nohyp"):
         text += "\nDRAFT edit %d\n" % n
@@ -568,6 +570,22 @@ class LoopTest(LoopBase):
         self.assertIn("same files", reasons[2]["reason"])
         self.assertFalse((run / "versions" / "v1").exists())
         self.assertNotIn("confirm", {p.name for p in (run / "results").iterdir()})
+
+    def test_an_editor_with_no_result_is_charged_its_cap(self):
+        self.set_cfg(editor={"1": "crash"})
+        run, _ = self.go()
+        line = next(l for l in store.lines(run) if l["kind"] == "editor" and l["round"] == 1)
+        start = next(l for l in store.lines(run) if l["kind"] == "start" and l.get("round") == 1)
+        self.assertGreater(start["cap"], 0)
+        self.assertEqual(line["cost_usd"], start["cap"])
+
+    def test_a_run_with_no_cost_is_charged_its_cap(self):
+        run, plan = seed_run()
+        store.start(run, plan, "baseline", "a", "current", 0)
+        make_result(run, "baseline", "a", "current", 0, cost=None, tmp=True)
+        store.finish(run, "baseline", "a", "current", 0)
+        line = [l for l in store.lines(run) if l["kind"] == "run"][-1]
+        self.assertGreater(line["cost_usd"], 0)
 
     def test_editor_sees_dev_cases_only(self):
         self.set_cfg(k={"draft": 2})  # no gain: three rounds, three prompts

@@ -182,15 +182,20 @@ def tmp_dir(run, stage, case, arm, i):
     return final.with_name(final.name + ".tmp")
 
 
-def _line(k, meta):
-    return {"kind": "run", **k, "cost_usd": meta.get("cost_usd") or 0, "status": meta.get("status")}
+def _line(run, k, meta):
+    """A `run` line. A call that reported no cost (killed, timed out, no result event) is charged the cap it started with."""
+    cost = meta.get("cost_usd")
+    if cost is None:
+        caps = [l["cap"] for l in lines(run) if l.get("kind") == "start" and _same(l, k) and "cap" in l]
+        cost = caps[-1] if caps else 0
+    return {"kind": "run", **k, "cost_usd": cost, "status": meta.get("status")}
 
 
 def recover(run, stage, case, arm, i):
     """Add the missing `run` line of a finished folder from its run.json."""
     k = key(stage, case, arm, i)
     meta = json.loads((result_dir(run, stage, case, arm, i) / "run.json").read_text())
-    append(run, _line(k, meta))
+    append(run, _line(run, k, meta))
 
 
 def discard(run, plan, stage, case, arm, i):
@@ -206,7 +211,7 @@ def finish(run, stage, case, arm, i):
     k = key(stage, case, arm, i)
     final = result_dir(run, stage, case, arm, i)
     os.rename(tmp_dir(run, stage, case, arm, i), final)
-    append(run, _line(k, json.loads((final / "run.json").read_text())))
+    append(run, _line(run, k, json.loads((final / "run.json").read_text())))
     return final
 
 

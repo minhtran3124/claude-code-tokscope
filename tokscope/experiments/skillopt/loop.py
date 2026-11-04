@@ -278,7 +278,9 @@ def ensure_editor(ctx, n):
     events = _run_editor(sandbox.command(prompt, ws, cap, plan["model"]), ws, ed)
     res = grade._result(events) or {}
     answer = res.get("result") or ""
-    cost = res.get("total_cost_usd") or 0
+    cost = res.get("total_cost_usd")
+    if cost is None:  # killed, timed out or no result event: the call may have spent up to its cap
+        cost = cap
     m = re.search(r"^\s*Hypothesis:\s*(.+)$", answer, re.M)
     hypothesis = m.group(1).strip() if m else None
     (ed / "hypothesis.txt").write_text(hypothesis or "")
