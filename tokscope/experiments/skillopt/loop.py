@@ -370,8 +370,15 @@ def trigger_gate(ctx, arm):
                 ctx.plan["description"], _front_description(draft_dir / "SKILL.md")):
             return
         acc = {a: {s: None for s in trigger.SPLITS} for a in ("current", "draft")}
-        for split in ("test", "train"):  # test first; a budget stop in either split ends the stage unsaved (runs are kept)
-            _trigger_runs(ctx, arm, split)
+        stop = None
+        for split in ("test", "train"):  # test first: its verdict is kept even when the budget ends the train split
+            try:
+                _trigger_runs(ctx, arm, split)
+            except Stop as e:
+                if split == "test":
+                    raise
+                stop = e  # train accuracy stays None (runs are kept); the test verdict below is still saved
+                break
             recs = ctx.records(trigger.STAGE)
             acc["current"][split] = trigger.accuracy(recs, ctx.triggers, "current", split)
             acc["draft"][split] = trigger.accuracy(recs, ctx.triggers, arm, split)
@@ -380,6 +387,10 @@ def trigger_gate(ctx, arm):
                            + ("new description kept" if passed else "old description put back"),
                            "prompts": trigger.counts(ctx.triggers), "current": acc["current"], "draft": acc["draft"],
                            "passed": passed, "reverted": not passed, "draft_version": arm})
+        if stop:
+            if not passed and draft_dir.is_dir():
+                trigger.revert_description(draft_dir, run / "versions" / "v0")
+            raise stop
     res = json.loads(path.read_text())
     if res.get("reverted") and draft_dir.is_dir():
         trigger.revert_description(draft_dir, run / "versions" / "v0")

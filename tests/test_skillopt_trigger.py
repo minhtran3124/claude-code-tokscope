@@ -272,7 +272,7 @@ class GateTest(TriggerBase):
         loop._trigger_runs(ctx, "v1", "test")  # a second call runs nothing
         self.assertEqual(len(self.calls()), before)
 
-    def test_budget_stop_in_the_train_split_writes_no_trigger_json_and_resume_finishes_train(self):
+    def test_budget_stop_in_the_train_split_keeps_the_test_verdict_and_reverts(self):
         self.set_cfg(editor={"default": "baddesc"})
         real = store.can_spend
 
@@ -283,13 +283,12 @@ class GateTest(TriggerBase):
 
         with mock.patch.object(store, "can_spend", limited):
             run, v = self.go()
-        self.assertEqual(v["trigger"]["status"], "not finished")
-        self.assertFalse((run / "trigger.json").exists())
-        (run / "verdict.json").unlink()
-        loop.resume(run.name, log=lambda *_: None)
+        self.assertEqual(v["stopped"], "trigger")
         t = json.loads((run / "trigger.json").read_text())
-        self.assertIsNotNone(t["draft"]["train"])
-        self.assertIsNotNone(t["current"]["train"])
+        self.assertEqual((v["trigger"]["status"], t["passed"], t["reverted"]), ("ran", False, True))
+        self.assertIsNotNone(t["draft"]["test"])
+        self.assertIsNone(t["draft"]["train"])
+        self.assertEqual(self.desc_of(run, "v1"), "Summarize notes")  # reverted despite the stop
 
 
 class WorkspaceTest(unittest.TestCase):
