@@ -388,6 +388,7 @@ def main():
     pcase.add_argument("skill")
     pcase.add_argument("case_id")
     pcase.add_argument("--version", help="kept version (hash prefix) of the skill to pin; default: the skill folder as it is")
+    pcase.add_argument("--max-budget-usd", type=float, default=None, help="cost cap of this run in USD (default 2.0)")
     tz_help = "IANA zone for days (default: local, or TOKSCOPE_TZ), e.g. UTC"
     pv = sub.add_parser("serve", help="live dashboard on 127.0.0.1 that ingests new transcripts as they land")
     pv.add_argument("--port", type=int, default=8765)
@@ -551,7 +552,7 @@ def main():
         from .experiments.skillopt import sandbox
 
         try:
-            run = sandbox.run_case(args.skill, args.case_id, args.version)
+            run = sandbox.run_case(args.skill, args.case_id, args.version, budget=args.max_budget_usd)
         except ValueError as e:  # a load error, before any paid run
             print(f"tokscope: {e}", file=sys.stderr)
             sys.exit(2)

@@ -9,16 +9,15 @@ updated_by: claude   # claude | manual
 # claude-code-tokscope — Status
 
 ## Summary
-All five issues of milestone 1 (logs to enhancement plan) are merged into `main` and closed, including the follow-ups #180 (cold-cache inherited reads) and #181 (Optimize apply when the changes row fails), and the app build is current. The nudge has not been tried in a live Claude Code session (UAT did not run) and the skill slice is held. Milestone 2 "Skill Optimize v2" (#187-#195, epic #196) replaces Library Optimize with an evaluated loop and an Approve that commits; #187 (isolated runner and machine graders: `tokscope optimize case`) is implemented on its branch.
+All five issues of milestone 1 (logs to enhancement plan) are merged into `main` and closed, including the follow-ups #180 (cold-cache inherited reads) and #181 (Optimize apply when the changes row fails), and the app build is current. The nudge has not been tried in a live Claude Code session (UAT did not run) and the skill slice is held. Milestone 2 "Skill Optimize v2" (#187-#195, epic #196) replaces Library Optimize with an evaluated loop and an Approve that commits; no code yet.
 
 ## Next step
-Review and merge #187, then #188 (suite loader; it must accept the `checks` shape).
+Run `/harness:autopilot "Skill Optimize v2"`, starting with #187 (isolated runner and machine graders).
 
 ## Blockers
 - macOS app (#144-#148) cannot be verified without a Mac.
 
 ## Recent
-- 2026-11-04: #187 implemented: `tokscope/experiments/skillopt/` (`sandbox.py`, `grade.py`) and `tokscope optimize case`; six machine check types, INVALID without a result event.
 - 2026-11-04: Autopilot run wf_0e96290a-254 shipped #180 and #181 (PRs #183, #184 into the feat branch, final PR #185 merged into `main`, `a895f3e`); the milestone is closed and the desktop `.deb` was rebuilt from `main`. Skill Optimize v2: brief `docs/research-skill-optimize.md` (from the design artifact https://claude.ai/artifact/ANQd9hiw6dZizuAQ7Prabi: isolated runner, approved suite with holdout, locked gates, run store, before/after page, Approve that checks the fingerprint and commits only the skill's files in git, else keeps a snapshot with Revert); milestone 2 with #187-#195 and epic #196.
 - 2026-11-04: PR #179 merged into `main` (`57ab775`); #171-#173 closed, follow-ups #180 and #181 opened, and the desktop `.deb` rebuilt from `main`.
 - 2026-11-02: #173 implemented: `session --json` carries `context`; the mod toasts once per session at 300K and adds a pane line; `/tokscope nudge on|off` persists; docs updated. Removed the unused `compacted` field and merged PR #178 into the feat branch; final PR to `main` opened. Review fixes on the final PR: `patterns` masks quoted keys, `_KEY` names, URL passwords, glpat/xox/Stripe/npm tokens and Basic auth; in-prompt cost subtracts inherited reads with the request's own fast, US and long-Haiku factors; the facets read skips symlinks, non-files and files over 1 MiB.

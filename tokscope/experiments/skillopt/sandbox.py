@@ -23,11 +23,11 @@ def claude():
     return paths.tool("claude", first=paths.CLAUDE_FIRST) or "claude"
 
 
-def command(prompt, sandbox):
+def command(prompt, sandbox, budget=None):
     """argv of the isolated session. Project settings only, no user MCP, nothing saved, edits allowed in the
-    sandbox only. Never --dangerously-skip-permissions."""
+    sandbox only, cost capped at `budget` (default MAX_BUDGET_USD). Never --dangerously-skip-permissions."""
     return [claude(), "-p", prompt, "--setting-sources", "project", "--strict-mcp-config", "--no-session-persistence",
-            "--output-format", "stream-json", "--verbose", "--max-budget-usd", str(MAX_BUDGET_USD),
+            "--output-format", "stream-json", "--verbose", "--max-budget-usd", str(budget or MAX_BUDGET_USD),
             "--permission-mode", "acceptEdits", "--add-dir", str(sandbox)]
 
 
@@ -103,7 +103,12 @@ def pin_copy(skill, source, sandbox, expect=None):
     """Copy exactly the fingerprint file set of `source` to <sandbox>/.claude/skills/<skill> (so evals/ and its
     checks never reach the model) and check the copy is the same version. Does not use skills.pin and never calls
     skills.check_pinnable: the run uses --setting-sources project, so a personal skill of the same name does not load
-    and cannot win over the copy."""
+    and cannot win over the copy.
+
+    Evidence (one probe of 4 haiku runs during the design, under $0.01): in a temp folder holding a fake copy of
+    `create-pr`, `--setting-sources project` loaded that copy over the real personal `create-pr` (21 skills and
+    18.3k tokens of context, against 170 skills and 98.6k tokens by default). The opt-in test
+    `LiveIsolationTest` repeats it: TOKSCOPE_LIVE=1 python3 -m unittest tests.test_skillopt_runner.LiveIsolationTest"""
     source, dest = Path(source), Path(sandbox) / ".claude" / "skills" / skill
     want = expect or skills.fingerprint(source)
     if want is None:
@@ -129,8 +134,11 @@ def _copy_work(sandbox, dest):
             shutil.copy2(p, dest / p.name, follow_symlinks=False)
 
 
-def run_case(skill, case_id, version=None, cwd=None):
-    """Run one case and return the run folder. ValueError for a load error, before any paid run."""
+def run_case(skill, case_id, version=None, cwd=None, budget=None):
+    """Run one case and return the run folder. ValueError for a load error, before any paid run. `budget` caps the
+    cost of this run in USD (default MAX_BUDGET_USD)."""
+    if budget is not None and not budget > 0:
+        raise ValueError(f"budget {budget!r} must be above 0")
     case, checks, folder, fixtures = load_case(skill, case_id, cwd)
     source, full = source_folder(skill, folder, version)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
@@ -145,7 +153,7 @@ def run_case(skill, case_id, version=None, cwd=None):
                 shutil.copy2(src, sandbox / src.name)
         pinned, fp = pin_copy(skill, source, sandbox, full)
         run.mkdir(parents=True)  # after the load errors a pin can raise
-        argv = command(case["prompt"], sandbox)
+        argv = command(case["prompt"], sandbox, budget)
         try:
             with (run / "stderr.log").open("w") as log, (run / "stream.jsonl").open("w") as stream:
                 proc = subprocess.Popen(argv, cwd=sandbox, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,

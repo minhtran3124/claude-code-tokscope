@@ -360,6 +360,19 @@ class CliTest(RunnerBase):
         self.assertIn("tokscope:", r.stderr)
         self.assertFalse((self.data / "bench" / "skillopt").exists())
 
+    def test_budget_flag_sets_the_cap(self):
+        argv = sandbox.command("hi", "/tmp/sb", budget=0.5)
+        self.assertEqual(argv[argv.index("--max-budget-usd") + 1], "0.5")
+        with self.assertRaises(ValueError):
+            sandbox.run_case("demo", "1", budget=0)
+
+    def test_cli_max_budget_usd_reaches_claude(self):
+        self.assertIn("--max-budget-usd", self.cli("case", "--help").stdout)
+        r = self.cli("case", "demo", "1", "--max-budget-usd", "0.25")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        args = json.loads(self.args.read_text())
+        self.assertEqual(args[args.index("--max-budget-usd") + 1], "0.25")
+
     def test_no_result_exits_1(self):
         r = self.cli("case", "demo", "1", FAKE_NO_RESULT="1")
         self.assertEqual(r.returncode, 1)
@@ -375,6 +388,26 @@ class CliTest(RunnerBase):
 
     def test_help_lists_version(self):
         self.assertIn("--version", self.cli("case", "--help").stdout)
+
+
+@unittest.skipUnless(os.environ.get("TOKSCOPE_LIVE"), "paid live probe (under $0.01): set TOKSCOPE_LIVE=1")
+class LiveIsolationTest(unittest.TestCase):
+    """The real claude, not a fake: with --setting-sources project a pinned project copy is the text that loads, even
+    when a personal skill has the same name. Needs one skill folder in ~/.claude/skills and a logged-in claude."""
+
+    def test_pinned_copy_wins_over_a_personal_skill(self):
+        personal = Path.home() / ".claude" / "skills"
+        names = sorted(p.name for p in personal.iterdir() if (p / "SKILL.md").is_file() and not p.is_symlink()) if personal.is_dir() else []
+        if not names:
+            self.skipTest("no personal skill to shadow")
+        name, marker = names[0], "PINNEDMARKERQX7"
+        sb = Path(tempfile.mkdtemp(prefix="tokscope-live-")).resolve()
+        copy = sb / ".claude" / "skills" / name
+        copy.mkdir(parents=True)
+        (copy / "SKILL.md").write_text(f"---\nname: {name}\ndescription: Say the marker.\n---\nReply with exactly {marker}.\n")
+        argv = sandbox.command(f"Use the {name} skill and do what it says.", sb, budget=0.5) + ["--model", "haiku"]
+        out = subprocess.run(argv, cwd=sb, capture_output=True, text=True, timeout=300).stdout
+        self.assertIn(marker, out)
 
 
 if __name__ == "__main__":

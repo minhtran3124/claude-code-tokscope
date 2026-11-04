@@ -89,9 +89,9 @@ file); **Show installed** shows them too. To fix a grouping, write `library.json
   each file (side by side, diff, before, after), optionally benchmark the draft, then **Approve and apply** or
   **Reject**. The run writes only in `bench/optimize/<job>/`; the skill changes only when you apply, and not if the
   skill changed after the run started. Only your own skills can be optimized.
-- **Optimize case** (`tokscope optimize case <skill> <case-id> [--version <hash>]`) runs one case of
+- **Optimize case** (`tokscope optimize case <skill> <case-id> [--version <hash>] [--max-budget-usd N]`) runs one case of
   `<skill>/evals/evals.json` in a temp sandbox with an isolated `claude -p` (project settings only, no user MCP,
-  nothing saved, edits allowed in the sandbox with `acceptEdits`, cost capped) and grades it by machine, with no LLM.
+  nothing saved, edits allowed in the sandbox with `acceptEdits`, cost capped at $2.0 unless `--max-budget-usd` says otherwise) and grades it by machine, with no LLM.
   The pinned skill copy has no `evals/` folder. A case keeps the skill-creator fields and adds `checks`; a file-level
   `checks` list applies to every case. Check types: `answer_regex` (`pattern`), `file_exists` (`path`),
   `file_contains` (`path`, `pattern`), `tool_called` (`tool`, optional `input_contains`), `tool_order` (`tools`, in call
