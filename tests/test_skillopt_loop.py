@@ -348,17 +348,20 @@ class StoreTest(Home):
         code = ("import sys\nfrom tokscope.experiments.skillopt import store\n"
                 "try:\n    store.acquire(sys.argv[1]); print('won')\nexcept store.LockError:\n    print('lost')\n")
         root = str(Path(__file__).resolve().parent.parent)
-        seen = []
-        real = os.fdopen
+        seen, linked = [], []
+        real = os.link
 
-        def fdopen(fd, *a, **k):
+        def link(src, dst, *a, **k):
+            linked.append(Path(src).read_text())  # the lock is published only once its pid is complete
+            real(src, dst, *a, **k)
+            linked.append(Path(dst).read_text())  # and it is never visible empty
             r = subprocess.run([sys.executable, "-c", code, str(run)], cwd=root, text=True, capture_output=True)
             seen.append(r.stdout.strip())
-            return real(fd, *a, **k)
 
-        with mock.patch("os.fdopen", fdopen):
+        with mock.patch("os.link", link):
             store.acquire(run)
-        self.assertNotIn("won", seen)
+        self.assertEqual(linked, [str(os.getpid())] * 2)
+        self.assertEqual(seen, ["lost"])
         self.assertEqual((run / "run.lock").read_text(), str(os.getpid()))
 
     def test_index_is_rebuilt_from_files(self):
