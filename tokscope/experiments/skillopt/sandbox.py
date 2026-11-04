@@ -101,13 +101,10 @@ def source_folder(skill, folder, version):
 
 def pin_copy(skill, source, sandbox, expect=None):
     """Copy exactly the fingerprint file set of `source` to <sandbox>/.claude/skills/<skill> (so evals/ and its
-    checks never reach the model) and check the copy is the same version. Does not use skills.pin. ValueError when a
-    personal skill of the same name would win over the copy. A personal-only skill run as it is (no `expect`) is
-    copied from the personal folder itself, so the same text loads either way and nothing is refused."""
+    checks never reach the model) and check the copy is the same version. Does not use skills.pin and never calls
+    skills.check_pinnable: the run uses --setting-sources project, so a personal skill of the same name does not load
+    and cannot win over the copy."""
     source, dest = Path(source), Path(sandbox) / ".claude" / "skills" / skill
-    personal = (Path.home() / ".claude" / "skills" / skill).resolve()
-    if expect or source.resolve() != personal:
-        skills.check_pinnable(skill)
     want = expect or skills.fingerprint(source)
     if want is None:
         raise ValueError(f"{skill}: {source} has no SKILL.md")

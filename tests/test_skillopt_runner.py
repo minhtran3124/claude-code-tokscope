@@ -171,7 +171,7 @@ class SandboxTest(RunnerBase):
     def test_run_pins_project_copy_and_grades(self):
         with mock.patch.object(skills, "check_pinnable") as cp, mock.patch.object(skills, "pin") as pn:
             run = sandbox.run_case("demo", "1")
-            cp.assert_called_once_with("demo")
+            cp.assert_not_called()
             pn.assert_not_called()
         stream = (run / "stream.jsonl").read_text()
         self.assertIn("PROJECT-MARKER", stream)
@@ -212,14 +212,16 @@ class SandboxTest(RunnerBase):
         self.assertIsNotNone(seen["proc"].poll())  # killed and waited, not left running
         seen["out"].close()
 
-    def test_personal_skill_blocks_pin_copy(self):
+    def test_personal_skill_of_same_name_still_runs(self):
         make_skill(self.home / ".claude" / "skills" / "demo", "PERSONAL-MARKER")
         sb = Path(tempfile.mkdtemp())
-        with self.assertRaisesRegex(ValueError, "wins over a pinned project copy"):
-            sandbox.pin_copy("demo", self.skill, sb)
-        self.assertFalse((sb / ".claude").exists())
-        with self.assertRaisesRegex(ValueError, "wins over"):
-            sandbox.run_case("demo", "1")
+        pinned, fp = sandbox.pin_copy("demo", self.skill, sb)
+        self.assertEqual(fp, skills.fingerprint(self.skill))
+        self.assertIn("PROJECT-MARKER", (pinned / "SKILL.md").read_text())
+        run = sandbox.run_case("demo", "1")
+        stream = (run / "stream.jsonl").read_text()
+        self.assertIn("PROJECT-MARKER", stream)
+        self.assertRegex(stream, r"tokscope-skillopt-[^/]+/\.claude/skills/demo")
 
     def test_personal_only_skill_runs(self):
         personal = self.home / ".claude" / "skills" / "solo"
@@ -228,8 +230,6 @@ class SandboxTest(RunnerBase):
         pinned, fp = sandbox.pin_copy("solo", personal, sb)
         self.assertEqual(fp, skills.fingerprint(personal))
         self.assertTrue((pinned / "SKILL.md").is_file())
-        with self.assertRaisesRegex(ValueError, "wins over"):  # a kept version is not what the personal skill loads
-            sandbox.pin_copy("solo", personal, Path(tempfile.mkdtemp()), expect="abc123")
 
     def test_pinned_copy_has_no_evals(self):
         sb = Path(tempfile.mkdtemp())
