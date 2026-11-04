@@ -1,4 +1,5 @@
 import argparse
+from contextlib import closing
 import json
 import os
 import sys
@@ -40,8 +41,12 @@ def summary_errors(conn, args, where, params, fmt):
 
 
 def summary(args):
+    with closing(connect(DB)) as conn:
+        return _summary(args, conn)
+
+
+def _summary(args, conn):
     where, params = _filters(args)
-    conn = connect(DB)  # creates the tables on a fresh install
     fmt = getattr(args, "format", "table")
     if getattr(args, "errors", False):
         return summary_errors(conn, args, where, params, fmt)
@@ -107,7 +112,8 @@ def check(args):
     """`tokscope check --once`: print the budget state, exit 0 ok / 10 near / 11 over / 30 no data."""
     from .core import budgets
 
-    result = budgets.check(connect(DB), _budgets(args))
+    with closing(connect(DB)) as conn:
+        result = budgets.check(conn, _budgets(args))
     print(json.dumps(result, indent=2) if args.json else budgets.text(result))
     return result["exit"]
 
@@ -125,11 +131,13 @@ def statusline(args):
             pass
     colour = {"near": "33", "over": "31", "ok": "32"}
     try:
-        cache.record_snapshot(connect(DB), snapshot)  # the official prompt_cache counters, for Breakdowns
+        with closing(connect(DB)) as conn:
+            cache.record_snapshot(conn, snapshot)  # the official prompt_cache counters, for Breakdowns
     except Exception:
         pass
     try:
-        result = budgets.check(connect(DB), budgets.load())
+        with closing(connect(DB)) as conn:
+            result = budgets.check(conn, budgets.load())
     except budgets.BudgetError:
         return "\033[31mtokscope: budgets.json is invalid (run tokscope check --once)\033[0m"
     warn = budgets.warnings(result)
@@ -147,7 +155,8 @@ def _budget_line(session_id):
 
     try:
         found = budgets.load()
-        hit = budgets.crossed(connect(DB), found, session_id) if found else []
+        with closing(connect(DB)) as conn:
+            hit = budgets.crossed(conn, found, session_id) if found else []
     except budgets.BudgetError:
         return
     if hit:
@@ -162,17 +171,18 @@ def record_skill_versions(lines):
     marks = [m for m in marks if m.get("tool") == "Skill" and m.get("skill") and not m.get("is_error")]
     if not marks:
         return
-    conn = connect(DB)
-    now = datetime.now(timezone.utc).isoformat()
-    for m in marks:
-        record_load(conn, m.get("session_id"), m.get("tool_use_id"), m["skill"], m.get("cwd"), now)
-    conn.commit()
+    with closing(connect(DB)) as conn:
+        now = datetime.now(timezone.utc).isoformat()
+        for m in marks:
+            record_load(conn, m.get("session_id"), m.get("tool_use_id"), m["skill"], m.get("cwd"), now)
+        conn.commit()
 
 
 def skills_text(skill=None, fmt="table"):
     from .core import skills as sk
 
-    rows = sk.versions(connect(DB), skill)
+    with closing(connect(DB)) as conn:
+        rows = sk.versions(conn, skill)
     if fmt == "json":
         return json.dumps(sk.export_rows(rows), indent=2)
     if fmt == "csv":
@@ -491,8 +501,8 @@ def main():
         print(statusline(args))
     elif args.cmd == "session":
         ingest_session(DB, PHASES, args.session_id)
-        conn = connect(DB)  # creates the tables on a fresh install
-        print(json.dumps(session_json(conn, args.session_id)) if args.json else session_text(conn, args.session_id))
+        with closing(connect(DB)) as conn:  # creates the tables on a fresh install
+            print(json.dumps(session_json(conn, args.session_id)) if args.json else session_text(conn, args.session_id))
     elif args.cmd == "mark":
         lines = sys.stdin.readlines()
         append_marks(lines, paths.marks())
@@ -510,7 +520,8 @@ def main():
         if args.skill == "import":
             from .core.skills import import_from_transcripts
 
-            done = import_from_transcripts(connect(DB), None, args.name)
+            with closing(connect(DB)) as conn:
+                done = import_from_transcripts(conn, None, args.name)
             for sk, version, first, n in done:
                 print(f"kept {sk} {version}: SKILL.md from {n} load(s), first {first[:16].replace('T', ' ')}")
             print(f"{len(done)} older version(s) kept" if done else "no older version found in the transcripts")
@@ -519,15 +530,15 @@ def main():
     elif args.cmd == "change":
         from .features.changes import add_change, impact_text, list_changes
 
-        conn = connect(DB)  # creates the tables on a fresh install
-        if args.note:
-            try:
-                cid = add_change(conn, args.note, args.agent, args.skill, args.at)
-            except ValueError as e:
-                sys.exit(f"tokscope: {e}")
-            print(f"recorded change #{cid}")
-        for change in list_changes(conn):
-            print(impact_text(conn, change, args.days))
+        with closing(connect(DB)) as conn:  # creates the tables on a fresh install
+            if args.note:
+                try:
+                    cid = add_change(conn, args.note, args.agent, args.skill, args.at)
+                except ValueError as e:
+                    sys.exit(f"tokscope: {e}")
+                print(f"recorded change #{cid}")
+            for change in list_changes(conn):
+                print(impact_text(conn, change, args.days))
     elif args.cmd == "replay":
         from .experiments import replay
 
