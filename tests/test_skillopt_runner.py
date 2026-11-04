@@ -181,6 +181,30 @@ class SandboxTest(RunnerBase):
         self.assertFalse(Path(meta["pinned"]).exists())  # sandbox removed
         self.assertFalse((Path(meta["pinned"]).parents[2] / "evals").exists())
 
+    def test_child_gets_no_stdin_and_is_reaped_when_reading_fails(self):
+        real, seen = subprocess.Popen, {}
+
+        class Boom:
+            def __iter__(self):
+                raise RuntimeError("read failed")
+
+            def close(self):
+                pass
+
+        def spy(*a, **kw):
+            seen.update(kw)
+            proc = real(*a, **kw)
+            seen["proc"] = proc
+            seen["out"] = proc.stdout
+            proc.stdout = Boom()
+            return proc
+
+        with mock.patch.object(subprocess, "Popen", spy), self.assertRaises(RuntimeError):
+            sandbox.run_case("demo", "1")
+        self.assertIs(seen["stdin"], subprocess.DEVNULL)
+        self.assertIsNotNone(seen["proc"].poll())  # killed and waited, not left running
+        seen["out"].close()
+
     def test_personal_skill_blocks_pin_copy(self):
         make_skill(self.home / ".claude" / "skills" / "demo", "PERSONAL-MARKER")
         sb = Path(tempfile.mkdtemp())

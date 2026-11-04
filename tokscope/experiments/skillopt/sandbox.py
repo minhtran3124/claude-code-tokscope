@@ -148,20 +148,25 @@ def run_case(skill, case_id, version=None, cwd=None):
         argv = command(case["prompt"], sandbox)
         try:
             with (run / "stderr.log").open("w") as log, (run / "stream.jsonl").open("w") as stream:
-                proc = subprocess.Popen(argv, cwd=sandbox, stdout=subprocess.PIPE, stderr=log, text=True)
+                proc = subprocess.Popen(argv, cwd=sandbox, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                        stderr=log, text=True)
                 def kill():
                     nonlocal timed_out
                     timed_out = True
                     proc.kill()
                 timer = threading.Timer(TIMEOUT, kill)
                 timer.start()
-                for line in proc.stdout:
-                    stream.write(line)
-                    stream.flush()
-                    lines.append(line)
-                proc.stdout.close()
-                proc.wait()
-                timer.cancel()
+                try:
+                    for line in proc.stdout:
+                        stream.write(line)
+                        stream.flush()
+                        lines.append(line)
+                finally:
+                    timer.cancel()
+                    if proc.poll() is None:
+                        proc.kill()
+                    proc.stdout.close()
+                    proc.wait()
         except OSError as e:  # no claude binary
             err = str(e)
         events = grade.parse(lines)
