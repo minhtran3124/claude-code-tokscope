@@ -72,7 +72,7 @@ bench/optimize/runs/<run-id>/
 ```
 
 The suite lives in `<skill>/evals/`, which the fingerprint already skips (with the other top-level test folders in
-`BENCH_DIRS`: `eval/`, `tests/`, `test/`, `fixtures/`, `results/`). JSON, not YAML (stdlib only). Tables `opt_results`
+`BENCH_DIRS`: `eval/`, `tests/`, `test/`, `fixtures/`, `results/`). JSON, not YAML (stdlib only). `evals.json` keeps `evals` and `checks` and gains `split: {hash, holdout: [ids]}` (hash = sha256 of `evals`+`checks`; kept while it matches, redone after an edit; holdout is the first ceil(n/3) ids of a hash-seeded shuffle). Tables `opt_results`
 (joins `requests` by `session_id`) and `opt_applied`. The worker is a separate CLI process (`tokscope optimize run|resume|regrade`,
 new names), so a run survives a dashboard stop.
 

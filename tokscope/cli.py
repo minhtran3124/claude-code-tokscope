@@ -398,6 +398,12 @@ def main():
     pcase.add_argument("skill")
     pcase.add_argument("case_id")
     pcase.add_argument("--version", help="kept version (hash prefix) of the skill to pin; default: the skill folder as it is")
+    psuite = po_sub.add_parser("suite", help="check <skill>/evals/evals.json and print its dev/holdout split; --draft writes evals.draft.json from real calls, --approve copies a passing draft to evals.json; exit 0 ok, 1 problems, 2 load error")
+    psuite.add_argument("skill")
+    pmode = psuite.add_mutually_exclusive_group()
+    pmode.add_argument("--draft", action="store_true", help="write evals/evals.draft.json (no paid run, no LLM)")
+    pmode.add_argument("--approve", action="store_true", help="copy evals.draft.json to evals.json when its checks pass")
+    psuite.add_argument("--n", type=int, default=5, help="most cases in a draft (default 5)")
     pcase.add_argument("--max-budget-usd", type=float, default=None, help="cost cap of this run in USD (default 2.0)")
     tz_help = "IANA zone for days (default: local, or TOKSCOPE_TZ), e.g. UTC"
     pv = sub.add_parser("serve", help="live dashboard on 127.0.0.1 that ingests new transcripts as they land")
@@ -559,6 +565,29 @@ def main():
             print(replay.diff(DB, args.session_id))
         else:
             print(replay.diff(DB, args.session_id))
+    elif args.cmd == "optimize" and args.optimize_cmd == "suite":
+        from .experiments.skillopt import suite
+
+        try:
+            if args.draft:
+                res = suite.draft(args.skill, args.n)
+                print(f"{res['note']}\ndraft {res['path']}\nadd machine checks, then: tokscope optimize suite {args.skill} --approve")
+            elif args.approve:
+                print(f"approved: {suite.approve(args.skill)}")
+            else:
+                loaded = suite.load(args.skill)
+                for problem in loaded.problems:
+                    print(problem)
+                if loaded.problems:
+                    sys.exit(1)
+                dev, hold = suite.split(loaded)
+                print(f"{len(dev)} dev, {len(hold)} holdout\nholdout: {', '.join(hold)}")
+        except suite.Refused as e:
+            print(f"tokscope: {e}", file=sys.stderr)
+            sys.exit(1)
+        except ValueError as e:
+            print(f"tokscope: {e}", file=sys.stderr)
+            sys.exit(2)
     elif args.cmd == "optimize":
         from .experiments.skillopt import sandbox
 
