@@ -152,13 +152,14 @@ def _measure(rows, read_cost):
     prompts), because the stored cost carries them.
 
     in_prompt = cost - inherited. cost sums every request (main thread and subagents, NULL as 0). For each main-thread
-    request, inherited = the cost of min(its cache_read, the first main-thread request's cache_read) tokens, so the first
-    request inherits all of its reads. Each request's inherited share is capped at its own stored cost: cost_usd was
-    priced at ingest and the rates are the current ones, so a rate change must not push in_prompt below zero."""
+    request, inherited = the cost of min(its cache_read, S) tokens. S is the context the prompt started with: the first
+    main-thread request's cache_read when that is above 0, else (a cold cache) its cache_write_5m + cache_write_1h. So a
+    warm first request inherits all of its reads. Each request's inherited share is capped at its own stored cost:
+    cost_usd was priced at ingest and the rates are the current ones, so a rate change must not push in_prompt below zero."""
     main = [r for r in rows if r[0] is None]
     cost = sum(r[2] for r in rows)
-    first_read = main[0][4] if main else 0
-    inherited = sum(min(r[2], read_cost(r, min(r[4], first_read)) or 0.0) for r in main)
+    start = (main[0][4] or main[0][5] + main[0][6]) if main else 0
+    inherited = sum(min(r[2], read_cost(r, min(r[4], start)) or 0.0) for r in main)
     first = main[0] if main else None
     return {"in_prompt": cost - inherited, "steps": len(main), "subagent_requests": len(rows) - len(main),
             "start_context": sum(first[3:7]) if first else None}
