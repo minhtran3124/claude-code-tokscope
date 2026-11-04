@@ -1,5 +1,6 @@
 import json
 import os
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -8,8 +9,8 @@ from pathlib import Path
 from unittest import mock
 
 from tokscope import paths
-from tokscope.core import ingest
-from tokscope.experiments.skillopt import stats, store, suite
+from tokscope.core import ingest, skills
+from tokscope.experiments.skillopt import loop, stats, store, suite
 
 PLAN = {"seed": 7, "resamples": 300, "holdout": ["h1", "h2"], "gates": stats.GATES}
 
@@ -295,6 +296,313 @@ class StoreTest(Home):
         self.assertEqual(rows, [("baseline", "a", "current", 0, 3, 0.75, "s-a-0", 5),
                                 ("baseline", "b", "none", 0, 1, 0.25, "s-b-0", 5)])
         self.assertIn("opt_results_session", names)
+
+
+FAKE = r"""#!/usr/bin/env python3
+import json, os, re, sys, time
+from pathlib import Path
+argv = sys.argv[1:]
+if argv == ["--version"]:
+    print("9.9.9-fake")
+    sys.exit(0)
+cfg = json.loads(Path(os.environ["FAKE_CFG"]).read_text())
+prompt = argv[argv.index("-p") + 1]
+say = lambda ev: print(json.dumps(ev), flush=True)
+
+
+def pick(table, kind, case=None):
+    v = table.get(kind, table.get("default"))
+    if isinstance(v, dict):
+        v = v.get(case, v.get("default"))
+    return v
+
+
+editor = prompt.startswith("Improve the Claude Code skill")
+with open(os.environ["FAKE_LOG"], "a") as f:
+    f.write(json.dumps({"editor": editor, "argv": argv}) + "\n")
+say({"type": "system", "subtype": "init", "model": "fake", "plugins": []})
+if editor:
+    n = int(re.search(r"edit round (\d+)", prompt).group(1))
+    mode = pick(cfg["editor"], str(n))
+    text = Path("SKILL.md").read_text()
+    if mode in ("edit", "nohyp"):
+        text += "\nDRAFT edit %d\n" % n
+    if mode == "desc":
+        text = text.replace("description: Summarize notes", "description: Something else") + "\nDRAFT\n"
+    Path("SKILL.md").write_text(text)
+    answer = "done" if mode == "nohyp" else "I changed it.\nHypothesis: made edit %d" % n
+    say({"type": "result", "result": answer, "is_error": False, "total_cost_usd": cfg["cost"]["editor"], "num_turns": 3})
+    sys.exit(0)
+case = re.search(r"do case (\w+)", prompt).group(1)
+skill = Path(".claude/skills/demo/SKILL.md")
+kind = "none"
+if skill.exists():
+    text = skill.read_text()
+    kind = "draft" if "DRAFT" in text else "current"
+    if not os.environ.get("FAKE_NO_CALL"):
+        body = text.split("---\n", 2)[2].strip()
+        say({"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t1", "name": "Skill", "input": {"skill": "demo"}}]}})
+        say({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t1", "content": "Launching skill: demo"},
+             {"type": "text", "text": "Base directory for this skill: " + os.getcwd() + "/.claude/skills/demo\n\n" + body}]}})
+say({"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Read", "input": {"file_path": "x"}}]}})
+if os.environ.get("FAKE_SLEEP_CASE") == kind + ":" + case and not Path(os.environ["FAKE_MARKER"]).exists():
+    Path(os.environ["FAKE_MARKER"]).write_text("1")
+    time.sleep(30)
+k = pick(cfg["k"], kind, case)
+res = {"type": "result", "result": " ".join("ABCD"[:k]), "is_error": False, "total_cost_usd": pick(cfg["cost"], kind, case),
+       "num_turns": 2, "session_id": "s-%d" % os.getpid(), "usage": {"output_tokens": 5}}
+if pick(cfg.get("deny", {}), kind, case):
+    res["permission_denials"] = [{"tool_name": "Bash"}]
+say(res)
+"""
+
+IDS = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
+CFG = {"k": {"current": 2, "none": 0, "draft": 4}, "cost": {"default": 0.1, "editor": 0.2}, "editor": {"default": "edit"}}
+
+
+class LoopBase(Home):
+    def setUp(self):
+        super().setUp()
+        fake = self.tmp / "claude"
+        fake.write_text(FAKE)
+        fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+        self.cfg_path, self.log_path, self.marker = self.tmp / "cfg.json", self.tmp / "calls.jsonl", self.tmp / "marker"
+        self.env = {"TOKSCOPE_CLAUDE": str(fake), "FAKE_CFG": str(self.cfg_path), "FAKE_LOG": str(self.log_path)}
+        p = mock.patch.dict(os.environ, {**self.env, "FAKE_MARKER": str(self.marker)})
+        p.start()
+        self.addCleanup(p.stop)
+        self.proj = self.tmp / "proj"
+        self.skill = self.proj / ".claude" / "skills" / "demo"
+        (self.skill / "evals").mkdir(parents=True)
+        (self.skill / "SKILL.md").write_text("---\nname: demo\ndescription: Summarize notes\n---\nBASE body\n")
+        (self.skill / "ref.md").write_text("ref\n")
+        checks = [{"type": "answer_regex", "pattern": rf"\b{t}\b"} for t in "ABCD"]
+        data = {"checks": [{"type": "no_permission_denials", "safety": True}],
+                "evals": [{"id": c, "prompt": f"do case {c}", "checks": checks} for c in IDS]}
+        (self.skill / "evals" / "evals.json").write_text(json.dumps(data))
+        self.evals_before = (self.skill / "evals" / "evals.json").read_bytes()
+        self.fp_before = skills.fingerprint(self.skill)
+        self.set_cfg()
+
+    def set_cfg(self, **over):
+        cfg = json.loads(json.dumps(CFG))
+        for k, v in over.items():
+            cfg[k] = {**cfg.get(k, {}), **v}
+        self.cfg_path.write_text(json.dumps(cfg))
+
+    def go(self, budget=50.0, runs=2, **kw):
+        out = []
+        run = loop.start("demo", budget, runs=runs, cwd=str(self.proj), log=out.append, **kw)
+        self.out = out
+        return run, json.loads((run / "verdict.json").read_text())
+
+    def calls(self):
+        return [json.loads(l) for l in self.log_path.read_text().splitlines()] if self.log_path.exists() else []
+
+    def ledger_runs(self, run):
+        return [(l["stage"], l["case"], l["arm"], l["i"]) for l in store.lines(run) if l["kind"] == "run"]
+
+
+class LoopTest(LoopBase):
+    def test_full_run_ends_with_every_file_and_apply(self):
+        run, v = self.go()
+        for name in ("plan.json", "ledger.jsonl", "benchmark.json", "verdict.json"):
+            self.assertTrue((run / name).is_file(), name)
+        self.assertTrue((run / "results").is_dir())
+        self.assertEqual(v["verdict"], "Apply", v)
+        self.assertEqual([g["name"] for g in v["gates"]], ["Valid", "Meaningful suite", "Safety", "No regression", "Benefit"])
+        self.assertTrue(all(g["passed"] and g["value"] is not None for g in v["gates"]))
+        self.assertEqual(v["draft_version"], "v1")  # dev_ok stops after round 1
+        self.assertEqual(v["draft_fingerprint"], skills.fingerprint(run / "versions" / "v1"))
+        self.assertEqual(v["base_fingerprint"], self.fp_before)
+        self.assertLessEqual(v["spent_usd"], v["budget_usd"])
+        self.assertFalse((run / "versions" / "v2").exists())
+        plan = json.loads((run / "plan.json").read_text())
+        self.assertEqual((plan["schema"], plan["runs"], plan["model"], plan["claude_version"], plan["max_rounds"]),
+                         (1, 2, "sonnet", "9.9.9-fake", 3))
+        self.assertEqual(sorted(plan["dev"] + plan["holdout"]), sorted(IDS))
+        self.assertEqual(plan["description"], "Summarize notes")
+        self.assertEqual(store.lines(run)[0]["kind"], "lock")
+        self.assertTrue(any("estimate" in l for l in self.out))
+        stages = {p.name for p in (run / "results").iterdir()}
+        self.assertEqual(stages, {"preflight", "baseline", "r1", "confirm"})
+        self.assertEqual(len(set(self.ledger_runs(run))), len(self.ledger_runs(run)))
+        for argv in (c["argv"] for c in self.calls()):
+            self.assertEqual(argv[argv.index("--model") + 1], "sonnet")
+
+    def test_benchmark_follows_the_skill_creator_schema(self):
+        run, _ = self.go()
+        b = json.loads((run / "benchmark.json").read_text())
+        self.assertEqual(b["metadata"]["skill_name"], "demo")
+        self.assertEqual({r["configuration"] for r in b["runs"]}, {"current", "draft", "no_skill"})
+        r = b["runs"][0]
+        self.assertEqual(set(r["result"]), {"pass_rate", "passed", "failed", "total", "time_seconds", "tokens", "tool_calls", "errors"})
+        self.assertTrue(r["expectations"])
+        self.assertEqual(set(b["run_summary"]) - {"delta"}, {"current", "draft", "no_skill"})
+        self.assertIn("pass_rate", b["run_summary"]["delta"])
+
+    def test_the_real_skill_is_never_written(self):
+        self.go()
+        self.assertEqual(skills.fingerprint(self.skill), self.fp_before)
+        self.assertEqual((self.skill / "evals" / "evals.json").read_bytes(), self.evals_before)
+
+    def test_opt_results_holds_every_result(self):
+        run, _ = self.go()
+        conn = ingest.connect(paths.db())
+        n = conn.execute("SELECT COUNT(*) FROM opt_results WHERE run_id = ?", (run.name,)).fetchone()[0]
+        conn.close()
+        self.assertEqual(n, len(store.records(run)))
+        self.assertGreater(n, 30)
+
+    def test_small_budget_stops_before_passing_it(self):
+        run, v = self.go(budget=0.55)
+        self.assertEqual(v["verdict"], "Not enough evidence")
+        self.assertLessEqual(store.spent(run), 0.55)
+        self.assertLessEqual(v["spent_usd"], 0.55)
+        self.assertIn(v["stop_stage"], ("baseline",))
+        self.assertIn("baseline", v["reason"])
+        self.assertEqual([g["passed"] for g in v["gates"]], [None] * 5)
+        self.assertFalse((run / "rounds").exists())
+        self.assertEqual(loop.exit_code(run), 1)
+
+    def test_every_call_is_capped_by_what_is_left(self):
+        run, _ = self.go(budget=0.55)
+        caps = [float(c["argv"][c["argv"].index("--max-budget-usd") + 1]) for c in self.calls()]
+        self.assertAlmostEqual(caps[0], 0.55)
+        self.assertTrue(all(c <= 0.55 for c in caps))
+        self.assertLess(caps[-1], caps[0])
+
+    def test_equal_arms_stop_after_baseline(self):
+        self.set_cfg(k={"none": 2})
+        run, v = self.go()
+        self.assertEqual(v["verdict"], "Not enough evidence")
+        meaningful = v["gates"][1]
+        self.assertIs(meaningful["passed"], False)
+        self.assertEqual(v["stop_stage"], "baseline")
+        self.assertEqual({p.name for p in (run / "results").iterdir()}, {"preflight", "baseline"})
+        self.assertFalse((run / "rounds").exists())
+        self.assertFalse(any(c["editor"] for c in self.calls()))
+
+    def test_preflight_that_does_not_load_the_skill_stops(self):
+        with mock.patch.dict(os.environ, {"FAKE_NO_CALL": "1"}):
+            run, v = self.go()
+        self.assertEqual(v["verdict"], "Not enough evidence")
+        self.assertIn("preflight", v["reason"])
+        self.assertEqual({p.name for p in (run / "results").iterdir()}, {"preflight"})
+        self.assertEqual(len(self.calls()), 1)
+
+    def test_a_safety_failure_rejects(self):
+        self.set_cfg(deny={"draft": {"alpha": True}})
+        run, v = self.go()
+        self.assertEqual(v["verdict"], "Reject")
+        self.assertIn("Safety", v["reason"])
+        self.assertEqual(loop.exit_code(run), 1)
+
+    def test_a_draft_that_fails_most_cases_rejects_on_the_ci(self):
+        self.set_cfg(k={"draft": 0})
+        run, v = self.go()
+        self.assertEqual(v["verdict"], "Reject")
+        self.assertLess(v["gates"][3]["value"]["ci_low"], -5)
+        self.assertEqual(sorted(p.name for p in (run / "rounds").iterdir()), ["1", "2", "3"])  # never dev_ok
+
+    def test_refused_drafts_are_recorded_and_not_run(self):
+        self.set_cfg(editor={"1": "nohyp", "2": "desc", "3": "same"})
+        run, v = self.go()
+        self.assertEqual(v["verdict"], "Not enough evidence")
+        self.assertIn("no draft", v["reason"])
+        reasons = [json.loads((run / "rounds" / str(n) / "editor" / "result.json").read_text()) for n in (1, 2, 3)]
+        self.assertEqual([r["accepted"] for r in reasons], [False] * 3)
+        self.assertIn("Hypothesis", reasons[0]["reason"])
+        self.assertIn("description", reasons[1]["reason"])
+        self.assertIn("same files", reasons[2]["reason"])
+        self.assertFalse((run / "versions" / "v1").exists())
+        self.assertNotIn("confirm", {p.name for p in (run / "results").iterdir()})
+
+    def test_editor_sees_dev_cases_only(self):
+        self.set_cfg(k={"draft": 2})  # no gain: three rounds, three prompts
+        run, _ = self.go()
+        plan = json.loads((run / "plan.json").read_text())
+        self.assertEqual(len(plan["holdout"]), 2)
+        for n in (1, 2, 3):
+            ed = run / "rounds" / str(n) / "editor"
+            blob = (ed / "prompt.md").read_text()
+            for p in (ed / "workspace").rglob("*"):
+                blob += p.relative_to(ed / "workspace").as_posix() + (p.read_text(errors="replace") if p.is_file() else "")
+            for h in plan["holdout"]:
+                self.assertNotIn(h, blob, f"round {n}")
+            self.assertTrue(any(d in blob for d in plan["dev"]))
+        second = (run / "rounds" / "2" / "editor" / "prompt.md").read_text()
+        self.assertIn("made edit 1", second)  # an earlier hypothesis and its dev result
+        self.assertIn("Failed dev cases", second)
+        self.assertIn("Most costly", second)
+        self.assertIn("failed: ", second)
+
+    def test_plan_is_written_before_the_first_paid_run(self):
+        seen = {}
+        real = loop.run_one
+
+        def spy(ctx, *a):
+            seen.setdefault("lock", store.lines(ctx.run)[0]["kind"])
+            seen.setdefault("plan", (ctx.run / "plan.json").is_file())
+            return real(ctx, *a)
+
+        with mock.patch.object(loop, "run_one", spy):
+            self.go()
+        self.assertEqual(seen, {"lock": "lock", "plan": True})
+
+    def test_load_errors_are_value_errors_before_any_run(self):
+        data = json.loads((self.skill / "evals" / "evals.json").read_text())
+        data["evals"][0]["checks"] = [{"type": "nope"}]
+        (self.skill / "evals" / "evals.json").write_text(json.dumps(data))
+        with self.assertRaises(ValueError):
+            loop.start("demo", 5.0, cwd=str(self.proj))
+        with self.assertRaises(ValueError):
+            loop.start("nosuch", 5.0, cwd=str(self.proj))
+        self.assertEqual(self.calls(), [])
+        self.assertFalse(store.runs_dir().exists())
+        with self.assertRaises(ValueError):
+            loop.start("demo", 0, cwd=str(self.proj))
+
+    def test_front_description_reads_folded_values(self):
+        p = self.tmp / "S.md"
+        p.write_text("---\nname: x\ndescription: >\n  one\n  two\nother: 1\n---\nbody\n")
+        self.assertEqual(loop._front_description(p), "> one two")  # the value as written, compared as is
+        p.write_text("---\nname: x\n---\nbody\n")
+        self.assertIsNone(loop._front_description(p))
+
+
+class FrozenSuiteTest(LoopBase):
+    def test_freeze_keeps_fixtures_outside_evals_and_loads_back(self):
+        (self.skill / "fixtures").mkdir()
+        (self.skill / "fixtures" / "a.txt").write_text("a")
+        data = json.loads((self.skill / "evals" / "evals.json").read_text())
+        data["evals"][0]["files"] = ["fixtures/a.txt"]
+        (self.skill / "evals" / "evals.json").write_text(json.dumps(data))
+        live = suite.load("demo", str(self.proj))
+        self.assertEqual(live.problems, [])
+        frozen = self.tmp / "frozen"
+        dev, hold = suite.freeze(live, frozen)
+        self.assertEqual((frozen / "fixtures" / "a.txt").read_text(), "a")
+        again = suite.load_folder(frozen)
+        self.assertEqual(again.problems, [])
+        self.assertEqual(suite.suite_hash(again.data), suite.suite_hash(live.data))
+        self.assertEqual((dev, hold), suite.split(again, write=False))
+
+    def test_workspace_from_a_source_folder_and_a_frozen_suite(self):
+        live = suite.load("demo", str(self.proj))
+        frozen = self.tmp / "frozen"
+        dev, hold = suite.freeze(live, frozen)
+        src = self.tmp / "v1"
+        src.mkdir()
+        (src / "SKILL.md").write_text("---\nname: demo\ndescription: Summarize notes\n---\nVERSION ONE\n")
+        (self.skill / "SKILL.md").write_text("---\nname: demo\ndescription: Summarize notes\n---\nCHANGED LIVE\n")
+        ws = suite.editor_workspace("demo", self.tmp / "ws", source=src, suite=suite.load_folder(frozen))
+        self.assertIn("VERSION ONE", (ws / "SKILL.md").read_text())
+        blob = "".join(p.relative_to(ws).as_posix() + p.read_text(errors="replace") for p in ws.rglob("*") if p.is_file())
+        for h in hold:
+            self.assertNotIn(h, blob)
+        for d in dev:
+            self.assertIn(d, blob)
 
 
 if __name__ == "__main__":

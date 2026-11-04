@@ -133,7 +133,7 @@ def reserve(run, plan):
 
 
 def can_spend(run, plan):
-    return spent(run) + reserve(run, plan) <= plan["budget_usd"] + 1e-9
+    return spent(run) + reserve(run, plan) <= plan["budget_usd"] + 1e-9 and call_cap(run, plan) > 0
 
 
 def call_cap(run, plan):

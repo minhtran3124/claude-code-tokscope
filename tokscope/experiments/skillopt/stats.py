@@ -131,8 +131,12 @@ def gates(plan, baseline, confirm, stopped=None):
     valid, meaning, safety, regress, benefit = out
     if meaningful is False:
         verdict, reason = NOT_ENOUGH, "Meaningful suite failed: the skill does not beat no skill on this suite; stopped at baseline"
+    elif stopped == "preflight":
+        verdict, reason = NOT_ENOUGH, "Valid failed at preflight: the pinned skill did not load or the run was invalid"
+    elif stopped == "rounds":
+        verdict, reason = NOT_ENOUGH, "no draft to confirm: the budget ended, or no edit passed the editor checks"
     elif stopped:
-        verdict, reason = NOT_ENOUGH, f"stopped at {stopped}: the run ended before the confirm finished"
+        verdict, reason = NOT_ENOUGH, f"stopped at {stopped}: the budget ended before the confirm finished"
     elif not ran_confirm:
         verdict, reason = NOT_ENOUGH, "no confirm run"
     elif safety["passed"] is False:
