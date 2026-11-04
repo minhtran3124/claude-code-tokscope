@@ -75,7 +75,7 @@ bench/optimize/runs/<run-id>/            run-id = <skill>-<UTC yyyymmddThhmmssZ>
 
 Commands (built in #189; Approve and Reject are #190, the page #192):
 
-- `tokscope optimize run <skill> --budget USD [--runs N] [--model M]`: lock, preflight, baseline, up to 3 edit rounds, confirm, verdict.
+- `tokscope optimize run <skill> --budget USD [--runs N] [--model M]`: lock, preflight, baseline, up to 3 edit rounds, confirm, verdict. Defaults: `--runs 3`, `--model sonnet`, passed on every run; `--budget` has no default.
   The budget is required. Exit 0 Apply; 1 Not enough evidence or Reject (a budget stop and a baseline stop too); 2 a load, plan-lock or run-lock error, before any paid run.
 - `tokscope optimize resume <run-id>`: continues a run that has no verdict yet (a kill, a crash). A run with a verdict is printed, not run again.
 - `tokscope optimize regrade <run-id>`: grades the stored results again and recomputes `verdict.json`, `benchmark.json` and the index. No claude call.
@@ -133,7 +133,8 @@ Delete: `GUIDES`, `prompt()`, `guides_available()`, the guide form, `bench_start
 `_bench_section` and their routes. Rewrite: `_job_view`, `apply`, `tests/test_optimize.py`. Reuse: `bench.schedule`,
 `skills.check_load`, `skills._snapshot`, `skills.record`, `changes_between`, `_side_by_side`, `_compare`, `_event`. Keep:
 `tokscope bench` and the STE check tab in Library. New: `tokscope/experiments/skillopt/` (`suite`, `sandbox`, `grade`, `stats`,
-`loop`, `store`) and `tokscope/web/dashboard/pages/optimize.py`, all testable with a fake `TOKSCOPE_CLAUDE`.
+`loop`, `store`) and `tokscope/web/dashboard/pages/optimize.py`, all testable with a fake `TOKSCOPE_CLAUDE`. This is a new package, not an extension of
+`optimize.py`: the old job runner has no isolation flags and goes away in the last slice (rejected: extending it with `skills.pin(check=False)`; and `--dangerously-skip-permissions` for writes).
 
 ## Slices
 
