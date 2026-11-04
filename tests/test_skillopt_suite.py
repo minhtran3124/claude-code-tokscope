@@ -253,14 +253,19 @@ class DraftTest(Base):
         for bad in (".env", "id_rsa", "server.pem"):
             self.assertNotIn(bad, copied)
 
-    def test_repo_under_a_secret_named_folder_keeps_fixtures(self):
+    def test_secret_check_counts_only_folders_below_the_session_root(self):
         repo = self.tmp / ".config" / "repo"
         (repo / ".git").mkdir(parents=True)
-        (repo / ".git" / "config").write_text("x")
-        (repo / "notes.txt").write_text("n")
-        self.assertFalse(suite._secret(repo / "notes.txt"))
-        self.assertTrue(suite._secret(repo / ".git" / "config"))
-        self.assertTrue(suite._secret(self.tmp / ".ssh" / "key1"))
+        self.assertFalse(suite._secret(repo / "notes.txt", repo))
+        self.assertTrue(suite._secret(repo / ".git" / "config", repo))
+        self.assertTrue(suite._secret(repo / ".ssh" / "key1", repo))
+        self.assertTrue(suite._secret(self.tmp / ".ssh" / "key1", repo))  # outside the root: every folder counts
+
+    def test_a_credentials_folder_that_is_a_git_repo_is_still_secret(self):
+        kube = self.tmp / ".kube"  # versioned ~/.kube: the nearest .git must not make it safe
+        (kube / ".git").mkdir(parents=True)
+        self.assertTrue(suite._secret(kube / "notes.txt"))  # no root known
+        self.assertTrue(suite._secret(kube / "notes.txt", self.tmp / "other"))  # file outside the session root
 
     def test_n_caps_and_evals_json_is_untouched(self):
         self.write({"evals": [case("keep")]})

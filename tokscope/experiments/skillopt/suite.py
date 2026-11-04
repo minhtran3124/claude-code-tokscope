@@ -234,11 +234,12 @@ def editor_workspace(skill, dest, cwd=None):
 
 
 def _touched(session_id, prompt_idx, projects_dir):
-    """File paths the Read/Write/Edit calls of one prompt named, from the session transcript."""
+    """(file paths the Read/Write/Edit calls of one prompt named, the session's working folder or None), from the
+    session transcript."""
     found = ingest.find_transcripts(session_id, projects_dir)
     if not found:
-        return []
-    idx, out = 0, []
+        return [], None
+    idx, out, root = 0, [], None
     for line in found[0].read_text(errors="replace").splitlines():
         try:
             rec = json.loads(line)
@@ -246,6 +247,8 @@ def _touched(session_id, prompt_idx, projects_dir):
             continue
         if not isinstance(rec, dict):
             continue
+        if root is None and isinstance(rec.get("cwd"), str):
+            root = rec["cwd"]
         if rec.get("type") == "user" and ingest._is_human_prompt(rec):
             m = ingest.COMMAND_RE.search(ingest._text((rec.get("message") or {}).get("content")))
             if not (m and m.group(1) in ingest.BUILTIN_COMMANDS):
@@ -256,7 +259,7 @@ def _touched(session_id, prompt_idx, projects_dir):
                 fp = (b.get("input") or {}).get("file_path") if isinstance(b, dict) and b.get("name") in TOUCH else None
                 if isinstance(fp, str) and fp not in out:
                     out.append(fp)
-    return out
+    return out, root
 
 
 _SECRET_DIRS = {".ssh", ".aws", ".gnupg", ".kube", ".docker", ".config", ".netrc", ".git", ".azure", ".gcloud"}
@@ -265,13 +268,17 @@ _SECRET_NAME = re.compile(
     re.I)
 
 
-def _secret(path):
-    """True for a path that looks like a credential or sits in a credentials folder; draft() never copies those."""
+def _secret(path, root=None):
+    """True for a path that looks like a credential or sits in a credentials folder; draft() never copies those.
+    Only the folders below `root` (the session's working folder) are checked when the file is inside it, so a project
+    under .config is fine. With no root, or a file outside it, every folder of the path counts."""
+    path = Path(path)
     parts = path.parts
-    for anc in path.parents:  # a repo may itself live under .config or .docker: only folders below its root count
-        if (anc / ".git").exists():
-            parts = path.relative_to(anc).parts
-            break
+    if root:
+        try:
+            parts = path.relative_to(root).parts
+        except ValueError:
+            pass
     return bool(_SECRET_NAME.match(path.name)) or any(part in _SECRET_DIRS for part in parts)
 
 
@@ -306,9 +313,11 @@ def draft(skill, n=5, cwd=None, projects_dir=None):
             break
         cid = f"{sid[:8]}-{pidx}"
         files = []
-        for raw in _touched(sid, pidx, projects_dir):
+        touched, root = _touched(sid, pidx, projects_dir)
+        for raw in touched:
             src = Path(raw)
-            if _secret(src) or _secret(src.resolve()):
+            real_root = Path(root).resolve() if root else None
+            if not src.is_absolute() or _secret(src, root) or _secret(src.resolve(), real_root):
                 continue
             if not src.is_file() or src.resolve().is_relative_to(folder.resolve()):
                 continue
