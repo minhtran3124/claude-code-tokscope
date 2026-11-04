@@ -382,6 +382,12 @@ def main():
     pb.add_argument("task", help="task name under bench/tasks/ or a path to its JSON")
     pb.add_argument("--runs", type=int, default=3)
     pb.add_argument("--variants", help="comma-separated subset of the task's variants")
+    po_ = sub.add_parser("optimize", help="evaluate a skill: run one eval case in an isolated session and grade it by machine")
+    po_sub = po_.add_subparsers(dest="optimize_cmd", required=True)
+    pcase = po_sub.add_parser("case", help="run one case of <skill>/evals/evals.json (paid claude -p run); exit 0 all checks passed, 1 failed or INVALID, 2 load error")
+    pcase.add_argument("skill")
+    pcase.add_argument("case_id")
+    pcase.add_argument("--version", help="kept version (hash prefix) of the skill to pin; default: the skill folder as it is")
     tz_help = "IANA zone for days (default: local, or TOKSCOPE_TZ), e.g. UTC"
     pv = sub.add_parser("serve", help="live dashboard on 127.0.0.1 that ingests new transcripts as they land")
     pv.add_argument("--port", type=int, default=8765)
@@ -541,6 +547,21 @@ def main():
             print(replay.diff(DB, args.session_id))
         else:
             print(replay.diff(DB, args.session_id))
+    elif args.cmd == "optimize":
+        from .experiments.skillopt import sandbox
+
+        try:
+            run = sandbox.run_case(args.skill, args.case_id, args.version)
+        except ValueError as e:  # a load error, before any paid run
+            print(f"tokscope: {e}", file=sys.stderr)
+            sys.exit(2)
+        g = json.loads((run / "grading.json").read_text())
+        print(f"run {run}")
+        if g["status"] == "INVALID":
+            print(f"INVALID: {g['reason']}")
+            sys.exit(1)
+        print(f"passed {g['passed']}/{g['total']}" + (f" · safety failed {g['safety_failed']}" if g["safety_failed"] else ""))
+        sys.exit(0 if g["passed"] == g["total"] else 1)
     elif args.cmd == "bench":
         from .experiments import bench
 
