@@ -1,6 +1,6 @@
 ---
 state: active         # active | paused | blocked | done
-progress: 44          # rough estimate, 0-100
+progress: 11          # rough estimate, 0-100
 priority: medium     # high | medium | low
 updated: 2026-11-04
 updated_by: claude   # claude | manual
@@ -19,7 +19,6 @@ Run `/harness:autopilot "Skill Optimize v2"` for #190, #194, #192, #193 and #195
 
 ## Recent
 - 2026-11-04: Skill Optimize v2 slice 1: autopilot runs wf_36f81f53-0a0 and wf_b6f9d143-94a opened PRs #203 (#188) and #204 (#189), both fixed after review and merged into the feat branch; PR #199 (#187) merged; final PR #200 merged into `main` (`073f017`). D26 live probe: the real claude puts the skill text in the stream, `stream_load` returns ok ($0.0017). Removed ADRs 0004, 0006-0009 (workflow logs or already in the brief, code and tests; kept 0005). Follow-up #202 (leaked sqlite connections, Python 3.13).
-- 2026-11-04: #189 implemented on `feat/skill-optimize-v2-189`: `tokscope optimize run|resume|regrade` (locked plan, ledger and budget stop, preflight, baseline, edit rounds, confirm, verdict, benchmark, `opt_results`); stats, store and loop modules, `sandbox.execute`, `suite.freeze`.
 - 2026-11-04: Autopilot run wf_0e96290a-254 shipped #180 and #181 (PRs #183, #184 into the feat branch, final PR #185 merged into `main`, `a895f3e`); the milestone is closed and the desktop `.deb` was rebuilt from `main`. Skill Optimize v2: brief `docs/research-skill-optimize.md` (from the design artifact https://claude.ai/artifact/ANQd9hiw6dZizuAQ7Prabi: isolated runner, approved suite with holdout, locked gates, run store, before/after page, Approve that checks the fingerprint and commits only the skill's files in git, else keeps a snapshot with Revert); milestone 2 with #187-#195 and epic #196.
 - 2026-11-04: PR #179 merged into `main` (`57ab775`); #171-#173 closed, follow-ups #180 and #181 opened, and the desktop `.deb` rebuilt from `main`.
 - 2026-11-02: #173 implemented: `session --json` carries `context`; the mod toasts once per session at 300K and adds a pane line; `/tokscope nudge on|off` persists; docs updated. Removed the unused `compacted` field and merged PR #178 into the feat branch; final PR to `main` opened. Review fixes on the final PR: `patterns` masks quoted keys, `_KEY` names, URL passwords, glpat/xox/Stripe/npm tokens and Basic auth; in-prompt cost subtracts inherited reads with the request's own fast, US and long-Haiku factors; the facets read skips symlinks, non-files and files over 1 MiB.
