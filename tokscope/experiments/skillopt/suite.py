@@ -149,7 +149,14 @@ def _problems(folder, data):
 def load(skill, cwd=None, name=NAME):
     """Suite with every problem found, not only the first. ValueError (a load error) for a missing folder or file or
     unreadable JSON."""
-    folder = _folder(skill, cwd)
+    return load_folder(_folder(skill, cwd), skill, name)
+
+
+def load_folder(folder, skill=None, name=NAME):
+    """Same as load for a folder that holds evals/<name> and the fixtures at their relative paths, such as a run's
+    frozen suite/."""
+    folder = Path(folder)
+    skill = skill or folder.name
     path = folder / "evals" / name
     data = _read(path, skill)
     problems, cases = _problems(folder, data)
@@ -204,16 +211,41 @@ def split(suite, write=True):
     return dev, hold
 
 
-def editor_workspace(skill, dest, cwd=None):
+def freeze(suite, dest):
+    """Copy the suite to `dest`: evals/ and every fixture a case names (also those outside evals/, such as a top-level
+    fixtures/ folder, which neither the fingerprint nor a version copy holds) at the same relative path. evals.json
+    gets the split written in, so the copy needs no seed. Returns (dev ids, holdout ids)."""
+    dev, hold = split(suite, write=False)
+    dest, root = Path(dest), suite.folder.resolve()
+    shutil.copytree(suite.folder / "evals", dest / "evals", symlinks=True)
+    for case in suite.cases:
+        for src in _fixture_paths(suite.folder, case)[0]:
+            target = dest / src.relative_to(root)
+            if target.exists():
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if src.is_dir():
+                shutil.copytree(src, target, symlinks=True)
+            else:
+                shutil.copy2(src, target)
+    data = {**suite.data, "split": {"hash": suite_hash(suite.data), "holdout": hold}}
+    (dest / "evals" / NAME).write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    return dev, hold
+
+
+def editor_workspace(skill, dest, cwd=None, source=None, suite=None):
     """Copy the skill's fingerprint file set and only the dev cases (with the fixtures only they name) to `dest`. The
-    folder the editor sees never holds a holdout id, prompt or fixture. `dest` must not exist or be empty."""
-    suite = load(skill, cwd)
+    folder the editor sees never holds a holdout id, prompt or fixture. `dest` must not exist or be empty. `source`
+    is a folder to take the skill files from (a run's versions/vN) and `suite` an already loaded Suite (a run's frozen
+    one); by default both come from the live skill."""
+    suite = suite or load(skill, cwd)
     dev, _ = split(suite, write=False)
     dest = Path(dest)
     if dest.exists() and (not dest.is_dir() or any(dest.iterdir())):
         raise ValueError(f"{dest} must not exist or be empty")
-    for f in skills._files(suite.folder):
-        target = dest / f.relative_to(suite.folder)
+    base = Path(source) if source else suite.folder
+    for f in skills._files(base):
+        target = dest / f.relative_to(base)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(f, target)
     keep = [c for c in suite.cases if str(c["id"]) in dev]
