@@ -249,11 +249,13 @@ def recover(log=print):
             continue
         folder = Path(state["folder"])
         live = skills.fingerprint(folder)
-        sha = state.get("commit_sha") if state.get("phase") == "committed" else None
+        committed = state.get("phase") == "committed"  # files installed and committed (or nothing to commit)
+        sha = state.get("commit_sha") if committed else None
         sha = sha or _found_commit(state)
-        if sha:
+        if sha or committed:
             if live != state["new"]:
-                raise Refused(f"{state['run_id']}: commit {sha} was made but {folder} no longer matches it "
+                what = f"commit {sha} was made" if sha else "the apply was installed"
+                raise Refused(f"{state['run_id']}: {what} but {folder} no longer matches it "
                               f"(fingerprint {live}); fix the folder by hand, then delete {f}")
             conn = _db()
             try:

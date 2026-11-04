@@ -246,6 +246,16 @@ class TestRecover(Base):
         self.assertEqual(len(self.rows("SELECT * FROM opt_applied")), 1)
         self.assertEqual(json.loads((self.run_dir / apply.DECISION_JSON).read_text())["history"][0]["decision"], "approve")
 
+    def test_committed_phase_without_a_commit_completes(self):
+        with self.interrupt("_finish"), self.assertRaises(KeyboardInterrupt):
+            self.approve()  # skill is not in git: no commit, phase committed
+        state = json.loads((self.run_dir / apply.APPLY_JSON).read_text())
+        self.assertEqual((state["phase"], state.get("commit_sha")), ("committed", None))
+        apply.recover(log=lambda m: None)
+        self.assertEqual(self.fp(), self.new)
+        self.assertEqual(len(self.rows("SELECT * FROM opt_applied")), 1)
+        self.assertFalse((self.run_dir / apply.APPLY_JSON).exists())
+
     def test_commit_made_but_phase_still_written(self):
         self.git_repo()
         with self.interrupt("_finish"), self.assertRaises(KeyboardInterrupt):
