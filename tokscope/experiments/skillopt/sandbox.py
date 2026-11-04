@@ -11,6 +11,7 @@ from pathlib import Path
 
 from ... import paths
 from ...core import skills
+from ...core.ingest import SKILL_TEXT
 from . import grade
 
 TIMEOUT = 15 * 60  # seconds; a run that never ends still ends
@@ -23,12 +24,14 @@ def claude():
     return paths.tool("claude", first=paths.CLAUDE_FIRST) or "claude"
 
 
-def command(prompt, sandbox, budget=None):
+def command(prompt, sandbox, budget=None, model=None):
     """argv of the isolated session. Project settings only, no user MCP, nothing saved, edits allowed in the
-    sandbox only, cost capped at `budget` (default MAX_BUDGET_USD). Never --dangerously-skip-permissions."""
-    return [claude(), "-p", prompt, "--setting-sources", "project", "--strict-mcp-config", "--no-session-persistence",
+    sandbox only, cost capped at `budget` (default MAX_BUDGET_USD), `--model` only when one is given. Never
+    --dangerously-skip-permissions."""
+    argv = [claude(), "-p", prompt, "--setting-sources", "project", "--strict-mcp-config", "--no-session-persistence",
             "--output-format", "stream-json", "--verbose", "--max-budget-usd", str(budget or MAX_BUDGET_USD),
             "--permission-mode", "acceptEdits", "--add-dir", str(sandbox)]
+    return argv + ["--model", model] if model else argv
 
 
 def _name(label, value):
@@ -134,26 +137,64 @@ def _copy_work(sandbox, dest):
             shutil.copy2(p, dest / p.name, follow_symlinks=False)
 
 
-def run_case(skill, case_id, version=None, cwd=None, budget=None):
-    """Run one case and return the run folder. ValueError for a load error, before any paid run. `budget` caps the
-    cost of this run in USD (default MAX_BUDGET_USD)."""
-    if budget is not None and not budget > 0:
-        raise ValueError(f"budget {budget!r} must be above 0")
-    case, checks, folder, fixtures = load_case(skill, case_id, cwd)
-    source, full = source_folder(skill, folder, version)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    run = paths.home() / "bench" / "skillopt" / "runs" / skill / str(case_id) / stamp
-    sandbox = Path(tempfile.mkdtemp(prefix="tokscope-skillopt-")).resolve()
+def _text(content):
+    """The text of a tool_result's content: a string, or a list of text blocks."""
+    if isinstance(content, str):
+        return content
+    return "\n".join(b.get("text", "") for b in content if isinstance(b, dict)) if isinstance(content, list) else ""
+
+
+def stream_load(events, skill, want):
+    """What loaded, from the stream (a run keeps no transcript, so skills.check_load has nothing to read):
+    "ok" when a Skill call names `skill` and a later skill text ("Base directory for this skill: ...", in the
+    tool_result or in the text block after it, as Claude Code writes it to a transcript) has body hash `want`,
+    "other text" when such a text has another hash, "unconfirmed" when the call returned no skill text, and
+    "not loaded" when no Skill call names the skill. Compared the way skills.check_load does."""
+    args, texts, called = [None], [], False
+    for ev in events:
+        content = (ev.get("message") or {}).get("content")
+        if not isinstance(content, list):
+            continue
+        for b in content:
+            if not isinstance(b, dict):
+                continue
+            if ev.get("type") == "assistant" and b.get("type") == "tool_use" and b.get("name") == "Skill":
+                inp = b.get("input") or {}
+                if str(inp.get("skill") or inp.get("name") or "") == skill:
+                    called = True
+                    args.append(inp.get("args"))
+            elif called and ev.get("type") == "user":
+                t = _text(b.get("content")) if b.get("type") == "tool_result" else b.get("text") or ""
+                if isinstance(t, str) and t.startswith(SKILL_TEXT):
+                    texts.append(t)
+    if not called:
+        return "not loaded"
+    if not texts:
+        return "unconfirmed"
+    ok = any(want in skills.loaded_text_hash(t, a).split() for t in texts for a in args)
+    return "ok" if ok else "other text"
+
+
+def execute(skill, case, checks, fixtures, dest, source=None, model=None, budget=None, expect=None, arm=None,
+            version=None):
+    """Run one loaded case in a fresh sandbox, write the run folder `dest` (it must not exist) and return it.
+    `source` is the folder to pin (the fingerprint files only); None is the no-skill arm: the same flags, no pinned
+    copy and no `.claude/skills/<skill>`. run.json carries cost_usd, arm, model and load (from the stream)."""
     t0, lines, proc, timed_out, err = time.time(), [], None, False, None
+    sandbox = Path(tempfile.mkdtemp(prefix="tokscope-skillopt-")).resolve()
+    run = Path(dest)
     try:
         for src in fixtures:
             if src.is_dir():
                 shutil.copytree(src, sandbox / src.name, symlinks=True)
             else:
                 shutil.copy2(src, sandbox / src.name)
-        pinned, fp = pin_copy(skill, source, sandbox, full)
+        pinned, fp, want = None, None, None
+        if source is not None:
+            pinned, fp = pin_copy(skill, source, sandbox, expect)
+            want = skills._sha(skills._body((pinned / "SKILL.md").read_text(errors="replace")))
         run.mkdir(parents=True)  # after the load errors a pin can raise
-        argv = command(case["prompt"], sandbox, budget)
+        argv = command(case["prompt"], sandbox, budget, model)
         try:
             with (run / "stderr.log").open("w") as log, (run / "stream.jsonl").open("w") as stream:
                 proc = subprocess.Popen(argv, cwd=sandbox, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
@@ -189,8 +230,11 @@ def run_case(skill, case_id, version=None, cwd=None, budget=None):
             {"init": True, "model": init.get("model"), "plugins": init.get("plugins") or []} if init
             else {"init": False, "model": None, "plugins": []}, indent=2))
         (run / "run.json").write_text(json.dumps({
-            "skill": skill, "case": str(case_id), "version": full, "fingerprint": fp, "source": str(source),
-            "pinned": str(pinned), "argv": argv, "exit_code": proc.returncode if proc else None,
+            "skill": skill, "case": str(case.get("id")), "version": version, "fingerprint": fp,
+            "source": str(source) if source is not None else None, "pinned": str(pinned) if pinned else None,
+            "arm": arm or ("none" if source is None else "skill"), "model": model,
+            "load": "n/a" if source is None else stream_load(events, skill, want), "argv": argv,
+            "exit_code": proc.returncode if proc else None,
             "duration_s": round(time.time() - t0, 1), "cost_usd": res.get("total_cost_usd"), "usage": res.get("usage"),
             "num_turns": res.get("num_turns"), "session_id": res.get("session_id"), "status": grading["status"],
             "reason": grading.get("reason")}, indent=2))
@@ -198,3 +242,15 @@ def run_case(skill, case_id, version=None, cwd=None, budget=None):
     finally:
         shutil.rmtree(sandbox, ignore_errors=True)
     return run
+
+
+def run_case(skill, case_id, version=None, cwd=None, budget=None):
+    """Run one case and return the run folder. ValueError for a load error, before any paid run. `budget` caps the
+    cost of this run in USD (default MAX_BUDGET_USD)."""
+    if budget is not None and not budget > 0:
+        raise ValueError(f"budget {budget!r} must be above 0")
+    case, checks, folder, fixtures = load_case(skill, case_id, cwd)
+    source, full = source_folder(skill, folder, version)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    run = paths.home() / "bench" / "skillopt" / "runs" / skill / str(case_id) / stamp
+    return execute(skill, case, checks, fixtures, run, source=source, budget=budget, expect=full, version=full)
