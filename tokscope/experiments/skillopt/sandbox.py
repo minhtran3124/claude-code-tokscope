@@ -229,11 +229,17 @@ def execute(skill, case, checks, fixtures, dest, source=None, model=None, budget
         (run / "plugins.json").write_text(json.dumps(
             {"init": True, "model": init.get("model"), "plugins": init.get("plugins") or []} if init
             else {"init": False, "model": None, "plugins": []}, indent=2))
+        # the no-skill arm must not load the skill under test (a global copy could leak in): a Skill call naming it
+        # is "leaked", which stats and the loop count as an invalid run
+        if source is not None:
+            load = stream_load(events, skill, want)
+        else:
+            load = "leaked" if stream_load(events, skill, "") != "not loaded" else "n/a"
         (run / "run.json").write_text(json.dumps({
             "skill": skill, "case": str(case.get("id")), "version": version, "fingerprint": fp,
             "source": str(source) if source is not None else None, "pinned": str(pinned) if pinned else None,
             "arm": arm or ("none" if source is None else "skill"), "model": model,
-            "load": "n/a" if source is None else stream_load(events, skill, want), "argv": argv,
+            "load": load, "argv": argv,
             "exit_code": proc.returncode if proc else None,
             "duration_s": round(time.time() - t0, 1), "cost_usd": res.get("total_cost_usd"), "usage": res.get("usage"),
             "num_turns": res.get("num_turns"), "session_id": res.get("session_id"), "status": grading["status"],

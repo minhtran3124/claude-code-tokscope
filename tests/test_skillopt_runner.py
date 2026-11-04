@@ -117,6 +117,8 @@ say = lambda ev: print(json.dumps(ev), flush=True)
 cwd = os.getcwd()
 say({"type": "system", "subtype": "init", "model": "claude-sonnet-5-5", "plugins": [{"name": "p1"}, {"name": "p2"}]})
 skill = Path(".claude/skills/demo/SKILL.md")
+if os.environ.get("FAKE_LEAK"):
+    say({"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t0", "name": "Skill", "input": {"skill": "demo"}}]}})
 if skill.exists() and not os.environ.get("FAKE_NO_CALL"):
     text = skill.read_text().split("---\\n", 2)[2].strip()  # the body, as Claude Code puts it in the context
     if os.environ.get("FAKE_OTHER_TEXT"):
@@ -264,6 +266,12 @@ class SandboxTest(RunnerBase):
                       {"type": "tool_result", "content": [{"type": "text", "text": "Base directory for this skill: /x\n\n" + body}]}]}}]
         self.assertEqual(sandbox.stream_load(events, "demo", want), "ok")
         self.assertEqual(sandbox.stream_load(events, "other", want), "not loaded")
+
+    def test_no_skill_arm_flags_a_leaked_skill_call(self):
+        case, checks, _folder, fixtures = sandbox.load_case("demo", "1")
+        with mock.patch.dict(os.environ, {"FAKE_LEAK": "1"}):
+            run = sandbox.execute("demo", case, checks, fixtures, self.tmp / "out" / "leak", source=None, arm="none")
+        self.assertEqual(json.loads((run / "run.json").read_text())["load"], "leaked")
 
     def test_no_skill_arm_pins_nothing(self):
         case, checks, _folder, fixtures = sandbox.load_case("demo", "1")
