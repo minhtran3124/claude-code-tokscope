@@ -1,8 +1,11 @@
 import json
 import os
+import signal
 import stat
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,6 +15,7 @@ from tokscope import paths
 from tokscope.core import ingest, skills
 from tokscope.experiments.skillopt import loop, stats, store, suite
 
+ROOT = Path(__file__).resolve().parent.parent
 PLAN = {"seed": 7, "resamples": 300, "holdout": ["h1", "h2"], "gates": stats.GATES}
 
 
@@ -322,6 +326,9 @@ with open(os.environ["FAKE_LOG"], "a") as f:
     f.write(json.dumps({"editor": editor, "argv": argv}) + "\n")
 say({"type": "system", "subtype": "init", "model": "fake", "plugins": []})
 if editor:
+    if os.environ.get("FAKE_SLEEP_EDITOR") and not Path(os.environ["FAKE_MARKER"]).exists():
+        Path(os.environ["FAKE_MARKER"]).write_text("1")
+        time.sleep(30)
     n = int(re.search(r"edit round (\d+)", prompt).group(1))
     mode = pick(cfg["editor"], str(n))
     text = Path("SKILL.md").read_text()
@@ -603,6 +610,127 @@ class FrozenSuiteTest(LoopBase):
             self.assertNotIn(h, blob)
         for d in dev:
             self.assertIn(d, blob)
+
+
+class ResumeTest(LoopBase):
+    def child(self, **env):
+        """Run loop.start in its own process group and kill the group once the fake has reached its marker."""
+        code = f"from tokscope.experiments.skillopt import loop; loop.start('demo', 50.0, runs=2, cwd={str(self.proj)!r})"
+        proc = subprocess.Popen([sys.executable, "-c", code], cwd=ROOT, env={**os.environ, **env}, start_new_session=True,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        deadline = time.time() + 60
+        while not self.marker.exists() and time.time() < deadline:
+            time.sleep(0.05)
+        self.assertTrue(self.marker.exists(), proc.stderr.read() if proc.poll() is not None else "no marker")
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait()
+        proc.stderr.close()
+        (run,) = store.runs_dir().iterdir()
+        self.assertFalse((run / "verdict.json").exists())
+        return run
+
+    def finished(self, run):
+        self.assertEqual(len(set(self.ledger_runs(run))), len(self.ledger_runs(run)))  # no (stage, case, arm, i) twice
+        return json.loads((run / "verdict.json").read_text())
+
+    def test_kill_in_a_case_then_resume_runs_nothing_twice(self):
+        run = self.child(FAKE_SLEEP_CASE="none:charlie")
+        self.assertTrue(list((run / "results").rglob("*.tmp")))
+        before = len(self.ledger_runs(run))
+        v = loop.resume(run.name, log=lambda *_: None)
+        self.assertEqual(v, run)
+        out = self.finished(run)
+        self.assertEqual(out["verdict"], "Apply")
+        self.assertFalse(list((run / "results").rglob("*.tmp")))
+        lost = [l for l in store.lines(run) if l["kind"] == "lost"]
+        self.assertEqual(len(lost), 1)
+        self.assertGreater(lost[0]["cost_usd"], 0)  # charged at the call's cap
+        self.assertGreater(len(self.ledger_runs(run)), before)
+        self.assertFalse((run / "run.lock").exists())
+        self.assertAlmostEqual(out["spent_usd"], store.spent(run), places=4)
+
+    def test_kill_in_the_editor_cleans_the_round_and_runs_it_again(self):
+        run = self.child(FAKE_SLEEP_EDITOR="1")
+        self.assertTrue((run / "rounds" / "1" / "editor" / "prompt.md").is_file())
+        self.assertFalse(store.editor_done(run, 1))
+        loop.resume(run.name, log=lambda *_: None)
+        out = self.finished(run)
+        self.assertEqual(out["verdict"], "Apply")
+        self.assertTrue(store.editor_done(run, 1))
+        self.assertEqual(sum(1 for l in store.lines(run) if l["kind"] == "editor" and l["round"] == 1), 1)
+        self.assertEqual(sum(1 for l in store.lines(run) if l["kind"] == "lost" and l.get("round") == 1), 1)
+        self.assertEqual(sum(1 for c in self.calls() if c["editor"]), 2)  # killed once, run once
+
+    def test_an_edited_plan_makes_resume_refuse(self):
+        run = self.child(FAKE_SLEEP_CASE="none:charlie")
+        n = len(self.calls())
+        text = (run / "plan.json").read_text()
+        (run / "plan.json").write_text(text.replace('"budget_usd": 50.0', '"budget_usd": 500.0'))
+        with self.assertRaises(store.LockError):
+            loop.resume(run.name)
+        self.assertEqual(len(self.calls()), n)
+        self.assertFalse((run / "run.lock").exists())
+
+    def test_a_live_run_lock_refuses(self):
+        run, _ = self.go()
+        live = subprocess.Popen(["sleep", "30"])
+        self.addCleanup(live.wait)
+        self.addCleanup(live.kill)
+        (run / "run.lock").write_text(str(live.pid))
+        with self.assertRaises(store.LockError):
+            loop.resume(run.name)
+        with self.assertRaises(store.LockError):
+            loop.regrade(run.name)
+
+    def test_resume_of_a_finished_run_runs_nothing(self):
+        run, v = self.go()
+        n = len(self.calls())
+        before = (run / "verdict.json").read_bytes()
+        loop.resume(run.name, log=lambda *_: None)
+        self.assertEqual(len(self.calls()), n)
+        self.assertEqual((run / "verdict.json").read_bytes(), before)
+        self.assertTrue(any("Apply" in l for l in loop.report(run)))
+
+    def test_a_finished_folder_without_its_line_is_recovered_not_rerun(self):
+        run, v = self.go()
+        n = len(self.calls())
+        ledger = store.lines(run)
+        last = max(i for i, l in enumerate(ledger) if l["kind"] == "run")
+        lost = ledger[last]
+        del ledger[last]
+        (run / "ledger.jsonl").write_text("".join(json.dumps(l, sort_keys=True) + "\n" for l in ledger))
+        (run / "verdict.json").unlink()
+        loop.resume(run.name, log=lambda *_: None)
+        self.assertEqual(len(self.calls()), n)
+        self.assertIn((lost["stage"], lost["case"], lost["arm"], lost["i"]), self.ledger_runs(run))
+        self.assertEqual(self.finished(run)["verdict"], "Apply")
+
+    def test_regrade_makes_no_paid_call_and_keeps_spent(self):
+        run, v = self.go()
+        spent, n = store.spent(run), len(self.calls())
+        victim = next((run / "results" / "baseline").rglob("stream.jsonl"))
+        victim.write_text(victim.read_text().replace('"type": "result"', '"type": "nothing"'))
+        with mock.patch("subprocess.Popen", side_effect=AssertionError("no process")), \
+                mock.patch("subprocess.run", side_effect=AssertionError("no process")):
+            loop.regrade(run.name, log=lambda *_: None)
+        self.assertEqual(len(self.calls()), n)
+        self.assertEqual(store.spent(run), spent)
+        self.assertEqual(json.loads((victim.parent / "grading.json").read_text())["status"], "INVALID")
+        again = json.loads((run / "verdict.json").read_text())
+        self.assertEqual(again["draft_fingerprint"], v["draft_fingerprint"])
+        conn = ingest.connect(paths.db())
+        bad = conn.execute("SELECT COUNT(*) FROM opt_results WHERE run_id = ? AND status = 'INVALID'", (run.name,)).fetchone()[0]
+        conn.close()
+        self.assertEqual(bad, 1)
+
+    def test_regrade_refuses_a_changed_plan_or_suite(self):
+        run, _ = self.go()
+        path = run / "suite" / "evals" / "evals.json"
+        data = json.loads(path.read_text())
+        data["evals"][0]["prompt"] = "changed"
+        path.write_text(json.dumps(data))
+        with self.assertRaises(store.LockError):
+            loop.regrade(run.name)
 
 
 if __name__ == "__main__":
