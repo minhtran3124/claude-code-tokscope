@@ -358,6 +358,15 @@ def _trigger_runs(ctx, arm, split):
             run_one(ctx, trigger.STAGE, item["id"], a, i)
 
 
+def _trigger_reason(acc, passed):
+    """Why the gate kept or reverted the description; says 'not measured' when a test accuracy is None."""
+    if acc["current"]["test"] is None or acc["draft"]["test"] is None:
+        why = "test accuracy was not measured"
+    else:
+        why = "test accuracy " + ("kept" if passed else "dropped")
+    return why + "; " + ("new description kept" if passed else "old description put back")
+
+
 def trigger_gate(ctx, arm):
     """A draft that changes the description must not lower test-split trigger accuracy; else the old description is
     put back and the rest of the draft is kept. Runs nothing when the description is the same (whitespace aside) or
@@ -383,8 +392,7 @@ def trigger_gate(ctx, arm):
             acc["current"][split] = trigger.accuracy(recs, ctx.triggers, "current", split)
             acc["draft"][split] = trigger.accuracy(recs, ctx.triggers, arm, split)
         passed = trigger.decide(acc["current"]["test"], acc["draft"]["test"])
-        _write_json(path, {"status": "ran", "reason": "test accuracy " + ("kept" if passed else "dropped") + "; "
-                           + ("new description kept" if passed else "old description put back"),
+        _write_json(path, {"status": "ran", "reason": _trigger_reason(acc, passed),
                            "prompts": trigger.counts(ctx.triggers), "current": acc["current"], "draft": acc["draft"],
                            "passed": passed, "reverted": not passed, "draft_version": arm})
         if stop:

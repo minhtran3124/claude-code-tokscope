@@ -82,6 +82,23 @@ class DecideTest(unittest.TestCase):
         self.assertFalse(trigger.decide(0.6, 0.5))
 
 
+class ReasonTest(unittest.TestCase):
+    def acc(self, cur, dr):
+        return {"current": {"test": cur}, "draft": {"test": dr}}
+
+    def test_unmeasured_accuracy_is_not_called_a_drop(self):
+        r = loop._trigger_reason(self.acc(0.5, None), False)
+        self.assertIn("not measured", r)
+        self.assertNotIn("dropped", r)
+        self.assertIn("old description put back", r)
+
+    def test_measured_reasons_are_unchanged(self):
+        self.assertEqual(loop._trigger_reason(self.acc(0.6, 0.5), False),
+                         "test accuracy dropped; old description put back")
+        self.assertEqual(loop._trigger_reason(self.acc(0.5, 0.5), True),
+                         "test accuracy kept; new description kept")
+
+
 class DescriptionTest(unittest.TestCase):
     def test_normalize_and_changed_ignore_whitespace(self):
         self.assertEqual(trigger.normalize("  a \n  b\tc "), "a b c")
