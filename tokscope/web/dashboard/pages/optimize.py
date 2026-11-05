@@ -20,7 +20,7 @@ from .... import paths
 from ....core import skills
 from ....core.ingest import connect
 from ....experiments.skillopt import apply, loop, sandbox, stats, store, suite
-from ....features import library
+from ....features import library, postship
 from ...report.widgets import _tok, _usd
 from .library import _side_by_side
 
@@ -399,11 +399,34 @@ def _compare_section(d):
             f'{"s" * (len(d["files"]) != 1)} changed between <code>v0</code> and <code>{_e(d["draft"])}</code>.</p>{table}</section>{files}')
 
 
-def _report(d, decide):
+def _post_ship_section(conn, d):
+    """Real sessions: the old and the new version side by side, only for an approved run."""
+    got = conn is not None and postship.approved(conn, d["id"])
+    if not got:
+        return ""
+    skill, old, new, at = got
+    try:
+        sides = postship.post_ship(conn, skill, old, new, at)
+    except (ValueError, TypeError):
+        return ""
+    o, n = sides["old"], sides["new"]
+    dash = lambda v, f: "–" if v is None else f(v)
+    rows = "".join(f"<tr><td>{label}</td><td>{dash(o[key], f)}</td><td>{dash(n[key], f)}</td></tr>" for label, key, f in (
+        ("Loads", "loads", str), ("Median tokens per load", "tokens_median", lambda x: _tok(round(x))),
+        ("Median cost per load", "cost_median", _usd), ("Error rate", "error_rate", lambda x: f"{x * 100:.0f}%")))
+    notes = "".join(f'<p class="warn" role="note">Only {side["loads"]} load{"s" * (side["loads"] != 1)} on the {name} version: '
+                    "too few to compare.</p>" for name, side in (("old", o), ("new", n)) if side["few"])
+    return ('<section class="card" id="postship"><h2 class="sec">Real sessions</h2><p class="note">From your own sessions after the approve. '
+            "Counts only loads of these two versions; loads after a later edit are left out.</p>"
+            f'<div class="scroll"><table><thead><tr><th></th><th>Old <code>{_e(str(old)[:8])}</code></th>'
+            f'<th>New <code>{_e(str(new)[:8])}</code></th></tr></thead><tbody>{rows}</tbody></table></div>{notes}</section>')
+
+
+def _report(d, decide, post=""):
     s = d["summary"]
     head = (f'<p><a href="/optimize">← All runs</a></p><section class="card libhead"><h2 class="sec">{_e(d["plan"].get("skill") or d["id"])} · '
             f'{_state(s["state"])}</h2><p class="note">Run <code>{_e(d["id"])}</code></p></section>')
-    return (head + _plan_section(d) + _gates_section(d) + _cases_section(d) + _rounds_section(d) + _compare_section(d) + decide)
+    return (head + _plan_section(d) + _gates_section(d) + _cases_section(d) + _rounds_section(d) + _compare_section(d) + post + decide)
 
 
 def page_optimize(conn, qs, level):
@@ -418,7 +441,7 @@ def page_optimize(conn, qs, level):
         except ValueError:
             notice = f'<p class="warn" role="note">There is no run <code>{_e(pick)}</code>.</p>'
         else:
-            return _report(d, _decide_section(conn, d))
+            return _report(d, _decide_section(conn, d), _post_ship_section(conn, d))
     return _runs_list(runs(), notice)
 
 

@@ -15,6 +15,7 @@ from unittest import mock
 
 from tokscope import paths
 from tokscope.core import ingest, skills
+from tokscope.features import postship
 from tokscope.experiments.skillopt import stats, store
 from tokscope.web.dashboard import server, shell
 from tokscope.web.dashboard.pages import optimize as page
@@ -833,3 +834,134 @@ class ScriptSyntaxTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def apply_table():
+    from tokscope.experiments.skillopt import apply
+    return apply.TABLE
+
+
+AT = "2026-03-10T12:00:00+00:00"
+
+
+class PostShipTest(Fixture):
+    """Real-session numbers on an approved run: loads, median tokens and cost, error rate per version."""
+
+    def setUp(self):
+        super().setUp()
+        self.new = skills.fingerprint(self.run_dir() / "versions" / "v1")
+        self.n = 0
+        conn = ingest.connect(self.db)
+        conn.execute("INSERT INTO sessions(session_id, project) VALUES ('s1', '-home-me-proj')")
+        conn.execute("INSERT INTO sessions(session_id, project) VALUES ('sb', '-home-me-tokscope-bench-1')")
+        conn.commit()
+        conn.close()
+
+    def approve(self, run=APPLY_RUN):
+        conn = ingest.connect(self.db)
+        conn.executescript(apply_table())
+        conn.execute("INSERT INTO opt_applied VALUES (?, 'demo', 'approve', ?, ?, NULL, 'apply', NULL, ?)",
+                     (run, self.old, self.new, AT))
+        conn.commit()
+        conn.close()
+
+    def loads(self, version, count, day, failed=0, tokens=100, cost=0.5, session="s1"):
+        conn = ingest.connect(self.db)
+        skills._ensure(conn)
+        for k in range(count):
+            self.n += 1
+            tid, ts = f"t{self.n}", f"2026-03-{day:02d}T0{k % 9}:00:00+00:00"
+            conn.execute("INSERT INTO skill_calls(session_id, ts, skill, source, prompt_idx, tool_use_id, failed) "
+                         "VALUES (?, ?, 'demo', 'tool', ?, ?, ?)", (session, ts, self.n, tid, int(k < failed)))
+            conn.execute("INSERT INTO skill_load_versions VALUES (?, ?, 'demo', ?, ?)", (session, tid, version, ts))
+            conn.execute("INSERT INTO requests(session_id, request_key, ts, prompt_idx, input, output, cache_read, "
+                         "cache_write_5m, cache_write_1h, cost_usd) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, ?)",
+                         (session, f"r{self.n}", ts, self.n, tokens + k, cost + k / 100))
+        conn.commit()
+        conn.close()
+
+    def numbers(self):
+        conn = ingest.connect(self.db)
+        try:
+            return postship.post_ship(conn, "demo", self.old, self.new, AT)
+        finally:
+            conn.close()
+
+    def render(self, run=APPLY_RUN):
+        conn = ingest.connect(self.db)
+        try:
+            return shell.render(conn, "optimize", {"run": [run]}, "stamp", "full")
+        finally:
+            conn.close()
+
+    def test_post_ship_function(self):
+        self.approve()
+        self.loads(self.old, 6, 5, failed=2, tokens=1000, cost=1.0)
+        self.loads(self.new, 3, 15, failed=0, tokens=500, cost=0.4)
+        got = self.numbers()
+        self.assertEqual((got["old"]["loads"], got["old"]["errors"], got["old"]["few"]), (6, 2, False))
+        self.assertAlmostEqual(got["old"]["error_rate"], 2 / 6)
+        self.assertEqual(got["old"]["tokens_median"], 1003.5)  # medians over the 4 ok loads: 1002..1005
+        self.assertAlmostEqual(got["old"]["cost_median"], 1.035)
+        self.assertEqual((got["new"]["loads"], got["new"]["tokens_median"], got["new"]["few"]), (3, 501, True))
+        self.assertEqual(got["new"]["error_rate"], 0)
+
+    def test_an_empty_side_has_no_numbers_and_no_division(self):
+        self.approve()
+        got = self.numbers()["new"]
+        self.assertEqual((got["loads"], got["tokens_median"], got["cost_median"], got["error_rate"], got["few"]),
+                         (0, None, None, None, True))
+
+    def test_both_sides_with_five_loads_show_their_numbers(self):
+        self.approve()
+        self.loads(self.old, 5, 5, failed=1, tokens=2000)
+        self.loads(self.new, 8, 15, failed=0, tokens=900)
+        body = self.render()
+        self.assertIn('id="postship"', body)
+        self.assertIn("Real sessions", body)
+        self.assertIn("20%", body)
+        self.assertNotIn("too few to compare", body)
+        self.assertIn(">5<", body)
+        self.assertIn(">8<", body)
+
+    def test_a_side_with_three_loads_gets_the_too_few_note(self):
+        self.approve()
+        self.loads(self.old, 6, 5)
+        self.loads(self.new, 3, 15)
+        body = self.render()
+        self.assertIn("Only 3 loads on the new version: too few to compare.", body)
+        self.assertNotIn("on the old version: too few", body)
+
+    def test_other_versions_and_old_loads_after_the_approve_are_not_counted(self):
+        self.approve()
+        self.loads(self.old, 5, 5)
+        self.loads(self.new, 5, 15)
+        self.loads("edited-by-hand", 7, 20)
+        self.loads(self.old, 2, 25)  # the old version read after the approve (a revert, a stale copy)
+        got = self.numbers()
+        self.assertEqual((got["old"]["loads"], got["new"]["loads"]), (5, 5))
+
+    def test_bench_sessions_and_loads_without_requests_stay_out_of_the_medians(self):
+        self.approve()
+        self.loads(self.old, 2, 5, session="sb")
+        self.loads(self.old, 5, 6)
+        conn = ingest.connect(self.db)
+        conn.execute("DELETE FROM requests WHERE session_id = 's1' AND prompt_idx = 3")
+        conn.commit()
+        conn.close()
+        got = self.numbers()["old"]
+        self.assertEqual(got["loads"], 7)
+        self.assertIsNotNone(got["tokens_median"])
+
+    def test_an_unapproved_run_has_no_section_and_keeps_decide(self):
+        self.approve()
+        body = self.render(REJECT_RUN)
+        self.assertNotIn('id="postship"', body)
+        self.assertIn("Decide", body)
+
+    def test_an_approved_run_without_loads_renders_and_keeps_decide(self):
+        self.approve()
+        body = self.render()
+        self.assertIn('id="postship"', body)
+        self.assertIn("Only 0 loads on the old version: too few to compare.", body)
+        self.assertIn("Decide", body)
