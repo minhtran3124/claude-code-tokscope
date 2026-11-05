@@ -162,6 +162,19 @@ document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',(
   document.querySelectorAll('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==b.dataset.view)}));
 """
 
+OPT_JS = """
+// optimize page: approve or reject a run (LIB_JS's send, ask, busy and idle carry this page's token)
+const decideEl=document.getElementById('decide');
+if(decideEl){const reason=document.getElementById('opt-reason'),ok=decideEl.querySelector('[data-opt-act=approve]'),
+    syncOk=()=>{if(ok&&!ok.dataset.block)ok.disabled=decideEl.dataset.need==='1'&&!reason.value.trim()};
+  reason.addEventListener('input',syncOk);
+  decideEl.querySelectorAll('[data-opt-act]').forEach(b=>b.addEventListener('click',async()=>{const act=b.dataset.optAct,all=decideEl.querySelectorAll('[data-opt-act]');
+    if(act==='approve'&&!await ask(b.parentElement,'Write the draft into the skill folder? tokscope keeps the old version and commits only the skill\'s files when it is in git.','Approve'))return;
+    busy(b,act==='approve'?'Approving…':'Rejecting…');all.forEach(x=>x.disabled=true);
+    try{await send(`/optimize/${decideEl.dataset.run}/${act}`,{reason:reason.value});location.reload()}
+    catch(err){showErr(err);all.forEach(x=>{x.disabled=!!x.dataset.block});idle(b);syncOk()}}))}
+"""
+
 MANAGED_JS = """
 // managed: pause or unpause a deployment after a question on the page; LIB_JS's send() carries this page's token
 document.querySelectorAll('[data-dep-act]').forEach(b=>b.addEventListener('click',async()=>{const act=b.dataset.depAct,pause=act==='pause';

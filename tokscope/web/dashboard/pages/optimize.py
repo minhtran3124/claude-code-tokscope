@@ -10,6 +10,7 @@ import threading
 from pathlib import Path
 
 from ....core import skills
+from ....core.ingest import connect
 from ....experiments.skillopt import apply, loop, sandbox, stats, store
 from ....features import library
 from ...report.widgets import _tok, _usd
@@ -345,5 +346,127 @@ def page_optimize(conn, qs, level):
     return _runs_list(runs(), notice)
 
 
+# deciding
+
+_DECIDE_LOCK = threading.Lock()  # every approve and reject of this server one at a time (see decide)
+
+
+def approve_check(run):
+    """(HTTP code, why not or None, whether a reason is needed): what Approve may do for this run. 400 for a run that
+    cannot be approved at all, 409 for one that is already approved."""
+    v = _dict(Path(run) / loop.VERDICT)
+    kind = v.get("verdict")
+    if not kind:
+        return 400, "no verdict yet: the run has not finished", False
+    if kind == stats.REJECT:
+        return 400, f"the verdict is {stats.REJECT} ({v.get('reason') or 'no reason given'}); nothing to apply", False
+    if kind not in (stats.APPLY, stats.NOT_ENOUGH):
+        return 400, f"unknown verdict {kind!r}", False
+    if not (v.get("draft_version") and v.get("draft_fingerprint")):
+        return 400, "no draft to apply", False
+    last = apply._latest_applied(run)
+    if last and last.get("decision") == "approve":
+        return 409, "this run is already approved; `tokscope optimize revert` undoes it", False
+    return 200, None, kind == stats.NOT_ENOUGH
+
+
+def owner_root(conn, skill, want, loose=False):
+    """(project root, skill dict, None) of the one skill folder named `skill` whose fingerprint is in `want`; the root is
+    what `cwd` must be for the optimize code to find that folder (the home folder for a personal skill). A run stores
+    only the skill's name, so the fingerprint tells same-named skills apart. (None, None, why) when none or several
+    match. `loose` (a reject, which records and changes nothing) falls back to the only skill of that name, else HOME."""
+    found = [k for k in library.discover(conn) if k["dir"] == skill]
+    hits = [k for k in found if skills.fingerprint(k["folder"]) in want]
+    if len(hits) == 1 or (loose and not hits and len(found) == 1):
+        k = hits[0] if hits else found[0]
+        return (Path.home() if k["scope"] == "personal" else k["folder"].parents[2]), k, None
+    if loose:
+        return Path.home(), None, None
+    where = ", ".join(str(k["folder"]) for k in (hits or found)) or "no skill folder"
+    return None, None, (f"{skill}: cannot tell which skill folder this run measured ({'several match' if hits else 'none matches'} "
+                        f"the measured version; checked {where}); use `tokscope optimize approve` from the project")
+
+
+def decide(db, run_id, act, body):
+    """(HTTP code, JSON) of POST optimize/<run>/approve|reject. One at a time: store.acquire lets a holder with the same
+    pid take a lock over, so two requests of this server would otherwise both write the skill."""
+    reason = body.get("reason")
+    reason = reason.strip() if isinstance(reason, str) else ""
+    try:
+        run = store.find_run(run_id)
+    except ValueError:
+        return 404, {"error": f"no run {run_id!r}"}
+    with _DECIDE_LOCK:
+        skill = _dict(run / store.PLAN).get("skill")
+        v = _dict(run / loop.VERDICT)
+        want = {f for f in (v.get("base_fingerprint"), v.get("draft_fingerprint"), _dict(run / store.PLAN).get("base_fingerprint")) if f}
+        if act == "approve":
+            code, why, need = approve_check(run)
+            if why:
+                return code, {"error": why}
+            if need and not reason:
+                return 400, {"error": f"the verdict is {stats.NOT_ENOUGH}: give a reason to approve it anyway"}
+        conn = connect(db)
+        try:
+            root, _, why = owner_root(conn, skill, want, loose=act == "reject")
+        finally:
+            conn.close()
+        if root is None:
+            return 409, {"error": why}
+        try:
+            record = (apply.approve if act == "approve" else apply.reject)(run_id, reason or None, cwd=str(root))
+        except ValueError as e:  # a refusal (apply.Refused) or a lock (store.LockError): the skill is unchanged
+            return 409, {"error": str(e)}
+        except OSError as e:
+            return 500, {"error": f"{type(e).__name__}: {e}"}
+        return 200, record
+
+
+def _git_note(k):
+    if not k:
+        return "The installed skill is not at the version this run measured, so Approve will refuse."
+    top = apply._toplevel(k["folder"])
+    if not top:
+        return "This skill is not in git: no commit is made. tokscope keeps the old version, and `tokscope optimize revert` undoes the approve."
+    branch = apply._git(top, "symbolic-ref", "-q", "--short", "HEAD").stdout.strip()
+    return (f"Approve commits only this skill's files on the git branch <code>{_e(branch)}</code>." if branch
+            else "Git is on a detached HEAD, so Approve will refuse; check out a branch first.")
+
+
+def _decision_box(d):
+    dec = d["decision"]
+    if not dec:
+        return ""
+    word = {"approve": "Approved", "reject": "Rejected", "revert": "Reverted"}.get(dec.get("decision"), "Decided")
+    cls = "ok" if dec.get("decision") == "approve" else "off"
+    detail = [f"{_time(dec.get('at'))}"]
+    if dec.get("reason"):
+        detail.append(f"reason: {_e(dec['reason'])}")
+    if dec.get("decision") != "reject" and dec.get("new_fingerprint"):
+        detail.append(f"<code>{_e(dec.get('old_fingerprint'))}</code> → <code>{_e(dec['new_fingerprint'])}</code>")
+    if dec.get("commit_sha"):
+        detail.append(f"commit <code>{_e(dec['commit_sha'][:10])}</code>")
+    still = (dec.get("decision") == "reject" and (apply._latest_applied(d["run"]) or {}).get("decision") == "approve")
+    note = ('<span class="warn">An earlier approve is still applied: the skill was not changed back. '
+            f'Run <code>tokscope optimize revert {_e(d["id"])}</code> to undo it.</span>' if still else "")
+    return f'<div class="outcome {cls}"><b>{word}</b><span>{" · ".join(detail)}</span>{note}</div>'
+
+
 def _decide_section(conn, d):
-    return ""
+    code, why, need = approve_check(d["run"])
+    verdict = d["verdict"].get("verdict")
+    want = {f for f in (d["verdict"].get("base_fingerprint"), d["verdict"].get("draft_fingerprint")) if f}
+    _, k, _ = owner_root(conn, d["plan"].get("skill"), want)
+    approve = ""
+    if verdict:
+        blocked = "" if code == 200 else f' disabled data-block="1" title="{_e(why)}"'
+        approve = (f'<button type="button" class="primary" data-opt-act="approve"{blocked or (" disabled" if need else "")}>'
+                   'Approve</button>')
+    block = f'<p class="note">Approve is off: {_e(why)}.</p>' if verdict and why else ""
+    label = "Reason (required to approve)" if need else "Reason (optional)"
+    return ('<section class="card" id="decide-card"><h2 class="sec">Decide</h2>' + _decision_box(d) + block
+            + f'<div class="optform" id="decide" data-run="{_e(d["id"])}" data-need="{int(need)}">'
+            + f'<label class="wide">{label}<textarea id="opt-reason" rows="2"{" required" if need else ""}></textarea></label>'
+            + f'<p class="acts">{approve}<button type="button" class="btn danger" data-opt-act="reject">Reject</button></p>'
+            + f'<p class="note">{_git_note(k)} Reject records your decision and never changes the skill.</p>'
+            + '<p class="err" id="opt-err" hidden></p></div></section>')

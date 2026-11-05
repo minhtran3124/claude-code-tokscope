@@ -1,9 +1,10 @@
 import json
 import os
+import re
 import shutil
-import sqlite3
 import subprocess
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -11,7 +12,7 @@ from unittest import mock
 from tokscope import paths
 from tokscope.core import ingest, skills
 from tokscope.experiments.skillopt import apply, stats, store
-from tokscope.web.dashboard import shell
+from tokscope.web.dashboard import server, shell
 from tokscope.web.dashboard.pages import optimize as page
 
 APPLY_RUN, NOT_ENOUGH_RUN, REJECT_RUN = "demo-20260101T000000Z", "demo-20260102T000000Z", "demo-20260103T000000Z"
@@ -57,14 +58,14 @@ class Fixture(unittest.TestCase):
                                    (REJECT_RUN, stats.REJECT, 3)):
             self.make_run(name, verdict, f"2026-01-0{day}T00:00:00+00:00")
 
-    def make_run(self, name, verdict, created):
+    def make_run(self, name, verdict, created, skill="demo"):
         run = store.runs_dir() / name
         for rel, text in (("SKILL.md", BASE_BODY), ("refs/a.md", "a\n")):
             write(run / "versions" / "v0" / rel, text)
         for rel, text in (("SKILL.md", DRAFT_BODY), ("refs/b.md", "b\n")):
             write(run / "versions" / "v1" / rel, text)
         new = skills.fingerprint(run / "versions" / "v1")
-        plan = {"schema": 1, "skill": "demo", "run_id": name, "base_fingerprint": self.old, "dev": ["d1", "d2"],
+        plan = {"schema": 1, "skill": skill, "run_id": name, "base_fingerprint": self.old, "dev": ["d1", "d2"],
                 "holdout": ["h1"], "runs": 1, "model": "sonnet", "budget_usd": 2.0, "per_run_cap_usd": 2.0, "seed": 5,
                 "resamples": 200, "gates": stats.GATES, "created": created}
         store.write_plan(run, plan)
@@ -81,7 +82,7 @@ class Fixture(unittest.TestCase):
             self.result(run, "r1", case, "v1", 4, 0.08)
         write(run / "verdict.json", {
             "verdict": verdict, "reason": f"because {verdict}", "stopped": None, "draft_version": "v1",
-            "draft_fingerprint": new, "base_fingerprint": self.old, "run_id": name, "skill": "demo", "spent_usd": 1.0,
+            "draft_fingerprint": new, "base_fingerprint": self.old, "run_id": name, "skill": skill, "spent_usd": 1.0,
             "budget_usd": 2.0, "trigger": {"status": "not needed", "reason": "the description did not change",
                                             "prompts": {"train": 0, "test": 0}, "passed": None, "reverted": False},
             "gates": [{"name": g, "passed": True, "value": 1, "threshold": 0, "detail": f"detail of {g}"} for g in GATES]})
@@ -266,6 +267,204 @@ class RenderTest(Fixture):
             self.assertIn("Run text is hidden", body)
             self.assertNotIn("evidence d1", body)
             self.assertNotIn("old body", body)
+
+
+class DecideTest(Fixture):
+    def post(self, run, act, body=None, path=None):
+        return server.post(self.db, path or f"optimize/{run}/{act}", body or {}, "full")
+
+    def fp(self):
+        return skills.fingerprint(self.folder)
+
+    def draft_fp(self, run=APPLY_RUN):
+        return skills.fingerprint(self.run_dir(run) / "versions" / "v1")
+
+    def verdict(self, run, **kw):
+        path = self.run_dir(run) / "verdict.json"
+        path.write_text(json.dumps({**json.loads(path.read_text()), **kw}))
+
+    def test_approve_installs_the_measured_draft_and_records_it(self):
+        code, out = self.post(APPLY_RUN, "approve")
+        self.assertEqual((code, out["decision"], out["new_fingerprint"]), (200, "approve", self.draft_fp()))
+        self.assertEqual(self.fp(), self.draft_fp())
+        self.assertEqual((self.folder / "refs" / "b.md").read_text(), "b\n")
+        self.assertFalse((self.folder / "refs" / "a.md").exists())
+        self.assertEqual((self.folder / "evals" / "evals.json").read_text(), '{"keep": true}\n')
+        self.assertEqual(self.rows("SELECT run_id, action FROM opt_applied"), [(APPLY_RUN, "approve")])
+        self.assertEqual(json.loads((self.run_dir() / "decision.json").read_text())["decision"], "approve")
+
+    def test_an_approve_after_an_approve_and_a_run_measured_on_an_old_version_are_409(self):
+        self.assertEqual(self.post(APPLY_RUN, "approve")[0], 200)
+        code, out = self.post(APPLY_RUN, "approve")
+        self.assertEqual(code, 409)
+        self.assertIn("already approved", out["error"])
+        code, out = self.post(NOT_ENOUGH_RUN, "approve", {"reason": "I looked"})  # the skill moved on to the first draft
+        self.assertEqual(code, 409)
+        self.assertEqual(self.fp(), self.draft_fp())
+
+    def test_not_enough_evidence_needs_a_reason(self):
+        for body in ({}, {"reason": "   "}, {"reason": 5}):
+            code, out = self.post(NOT_ENOUGH_RUN, "approve", body)
+            self.assertEqual(code, 400, body)
+            self.assertIn("reason", out["error"])
+            self.assertEqual(self.fp(), self.old)
+        code, out = self.post(NOT_ENOUGH_RUN, "approve", {"reason": " read the diff "})
+        self.assertEqual((code, out["reason"]), (200, "read the diff"))
+        self.assertEqual(self.fp(), self.draft_fp(NOT_ENOUGH_RUN))
+
+    def test_a_reject_verdict_cannot_be_approved_but_can_be_rejected(self):
+        code, out = self.post(REJECT_RUN, "approve", {"reason": "please"})
+        self.assertEqual(code, 400)
+        self.assertIn("Reject", out["error"])
+        self.assertEqual(self.fp(), self.old)
+        code, out = self.post(REJECT_RUN, "reject")
+        self.assertEqual((code, out["decision"], out["reason"], out["approve_still_applied"]), (200, "reject", None, False))
+        self.assertEqual(self.fp(), self.old)
+
+    def test_reject_works_on_every_run_with_and_without_a_reason(self):
+        for run, body, reason in ((APPLY_RUN, {}, None), (NOT_ENOUGH_RUN, {"reason": "not now"}, "not now"), (REJECT_RUN, {"reason": ""}, None)):
+            code, out = self.post(run, "reject", body)
+            self.assertEqual((code, out["reason"]), (200, reason), run)
+        self.assertEqual(self.fp(), self.old)
+        self.assertEqual(sorted(r[1] for r in self.rows("SELECT run_id, action FROM opt_applied")), ["reject"] * 3)
+
+    def test_a_reject_after_an_approve_says_the_approve_is_still_applied(self):
+        self.post(APPLY_RUN, "approve")
+        code, out = self.post(APPLY_RUN, "reject", {"reason": "changed my mind"})
+        self.assertEqual((code, out["approve_still_applied"]), (200, True))
+        self.assertEqual(self.fp(), self.draft_fp())
+        self.assertIn("An earlier approve is still applied", RenderTest.render(self, f"run={APPLY_RUN}"))
+
+    def test_a_skill_edited_after_the_run_is_409_and_untouched(self):
+        (self.folder / "SKILL.md").write_text("edited by hand\n")
+        edited = self.fp()
+        code, out = self.post(APPLY_RUN, "approve")
+        self.assertEqual(code, 409)
+        self.assertIn("cannot tell which skill folder", out["error"])  # no folder holds the measured version any more
+        self.assertEqual(self.fp(), edited)
+
+    def test_a_missing_verdict_or_draft_is_400_and_an_unknown_run_is_404(self):
+        self.verdict(NOT_ENOUGH_RUN, draft_version=None, draft_fingerprint=None)
+        code, out = self.post(NOT_ENOUGH_RUN, "approve", {"reason": "x"})
+        self.assertEqual((code, out["error"]), (400, "no draft to apply"))
+        (self.run_dir(REJECT_RUN) / "verdict.json").unlink()
+        self.assertEqual(self.post(REJECT_RUN, "approve")[0], 400)
+        self.assertEqual(self.post(REJECT_RUN, "reject")[0], 200)  # a reject is always allowed
+        self.assertEqual(self.post("demo-nope", "approve")[0], 404)
+        self.assertEqual(self.post("demo-nope", "reject")[0], 404)
+
+    def test_the_old_job_routes_are_untouched(self):
+        for act in ("apply", "discard", "cancel", "bench", "task"):
+            self.assertEqual(self.post("20260101-000000-abcdef", act, path=f"api/optimize/20260101-000000-abcdef/{act}"),
+                             (404, {"error": "unknown endpoint"}))
+        self.assertEqual(self.post(APPLY_RUN, "approve", path=f"api/optimize/{APPLY_RUN}/approve")[0], 404)
+        self.assertEqual(self.post(APPLY_RUN, "approve", path=f"optimize/{APPLY_RUN}/apply")[0], 404)
+        self.assertEqual(server.post(self.db, f"optimize/{APPLY_RUN}/approve", {}, "redacted")[0], 403)
+
+    def test_two_requests_at_once_apply_the_draft_once(self):
+        results, gate = [], threading.Barrier(2)
+
+        def go():
+            gate.wait()
+            results.append(self.post(APPLY_RUN, "approve")[0])
+        threads = [threading.Thread(target=go) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(sorted(results), [200, 409])
+        self.assertEqual(self.fp(), self.draft_fp())
+        self.assertEqual(len(self.rows("SELECT * FROM opt_applied")), 1)
+        self.assertFalse((self.run_dir() / "run.lock").exists())
+
+    def test_the_owning_project_is_found_by_the_measured_version(self):
+        proj = self.tmp / "work" / "app"
+        sibling = proj / ".claude" / "skills" / "demo"
+        for rel, text in (("SKILL.md", BASE_BODY), ("refs/a.md", "a\n")):
+            write(sibling / rel, text)
+        conn = ingest.connect(self.db)
+        conn.execute("INSERT INTO sessions (session_id, project, cwd, title, prompts) VALUES ('s1', '-p', ?, 't', 1)", (str(proj / "src"),))
+        conn.commit()
+        want = {self.old}
+        try:
+            root, k, why = page.owner_root(conn, "demo", want)
+            self.assertIsNone(root)
+            self.assertIn("cannot tell which skill folder", why)
+            self.assertIn(str(sibling), why)
+            (sibling / "SKILL.md").write_text("project copy changed\n")
+            root, k, why = page.owner_root(conn, "demo", want)  # only the personal one still has the measured version
+            self.assertEqual((root, k["scope"]), (self.tmp / "h", "personal"))
+            root, k, why = page.owner_root(conn, "demo", {skills.fingerprint(sibling)})
+            self.assertEqual((root, k["folder"]), (proj, sibling))  # folder.parents[2] is the project root
+            self.assertEqual(page.owner_root(conn, "demo", {"nope"}, loose=True)[0], self.tmp / "h")
+            self.assertIsNone(page.owner_root(conn, "absent", want)[0])
+        finally:
+            conn.close()
+
+    def test_a_project_skill_is_approved_with_the_project_as_cwd(self):
+        proj = self.tmp / "work" / "app"
+        folder = proj / ".claude" / "skills" / "pdemo"
+        for rel, text in (("SKILL.md", BASE_BODY), ("refs/a.md", "a\n")):
+            write(folder / rel, text)
+        conn = ingest.connect(self.db)
+        conn.execute("INSERT INTO sessions (session_id, project, cwd, title, prompts) VALUES ('s1', '-p', ?, 't', 1)", (str(proj),))
+        conn.commit()
+        conn.close()
+        self.make_run("pdemo-20260104T000000Z", stats.APPLY, "2026-01-04T00:00:00+00:00", skill="pdemo")
+        code, out = self.post("pdemo-20260104T000000Z", "approve")
+        self.assertEqual(code, 200, out)
+        self.assertEqual(skills.fingerprint(folder), self.draft_fp("pdemo-20260104T000000Z"))
+        self.assertEqual(self.fp(), self.old)  # the personal skill of another name is not touched
+
+
+class DecideMarkupTest(Fixture):
+    def body(self, run):
+        return RenderTest.render(self, f"run={run}")
+
+    def approve_button(self, body):
+        m = re.search(r'<button[^>]*data-opt-act="approve"[^>]*>', body)
+        return m.group(0) if m else None
+
+    def test_apply_has_an_enabled_approve_and_an_optional_reason(self):
+        body = self.body(APPLY_RUN)
+        self.assertNotIn("disabled", self.approve_button(body))
+        self.assertIn("Reason (optional)", body)
+        self.assertNotIn(" required", body)
+        self.assertIn('data-opt-act="reject"', body)
+        self.assertIn("not in git: no commit is made", body)
+
+    def test_not_enough_evidence_needs_the_reason_before_approve(self):
+        body = self.body(NOT_ENOUGH_RUN)
+        self.assertIn("disabled", self.approve_button(body))
+        self.assertNotIn("data-block", self.approve_button(body))  # the page script enables it once a reason is typed
+        self.assertIn("<textarea id=\"opt-reason\" rows=\"2\" required>", body)
+        self.assertIn("Reason (required to approve)", body)
+
+    def test_reject_verdict_has_approve_off_with_its_reason(self):
+        body = self.body(REJECT_RUN)
+        self.assertIn('disabled data-block="1"', self.approve_button(body))
+        self.assertIn("Approve is off: the verdict is Reject (because Reject)", body)
+        self.assertIn('data-opt-act="reject"', body)
+
+    def test_no_verdict_has_no_approve_and_no_draft_has_it_off(self):
+        (self.run_dir(REJECT_RUN) / "verdict.json").unlink()
+        body = self.body(REJECT_RUN)
+        self.assertIsNone(self.approve_button(body))
+        self.assertIn('data-opt-act="reject"', body)
+        path = self.run_dir() / "verdict.json"
+        path.write_text(json.dumps({**json.loads(path.read_text()), "draft_version": None, "draft_fingerprint": None}))
+        self.assertIn("Approve is off: no draft to apply", self.body(APPLY_RUN))
+
+    def test_an_approved_run_shows_the_decision_and_approve_off(self):
+        server.post(self.db, f"optimize/{APPLY_RUN}/approve", {"reason": "ok"}, "full")
+        body = self.body(APPLY_RUN)
+        self.assertIn("<b>Approved</b>", body)
+        self.assertIn("reason: ok", body)
+        self.assertIn("disabled", self.approve_button(body))
+
+    def test_a_git_skill_names_its_branch(self):
+        sh(self.root, "git", "init", "-q", "-b", "trunk")
+        self.assertIn("on the git branch <code>trunk</code>", self.body(APPLY_RUN))
 
 
 if __name__ == "__main__":

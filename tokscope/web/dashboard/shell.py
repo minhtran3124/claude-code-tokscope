@@ -25,7 +25,7 @@ from .pages.optimize import page_optimize
 from .pages.overview import page_overview
 from .pages.projects import page_projects
 from .pages.sessions import page_sessions
-from .scripts import DASH_CSS, DASH_JS, LIB_JS, MANAGED_JS
+from .scripts import DASH_CSS, DASH_JS, LIB_JS, MANAGED_JS, OPT_JS
 
 
 def _options(conn, f, only=None):
@@ -126,7 +126,7 @@ def render(conn, name, qs, stamp, level="full", token=""):
     if (qs.get("partial") or [""])[0]:
         return body
     scripts = (JS_CORE + (JS_SESSIONS if name == "sessions" else "") + JS_TREND + (JS_BENCH if name == "benchmarks" else "") + (JS_SUMMARY if name == "breakdowns" else "")
-               + (LIB_JS if name in ("library", "projects", "managed", "optimize") else "") + (MANAGED_JS if name == "managed" else "") + DASH_JS)
+               + (LIB_JS if name in ("library", "projects", "managed", "optimize") else "") + (OPT_JS if name in ("library", "optimize") else "") + (MANAGED_JS if name == "managed" else "") + DASH_JS)
     # on the Library, ?skill= is a skill's id, not the filter bar's skill name: other pages must not get it
     navf = Filters({**qs, "skill": [""]}) if name == "library" else f
     counts = _nav_counts(conn, level)
