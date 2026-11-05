@@ -37,7 +37,7 @@ def _ver_badge(state, run=None, link=False):
 def _verified_map(conn, found):
     """{skill id: (state, run id)}. Skills that share a folder name cannot be told apart in opt_applied, so an approve
     reads as edited only for a name that one folder has."""
-    names = Counter(k["dir"] for k in found)
+    names = Counter(k["dir"] for k in library.discover(conn))   # every project, not the filtered list: opt_applied has no scope
     return {k["id"]: library.verified(conn, k["dir"], k["folder"], names[k["dir"]] == 1) for k in found}
 
 

@@ -162,6 +162,20 @@ class LibraryTest(unittest.TestCase):
         self.assertRegex(page, r'<a class="sk"[^>]*data-origin="installed"[^>]*hidden>')
         self.assertIn("Show installed (3)", page)
 
+    def test_the_badge_counts_same_named_skills_in_every_project_not_only_the_filtered_one(self):
+        other = self.home / "work" / "other"
+        self.conn.execute("INSERT INTO sessions (session_id, project, cwd, title, prompts) VALUES ('s2', '-q', ?, 't', 1)", (str(other),))
+        self.conn.commit()
+        skill(self.project / ".claude" / "skills" / "dup", "dup")
+        skill(other / ".claude" / "skills" / "dup", "dup")
+        self.conn.executescript(apply.TABLE)
+        self.conn.execute("INSERT INTO opt_applied VALUES (?,?,?,?,?,?,?,?,?)",
+                          ("r1", "dup", "approve", "old", "gone", None, "Apply", None, "2026-01-01T00:00:00+00:00"))
+        self.conn.commit()
+        page = dashboard.page_library(self.conn, dashboard.Filters({"project": ["-p"]}), {}, "full")
+        card = re.search(r'<a class="sk"[^>]*data-dir="dup".*?</a>', page, re.S).group(0)
+        self.assertNotIn("Edited after run", card)   # two folders share the name, so an approve cannot say which was edited
+
     def test_a_skill_page_renders_skill_md_and_links_its_files(self):
         k = self.by_dir()[("personal", "mine-a")]
         (k["folder"] / "SKILL.md").write_text("---\nname: mine-a\ndescription: uses `x`\nmodel: opus\n---\nSee [the ref](references/r.md).\n")
