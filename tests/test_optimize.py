@@ -67,6 +67,11 @@ class DeadCssTest(unittest.TestCase):
         for dead in ("ol.steps", ".runline", ".cmp .viewbar", ".cmp .path", ".opt .note", ".runbar{", ".runbar i{"):
             self.assertNotIn(dead, LAYOUT_TOKEN_DASH_CSS)
 
+    def test_the_base_opt_rule_is_gone_with_its_note(self):
+        from tokscope.web.theme import layout
+        for css in (layout.LAYOUT_CSS, layout.LAYOUT_DASH_CSS, layout.LAYOUT_TOKEN_CSS, layout.LAYOUT_TOKEN_DASH_CSS):
+            self.assertNotIn("\n.opt{", css)
+
 
 if __name__ == "__main__":
     unittest.main()

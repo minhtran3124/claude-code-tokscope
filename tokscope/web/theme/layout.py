@@ -256,7 +256,6 @@ table.sbs td.del{background:color-mix(in oklch,var(--fail) 12%,transparent)}
 table.sbs td.add{background:color-mix(in oklch,var(--pass) 12%,transparent)}
 .decide .acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .optform{display:flex;flex-direction:column;gap:8px}
-.opt{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .optrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 /* a poll that finds new data: the live dot gives one ring (#125 Pulse, 600 ms, not a token), never a loop; offline shows a hollow dot */
 @keyframes ring{from{box-shadow:0 0 0 0 color-mix(in oklch,var(--pass) 60%,transparent)}to{box-shadow:0 0 0 8px transparent}}
