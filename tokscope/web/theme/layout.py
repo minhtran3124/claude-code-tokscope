@@ -360,8 +360,8 @@ svg .vmark{cursor:default}
 .segctl{display:flex}
 .segctl .chip{flex:1;justify-content:center;border-radius:0;padding:5px 8px}
 .segctl .chip+.chip{margin-left:calc(-1*var(--line-w,1px))}
-.segctl .chip:first-child{border-radius:999px 0 0 999px}
-.segctl .chip:last-child{border-radius:0 999px 999px 0}
+.segctl .chip:first-child{border-radius:var(--r-btn) 0 0 var(--r-btn)}
+.segctl .chip:last-child{border-radius:0 var(--r-btn) var(--r-btn) 0}
 #keys-btn{align-self:flex-start}
 /* end overview */
 /* phone */
@@ -476,7 +476,7 @@ details.finding-sec .empty code{overflow-wrap:anywhere}
 """
 
 # The skin tokens (set in the :root rule of both skins; the dark rules only change colours and the line weight and shadow tokens). Ink value | Classic value.
-#   --line-w 1.5px | 1px         outline width of a card, control or tray
+#   --line-w 1px | 1px           outline width of a card, control or tray
 #   --line-c ink | edge          outline colour;  --focus-c ink | mark: focus ring;  --row-c grid | edge: row and day rules
 #   --r-card 14px | 12px         radius of a card;  --r-tile 12px | 10px: tile, row, KPI;  --r-box 12px | 8px: panel, list
 #   --r-ctl 999px | 8px          radius of an input, select, chip;  --r-btn 999px | 6px: small button;  --r-bar 5px | 4px: bar track
@@ -566,8 +566,8 @@ mark{background:var(--hl);color:inherit;border-radius:2px}
 .side{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:28px 12px 20px 16px;border-right:1px solid var(--edge);background:var(--page);z-index:10}
 .brand{font-weight:600;font-size:13px;margin:0 0 14px 10px;display:flex;align-items:center;gap:7px}
 .toc a{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;color:var(--ink2);text-decoration:none;font-size:14px;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);position:relative;z-index:1}
-.toc a:hover{background:color-mix(in oklch,var(--mark) 10%,transparent);color:var(--ink);transform:translateX(2px)}
-.toc a.on{background:color-mix(in oklch,var(--mark) 15%,transparent);color:var(--mark-ink);font-weight:600}
+.toc a:hover{background:color-mix(in oklch,var(--ink) 7%,transparent);color:var(--ink)}
+.toc a.on{background:var(--chip);color:var(--ink);font-weight:600;box-shadow:inset 3px 0 0 var(--ink)}
 .toc a:focus-visible{outline:2px solid var(--focus-c);outline-offset:1px}
 .sub-toc{display:flex;flex-direction:column;gap:1px;margin:2px 0 4px 14px;padding-left:6px;border-left:1px solid var(--grid)}
 .sub-toc a{font-size:13px;padding:4px 10px}
@@ -637,10 +637,10 @@ tr.runs-row td{border-top:0;padding-top:0}
 #progress{position:fixed;inset:0 0 auto 0;height:3px;z-index:40;transform-origin:0 50%;transform:scaleX(0)}
 /* sidebar: one pill slides to the section in view */
 .toc{position:relative}
-.toc-pill{position:absolute;left:0;top:0;border-radius:8px;pointer-events:none;background:color-mix(in oklch,var(--mark) 15%,transparent);box-shadow:inset 3px 0 0 var(--mark);transition:transform var(--t-layout) var(--ease-expo),width var(--t-layout) var(--ease-expo),height var(--t-layout) var(--ease-expo),opacity var(--t-state)}
+.toc-pill{position:absolute;left:0;top:0;border-radius:8px;pointer-events:none;background:var(--chip);box-shadow:inset 3px 0 0 var(--ink);transition:transform var(--t-layout) var(--ease-expo),width var(--t-layout) var(--ease-expo),height var(--t-layout) var(--ease-expo),opacity var(--t-state)}
 .has-pill .toc a.on{background:transparent}
 .side-foot{display:flex;gap:6px;margin:18px 0 0 4px}
-.chip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);padding:var(--pad-chip);border:var(--line-w) solid var(--line-c);border-radius:999px}
+.chip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);padding:var(--pad-chip);border:var(--line-w) solid var(--line-c);border-radius:var(--r-ctl)}
 .chip:focus-visible{outline:2px solid var(--focus-c);outline-offset:2px}
 .chip kbd,.keys kbd{font:600 11px var(--mono);padding:1px 6px;border-radius:5px;border:1px solid var(--edge);border-bottom-width:2px;background:var(--surface);color:var(--ink)}
 ::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
