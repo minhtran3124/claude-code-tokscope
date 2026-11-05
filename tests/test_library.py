@@ -9,7 +9,9 @@ from unittest import mock
 from tokscope.core import markdown
 from tokscope.features import library
 from tokscope.web import dashboard
+from tokscope.core import skills
 from tokscope.core.ingest import connect
+from tokscope.experiments.skillopt import apply
 
 
 def skill(folder, name, description="Does a thing.", body="# Title\n\nText.\n"):
@@ -160,6 +162,20 @@ class LibraryTest(unittest.TestCase):
         self.assertRegex(page, r'<a class="sk"[^>]*data-origin="installed"[^>]*hidden>')
         self.assertIn("Show installed (3)", page)
 
+    def test_the_badge_counts_same_named_skills_in_every_project_not_only_the_filtered_one(self):
+        other = self.home / "work" / "other"
+        self.conn.execute("INSERT INTO sessions (session_id, project, cwd, title, prompts) VALUES ('s2', '-q', ?, 't', 1)", (str(other),))
+        self.conn.commit()
+        skill(self.project / ".claude" / "skills" / "dup", "dup")
+        skill(other / ".claude" / "skills" / "dup", "dup")
+        self.conn.executescript(apply.TABLE)
+        self.conn.execute("INSERT INTO opt_applied VALUES (?,?,?,?,?,?,?,?,?)",
+                          ("r1", "dup", "approve", "old", "gone", None, "Apply", None, "2026-01-01T00:00:00+00:00"))
+        self.conn.commit()
+        page = dashboard.page_library(self.conn, dashboard.Filters({"project": ["-p"]}), {}, "full")
+        card = re.search(r'<a class="sk"[^>]*data-dir="dup".*?</a>', page, re.S).group(0)
+        self.assertNotIn("Edited after run", card)   # two folders share the name, so an approve cannot say which was edited
+
     def test_a_skill_page_renders_skill_md_and_links_its_files(self):
         k = self.by_dir()[("personal", "mine-a")]
         (k["folder"] / "SKILL.md").write_text("---\nname: mine-a\ndescription: uses `x`\nmodel: opus\n---\nSee [the ref](references/r.md).\n")
@@ -273,6 +289,62 @@ class MarkdownTest(unittest.TestCase):
         out = markdown.render("| a | b |\n|---|---|\n| **1** | 2 |\n\n```\n<b>\n```")
         self.assertIn("<td><strong>1</strong></td>", out)
         self.assertIn("<pre><code>&lt;b&gt;</code></pre>", out)
+
+
+class VerifiedTest(unittest.TestCase):
+    """The state shown beside a skill: what `opt_applied` says about the folder as it is now."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.folder = skill(self.tmp / "demo", "demo")
+        self.live = skills.fingerprint(self.folder)
+        self.conn = connect(self.tmp / "t.db")
+
+    def table(self):
+        self.conn.executescript(apply.TABLE)
+
+    def row(self, run, action, new, at):
+        self.conn.execute("INSERT INTO opt_applied VALUES (?,?,?,?,?,?,?,?,?)", (run, "demo", action, "old", new, None, "Apply", None, at))
+
+    def test_no_table_and_no_row_are_not_verified(self):
+        self.assertEqual(library.verified(self.conn, "demo", self.folder), ("none", None))
+        self.assertEqual(library.approved_versions(self.conn, "demo"), {})
+        self.table()
+        self.assertEqual(library.verified(self.conn, "demo", self.folder), ("none", None))
+
+    def test_an_approve_of_the_live_version_is_verified_until_the_folder_is_edited(self):
+        self.table()
+        self.row("r1", "approve", self.live, "2026-01-01T00:00:00+00:00")
+        self.assertEqual(library.verified(self.conn, "demo", self.folder), ("verified", "r1"))
+        (self.folder / "SKILL.md").write_text("edited by hand\n")
+        self.assertEqual(library.verified(self.conn, "demo", self.folder), ("edited", "r1"))
+        self.assertEqual(library.verified(self.conn, "demo", self.folder, unique=False), ("none", None))
+
+    def test_rejects_only_and_a_later_revert_are_not_verified(self):
+        self.table()
+        self.row("r0", "reject", self.live, "2026-01-01T00:00:00+00:00")
+        self.assertEqual(library.verified(self.conn, "demo", self.folder), ("none", None))
+        self.row("r1", "approve", self.live, "2026-01-02T00:00:00+00:00")
+        self.row("r1", "revert", "old", "2026-01-03T00:00:00+00:00")
+        self.assertEqual(library.verified(self.conn, "demo", self.folder), ("none", None))
+        self.row("r2", "approve", self.live, "2026-01-04T00:00:00+00:00")
+        self.assertEqual(library.verified(self.conn, "demo", self.folder), ("verified", "r2"))
+
+    def test_approved_versions_map_a_version_to_its_run(self):
+        self.table()
+        self.row("r1", "approve", "v-a", "2026-01-01T00:00:00+00:00")
+        self.row("r2", "approve", "v-b", "2026-01-02T00:00:00+00:00")
+        self.row("r3", "reject", "v-c", "2026-01-03T00:00:00+00:00")
+        self.assertEqual(library.approved_versions(self.conn, "demo"), {"v-a": "r1", "v-b": "r2"})
+
+    def test_approved_versions_order_by_latest_approve(self):
+        self.table()
+        self.row("r1", "approve", "v-a", "2026-01-01T00:00:00+00:00")
+        self.row("r2", "approve", "v-b", "2026-01-02T00:00:00+00:00")
+        self.row("r3", "revert", "v-a", "2026-01-03T00:00:00+00:00")
+        self.row("r4", "approve", "v-a", "2026-01-04T00:00:00+00:00")
+        got = library.approved_versions(self.conn, "demo")
+        self.assertEqual(list(got.items()), [("v-b", "r2"), ("v-a", "r4")])
 
 
 if __name__ == "__main__":

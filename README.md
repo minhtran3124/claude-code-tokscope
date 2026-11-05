@@ -28,6 +28,9 @@ show no prompts, titles, paths or project names. The Managed screenshot uses dem
 
 ![The dashboard Managed page](docs/screenshots/dashboard-managed.png)
 
+**Optimize**: the runs of `tokscope optimize run`, each with its gates, evidence per case, before and after, and Approve
+or Reject. Start a run from a skill in the Library; it shows the cost estimate before it spends anything.
+
 **Report** (`tokscope open`): one HTML file with the last 7 days, the totals, the sessions and the breakdowns.
 
 ![The HTML report](docs/screenshots/report-overview.png)

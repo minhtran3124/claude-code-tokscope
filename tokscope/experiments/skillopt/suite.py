@@ -233,11 +233,12 @@ def freeze(suite, dest):
     return dev, hold
 
 
-def editor_workspace(skill, dest, cwd=None, source=None, suite=None):
+def editor_workspace(skill, dest, cwd=None, source=None, suite=None, triggers=None):
     """Copy the skill's fingerprint file set and only the dev cases (with the fixtures only they name) to `dest`. The
     folder the editor sees never holds a holdout id, prompt or fixture. `dest` must not exist or be empty. `source`
     is a folder to take the skill files from (a run's versions/vN) and `suite` an already loaded Suite (a run's frozen
-    one); by default both come from the live skill."""
+    one); by default both come from the live skill. `triggers` is the train-split trigger prompts the editor may see,
+    written to evals/triggers.json; the test split is never passed in."""
     suite = suite or load(skill, cwd)
     dev, _ = split(suite, write=False)
     dest = Path(dest)
@@ -262,6 +263,8 @@ def editor_workspace(skill, dest, cwd=None, source=None, suite=None):
     out["evals"] = keep
     (dest / "evals").mkdir(exist_ok=True)
     (dest / "evals" / NAME).write_text(json.dumps(out, indent=2, ensure_ascii=False) + "\n")
+    if triggers:
+        (dest / "evals" / "triggers.json").write_text(json.dumps({"triggers": triggers}, indent=2, ensure_ascii=False) + "\n")
     return dest
 
 

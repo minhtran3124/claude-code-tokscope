@@ -256,7 +256,6 @@ table.sbs td.del{background:color-mix(in oklch,var(--fail) 12%,transparent)}
 table.sbs td.add{background:color-mix(in oklch,var(--pass) 12%,transparent)}
 .decide .acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .optform{display:flex;flex-direction:column;gap:8px}
-.opt{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .optrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 /* a poll that finds new data: the live dot gives one ring (#125 Pulse, 600 ms, not a token), never a loop; offline shows a hollow dot */
 @keyframes ring{from{box-shadow:0 0 0 0 color-mix(in oklch,var(--pass) 60%,transparent)}to{box-shadow:0 0 0 8px transparent}}
@@ -713,7 +712,7 @@ td:not(:first-child):not(.l):not(.lm):not(.u):not(:is(.runs-row,table.sbs) td){f
 td.l,td.lm,td.calls,.md td{font-family:var(--sans)}
 .today-nums b,.pnums b{font-weight:600}
 .btn,.chip{font-weight:var(--btn-w)}
-.bar i u,.key i,.split u,.share i,.runbar i{box-shadow:var(--seg-ring)}
+.bar i u,.key i,.split u,.share i{box-shadow:var(--seg-ring)}
 """
 
 LAYOUT_TOKEN_DASH_CSS = """
@@ -823,25 +822,12 @@ code.login{display:block;margin-top:2px;font-size:11.5px;color:var(--ink2);overf
 .busy{position:relative;padding-left:30px!important;opacity:.9;cursor:progress}
 .busy::before{content:"";position:absolute;left:11px;top:50%;width:11px;height:11px;margin-top:-7px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
 .spin{display:inline-block;width:12px;height:12px;margin-right:7px;vertical-align:-1px;border:2px solid var(--mark);border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
-.runbar{background:var(--track);overflow:hidden;margin:14px 0 10px}
-.runbar i{display:block;width:35%;height:100%;background:var(--mark);animation:slide 1.6s var(--ease) infinite}
 /* a page takes a moment to render: DASH_JS adds html.loading from a click on a link until the next page arrives */
 #navload{position:fixed;inset:0 0 auto 0;height:3px;z-index:50;overflow:hidden;opacity:0;pointer-events:none;transition:opacity var(--t-state) var(--ease)}
 #navload i{display:block;width:35%;height:100%;background:var(--mark);animation:slide 1.6s var(--ease) infinite}
 html.loading #navload{opacity:1}
 html.loading main{opacity:.6;transition:opacity var(--t-state) var(--ease)}
-.runline{margin:0 0 8px}
-.runline b{font-variant-numeric:tabular-nums}
 p.warn{color:var(--agent-ink);font-size:13px}
-ol.steps{list-style:none;margin:6px 0 0;padding:0;max-height:360px;overflow-y:auto;font-size:12.5px}
-ol.steps li{display:flex;gap:10px;padding:4px 0;border-bottom:1px solid var(--grid)}
-ol.steps span{min-width:0;overflow-wrap:anywhere}
-ol.steps time{flex:none;width:5.5em;color:var(--muted);font:12px var(--mono)}
-ol.steps li.sub span{padding-left:16px;color:var(--ink2)}
-ol.steps li.say span{color:var(--ink2);font-style:italic}
-ol.steps li:is(.error,.denied) span{color:var(--fail)}
-ol.steps li.retry span{color:var(--agent-ink)}
-ol.steps li.start span,ol.steps li.end span{font-weight:600}
 .outcome{display:flex;flex-direction:column;gap:4px;margin:12px 0 6px;padding:12px 14px;border:var(--line-w) solid var(--line-c);border-radius:var(--r-tile);animation:reveal var(--t-layout) var(--ease) both}
 .outcome b{font-size:15px}
 .outcome span{overflow-wrap:anywhere}
@@ -854,8 +840,6 @@ a.outcome.run:hover{background:color-mix(in oklch,var(--mark) 15%,var(--surface)
 .runbar i,.spin,.busy::before{animation:none}
 #navload i{animation:none;width:100%}
 }
-.cmp .viewbar{margin-bottom:8px}
-.cmp .path{margin:0}
 table.sbs{width:100%;table-layout:fixed;border-collapse:collapse;font:12.5px/1.5 var(--mono)}
 table.sbs col.n{width:3.2em}
 table.sbs th{text-align:left}
@@ -872,17 +856,6 @@ table.sbs{font-size:11.5px}
 .decide{position:sticky;bottom:12px;z-index:6;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;margin:14px 0 0;padding:10px 14px;border-radius:12px;background:var(--surface);animation:reveal var(--t-layout) var(--ease) both}
 .decide .note{margin-left:6px}
 .btn.danger{color:var(--fail)}
-#bench .verdict{font-size:14px;margin:6px 0 10px}
-#bench-form{margin:10px 0}
-#bench-form select{font:inherit;font-size:13px;padding:var(--pad-sel);border:var(--line-w) solid var(--line-c);border-radius:var(--r-ctl);background:var(--surface);color:var(--ink);max-width:100%}
-#task-form label.wide{display:flex;flex-direction:column;gap:4px;font-size:13px;margin:0 0 8px}
-#task-form input,#task-form textarea{font:inherit;font-size:13px;padding:6px 8px;border:var(--line-w) solid var(--line-c);border-radius:8px;background:var(--surface);color:var(--ink)}
-#task-form textarea{font-family:var(--mono)}
-#task-new{margin-top:10px}
-table.bres td:not(:first-child),table.bres th:not(:first-child){text-align:right}
-table.bres td:last-child,table.bres th:last-child{text-align:left}
-details.more#optimize-panel{margin:-4px 0 14px}
-.opt .note{margin:0}
 .optrow select,.optrow input{font:inherit;font-size:13px;padding:var(--pad-sel);border:var(--line-w) solid var(--line-c);border-radius:var(--r-ctl);background:var(--surface);color:var(--ink)}
 .optrow input{width:6em}
 select option{background:var(--surface);color:var(--ink)}
@@ -903,9 +876,9 @@ select option{background:var(--surface);color:var(--ink)}
 .tdot{stroke-width:1.5}
 .privacy{border:var(--line-w) solid var(--line-c);border-radius:var(--r-box);padding:8px 12px;margin:0 0 12px;font-size:13px;color:var(--ink2);background:var(--surface)}
 .privacy b{color:var(--mark-ink);text-transform:uppercase;font-size:11px;margin-right:6px;margin:0}
-.filters select,.libtools select,#bench-form select,.optrow select,.optrow input,#reg-form input,#mcp-form select{font-family:var(--num-font);font-size:var(--ctl-size);font-weight:400}
-.filters a,.fresh,.kpi .dl .trend,.state,.st .pill,.badge,a.sk .meta,.libview .ste-n,.runline b,.range-dates,.cause,.vs .trend,.tag,.movers td:not(:first-child):not(.tagc),.movers th{font-family:var(--num-font)}
-table.mcp td:is(:nth-child(2),:nth-child(3),:nth-child(8)),table.bres td:last-child,table.bres td:first-child{font-family:var(--sans)}
+.filters select,.libtools select,.optrow select,.optrow input,#reg-form input,#mcp-form select{font-family:var(--num-font);font-size:var(--ctl-size);font-weight:400}
+.filters a,.fresh,.kpi .dl .trend,.state,.st .pill,.badge,a.sk .meta,.libview .ste-n,.range-dates,.cause,.vs .trend,.tag,.movers td:not(:first-child):not(.tagc),.movers th{font-family:var(--num-font)}
+table.mcp td:is(:nth-child(2),:nth-child(3),:nth-child(8)){font-family:var(--sans)}
 table.mcp td.st{font-family:var(--num-font)}
 .latest>.note:first-child{font-family:var(--num-font);font-weight:var(--lab-w);font-size:var(--lab-size);text-transform:var(--lab-case);letter-spacing:var(--lab-track)}
 .latest>.note:first-child time{font-weight:400}

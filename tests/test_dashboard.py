@@ -245,7 +245,8 @@ class ServerTest(unittest.TestCase):
         groups = re.findall(r'<div class="grp">(\w+)</div>', side)
         self.assertEqual(groups, ["Usage", "Workspace", "Connect", "System"])
         order = re.findall(r'<a href="/(\w+)[?"]', side.split('<nav class="toc"', 1)[1])
-        self.assertEqual(order, ["overview", "sessions", "breakdowns", "projects", "library", "benchmarks", "managed", "settings"])
+        self.assertEqual(order, ["overview", "sessions", "breakdowns", "projects", "library", "optimize", "benchmarks", "managed",
+                                 "settings"])
         self.assertNotIn("data-set-theme", side)
         self.assertNotIn("data-set-tz", side)
 

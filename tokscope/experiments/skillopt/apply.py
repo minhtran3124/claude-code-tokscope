@@ -1,6 +1,7 @@
-"""Approve, reject or revert an optimize run. Approve replaces the skill's fingerprinted files with the measured draft,
-checks that the skill's fingerprint is the measured one, and commits when the skill is in git (brief: Approve).
-apply.json is written before the first file moves, so a stop mid-write is finished or rolled back by the next command."""
+"""Approve, reject or revert an optimize run. Approve installs the measured draft so the installed fingerprint equals
+the measured one, commits only the skill's files when the skill is in git, and records the version, the change and the
+decision. Any failure, or a stop at any point, leaves the skill at its old fingerprint (apply.json says how to finish
+or undo an apply that was cut short; every command runs `recover` first)."""
 import json
 import os
 import shutil
@@ -11,32 +12,34 @@ from pathlib import Path
 
 from ... import paths
 from ...core import ingest, skills
-from ...features import changes as changes_log
+from ...features import changes
 from . import stats, store, suite
 
-APPLY, DECISION = "apply.json", "decision.json"
+APPLY_JSON, DECISION_JSON = "apply.json", "decision.json"
 TABLE = """
 CREATE TABLE IF NOT EXISTS opt_applied(
-    id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT, skill TEXT, kind TEXT, old_fingerprint TEXT,
-    new_fingerprint TEXT, commit_sha TEXT, at TEXT, reason TEXT);
-CREATE INDEX IF NOT EXISTS opt_applied_run ON opt_applied(run_id);
+    run_id TEXT, skill TEXT, action TEXT, old_version TEXT, new_version TEXT, commit_sha TEXT, verdict TEXT,
+    reason TEXT, at TEXT, PRIMARY KEY(run_id, action, at));
 """
+TMP = ".{}.tokscope-tmp-{}"  # hidden, so a leftover never changes the fingerprint
 
 
 class Refused(ValueError):
-    """The action was not done and the skill is as it was (the CLI exits 1). A plain ValueError is a load error (2)."""
+    """The apply was refused or undone; the skill is at its old fingerprint (the CLI exits 2)."""
 
 
-def _now():
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+# small helpers
+
+def _now(now):
+    if isinstance(now, str):
+        return now
+    return (now or datetime.now(timezone.utc)).isoformat()
 
 
 def _write_json(path, data):
-    tmp = path.with_name(path.name + ".tmp")
-    with open(tmp, "w") as f:
-        f.write(json.dumps(data, indent=2, sort_keys=True) + "\n")
-        f.flush()
-        os.fsync(f.fileno())
+    path = Path(path)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
     os.replace(tmp, path)
 
 
@@ -47,359 +50,433 @@ def _read_json(path):
         return None
 
 
-# files
-
-def _rels(folder):
-    return {p.relative_to(folder).as_posix() for p in skills._files(Path(folder))}
-
-
-def _planned(folder, src):
-    """The relative paths _replace would write or remove."""
-    old, new = _rels(folder), _rels(src)
-    same = {r for r in old & new if skills._content(Path(folder) / r) == skills._content(Path(src) / r)}
-    return sorted((old | new) - same)
-
-
-def _replace(folder, src):
-    """Make the fingerprinted files of `folder` those of `src`: each file goes through a temp file and a rename, files
-    `src` lacks are removed. Hidden files, bench folders and large files stay. Returns the changed relative paths."""
-    folder, src = Path(folder), Path(src)
-    old, new = _rels(folder), _rels(src)
-    changed = []
-    for rel in sorted(new):
-        target = folder / rel
-        if target.is_file() and not target.is_symlink() and skills._content(target) == skills._content(src / rel):
-            continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        tmp = target.with_name(f".{target.name}.tokscope-tmp")
-        shutil.copy2(src / rel, tmp)
-        os.replace(tmp, target)
-        changed.append(rel)
-    for rel in sorted(old - new):
-        (folder / rel).unlink()
-        changed.append(rel)
-        parent = (folder / rel).parent
-        while parent != folder:  # leave no empty folder of a removed file behind
-            try:
-                parent.rmdir()
-            except OSError:
-                break
-            parent = parent.parent
-    return changed
-
-
-def _restore(folder, skill, fp):
-    """Put the kept snapshot of version `fp` back; ApplyError-free: the caller reports."""
-    snap = skills.snapshot_dir(skill, fp)
-    if skills.fingerprint(snap) != fp:
-        return False
-    _replace(folder, snap)
-    return skills.fingerprint(folder) == fp
-
-
-# git
-
-def _git(top, *args, check=False):
-    try:
-        r = subprocess.run(["git", "--literal-pathspecs", "-C", str(top), *args], capture_output=True, text=True,
-                           timeout=120, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
-    except (OSError, subprocess.SubprocessError) as e:
-        if check:
-            raise Refused(f"git failed: {e}") from None
-        return None
-    return r
-
-
-def _repo(folder):
-    """(top, branch) when the folder is in a git work tree; (None, None) outside git. Refused on a detached HEAD."""
-    r = _git(folder, "rev-parse", "--show-toplevel")
-    if r is None or r.returncode != 0 or not r.stdout.strip():
-        return None, None
-    top = Path(r.stdout.strip()).resolve()
-    b = _git(top, "symbolic-ref", "-q", "--short", "HEAD")
-    if b is None or b.returncode != 0 or not b.stdout.strip():
-        raise Refused(f"{folder}: HEAD is detached; check out a branch first, nothing was changed")
-    return top, b.stdout.strip()
-
-
-def _commit(top, folder, rels, subject, body):
-    """Commit only these files; returns the sha. Files git does not know yet are added as intent-to-add so --only sees
-    them. On any failure the intent-to-add entries are dropped again and Refused is raised."""
-    spec = [(Path(folder) / r).resolve().relative_to(top).as_posix() for r in rels]
-    added = []
-    try:
-        for p in spec:
-            if (Path(top) / p).exists() and _git(top, "ls-files", "--error-unmatch", "--", p).returncode != 0:
-                r = _git(top, "add", "-N", "--", p)
-                if r.returncode != 0:
-                    raise Refused(f"git add failed: {r.stderr.strip() or r.stdout.strip()}")
-                added.append(p)
-        r = _git(top, "commit", "--only", "-m", subject, "-m", body, "--", *spec)
-        if r.returncode != 0:
-            raise Refused(f"git commit failed: {(r.stderr.strip() or r.stdout.strip())[-400:]}")
-    except Refused:
-        for p in added:
-            _git(top, "reset", "-q", "--", p)
-        raise
-    return _git(top, "rev-parse", "HEAD").stdout.strip()
-
-
-def _committed(top, folder, rels, subject):
-    """For recovery: the sha when these files have no uncommitted change and HEAD has this subject, else None."""
-    spec = [(Path(folder) / r).resolve().relative_to(top).as_posix() for r in rels]
-    st = _git(top, "status", "--porcelain", "--", *spec)
-    head = _git(top, "log", "-1", "--format=%H%n%s")
-    if st is None or head is None or st.stdout.strip() or head.returncode != 0:
-        return None
-    sha, _, subj = head.stdout.partition("\n")
-    return sha.strip() if subj.strip() == subject else None
-
-
-# the run
-
-def _open(run_id):
-    run = store.find_run(run_id)
-    plan = store.read_plan(run)
-    verdict = _read_json(run / "verdict.json")
-    return run, plan, verdict
-
-
-def _folder(plan):
-    """The skill's real path: where the run was started from, else where the skill is found from here."""
-    src = plan.get("source")
-    if src and (Path(src) / "SKILL.md").is_file():
-        return Path(src).resolve()
-    found = suite._folder(plan["skill"], None)
-    return Path(found).resolve()
-
-
-def _subject(kind, skill, a, b):
-    return f"optimize({skill}): {a} → {b}" if kind == "approve" else f"optimize({skill}): revert {a} → {b}"
-
-
-def _body(run, kind, verdict, reason):
-    lines = []
-    if verdict:
-        lines.append(f"verdict: {verdict.get('verdict')} ({verdict.get('reason')})")
-    lines.append(f"run: {run.name}")
-    if reason:
-        lines.append(f"reason: {reason}")
-    return "\n".join(lines)
-
-
-def _conn():
+def _db():
     conn = ingest.connect(paths.db())
     conn.executescript(TABLE)
     return conn
 
 
-def _complete(run, plan, verdict, a, conn=None):
-    """Steps 6 and 7 of the brief, once the files hold the target version. Used by an apply and by recovery."""
-    skill, folder = a["skill"], Path(a["folder"])
-    own = conn is None
-    conn = conn or _conn()
+def _files(folder):
+    return {p.relative_to(folder).as_posix(): p for p in skills._files(Path(folder))}
+
+
+def _clean_tmp(folder):
+    for p in Path(folder).rglob(".*.tokscope-tmp-*"):
+        if p.is_file():
+            p.unlink(missing_ok=True)
+
+
+def _symlinked_parent(folder, rel):
+    """The first folder between `folder` and `rel` that is a symlink (rglob does not follow those, so a file written
+    below one would land outside the skill), or None."""
+    p = Path(folder)
+    for part in Path(rel).parts[:-1]:
+        p = p / part
+        if p.is_symlink():
+            return p
+    return None
+
+
+def _prune(path, folder):
+    """Remove the empty folders above `path`, up to `folder`."""
+    parent = path.parent
+    while parent != folder:
+        try:
+            parent.rmdir()
+        except OSError:
+            break
+        parent = parent.parent
+
+
+def _replace(folder, src):
+    """Make the covered files of `folder` (the fingerprint's file set) the covered files of `src`. Removed files go
+    first (so a file can become a folder); each new file is written beside its target and renamed into place.
+    Uncovered files (evals/, hidden, over 1 MB) are never listed, so never touched."""
+    folder, src = Path(folder), Path(src)
+    want, have = _files(src), _files(folder)
+    for rel in sorted(set(have) - set(want)):
+        have[rel].unlink(missing_ok=True)
+        _prune(have[rel], folder)
+    for rel, f in want.items():
+        link = _symlinked_parent(folder, rel)
+        if link:
+            raise OSError(f"{link} is a symlink; {rel} would be written outside the skill")
+        target = folder / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp = target.parent / TMP.format(target.name, os.getpid())
+        shutil.copyfile(f, tmp)
+        shutil.copymode(f, tmp)
+        os.replace(tmp, target)
+    _clean_tmp(folder)
+
+
+def _restore(state):
+    """Put the old version back from its snapshot; Refused (state kept) when that cannot be done."""
+    snap = skills.snapshot_dir(state["skill"], state["old"])
+    folder = Path(state["folder"])
+    if skills.fingerprint(snap) != state["old"]:
+        raise Refused(f"{state['skill']}: cannot restore {state['old']}: the snapshot {snap} is missing or changed; "
+                      f"copy it over {folder} by hand, then delete {state['run_dir']}/{APPLY_JSON}")
     try:
-        commit = a.get("commit")
-        if a.get("git_top") and commit is None:
-            top, subject = Path(a["git_top"]), a["subject"]
-            if a.get("recovering"):
-                commit = _committed(top, folder, a["changed"], subject)
-            if commit is None and (a["changed"] or not a.get("recovering")):
-                try:
-                    commit = _commit(top, folder, a["changed"], subject, a["body"])
-                except Refused:
-                    if not _restore(folder, skill, a["from"]):
-                        raise Refused(f"the commit failed and the snapshot of {a['from']} could not be restored; "
-                                      f"see {run / APPLY}") from None
-                    a.update(state="rolled_back", error="commit failed")
-                    _write_json(run / APPLY, a)
-                    raise
-        now = _now()
-        skills.record(conn, skill, folder, now, "optimize")
-        note = None
-        if a["kind"] == "approve":
-            try:
-                changes_log.add_change(conn, "Optimize applied", skill=skill, at=now)
-            except sqlite3.Error as e:  # the apply worked; keep it and note why the row is missing
-                note = str(e)
-        decision = _read_json(run / DECISION) or {}
-        entry = {"old_fingerprint": a["from"], "new_fingerprint": a["to"], "commit": commit, "time": now,
-                 "reason": a.get("reason")}
-        if note:
-            entry["change_error"] = note
-        if a["kind"] == "approve":
-            decision = {"decision": "approved", "run_id": run.name, "skill": skill,
-                        "verdict": (verdict or {}).get("verdict"), **entry}
-        else:
-            decision["reverted"] = entry
-        _write_json(run / DECISION, decision)
-        conn.execute("INSERT INTO opt_applied(run_id, skill, kind, old_fingerprint, new_fingerprint, commit_sha, at, reason)"
-                     " VALUES (?,?,?,?,?,?,?,?)", (run.name, skill, a["kind"], a["from"], a["to"], commit, now, a.get("reason")))
-        conn.commit()
-        a.update(state="done", commit=commit)
-        a.pop("recovering", None)
-        _write_json(run / APPLY, a)
-        return {**entry, "kind": a["kind"], "skill": skill, "run_id": run.name, "folder": str(folder)}
-    finally:
-        if own:
-            conn.close()
+        _replace(folder, snap)
+        src = Path(state.get("source") or "")
+        if state.get("source") and src.is_dir():  # a file the apply created that the old version does not list
+            for rel in set(_files(src)) - set(_files(snap)):
+                p = folder / rel
+                if not _symlinked_parent(folder, rel) and p.is_file() and not p.is_symlink():
+                    p.unlink()
+                    _prune(p, folder)
+    except OSError as e:
+        raise Refused(f"{state['skill']}: restoring {state['old']} failed ({e}); copy {snap} over {folder} by hand") from None
+    if skills.fingerprint(folder) != state["old"]:
+        raise Refused(f"{state['skill']}: restoring {state['old']} did not reach it; copy {snap} over {folder} by hand")
 
 
-def recover(run, plan=None, verdict=None):
-    """Finish or roll back an apply that stopped half way (apply.json not `done`). Returns a line to print, or None."""
-    run = Path(run)
-    a = _read_json(run / APPLY)
-    if not a or a.get("state") != "writing":
+# git
+
+def _git(top, *args):
+    env = {**os.environ, "GIT_LITERAL_PATHSPECS": "1"}
+    try:
+        return subprocess.run(["git", "-C", str(top), *args], capture_output=True, text=True, env=env)
+    except FileNotFoundError:  # git is not installed: treat the folder as not in git
+        return subprocess.CompletedProcess(args, 127, "", "git not found")
+
+
+def _toplevel(folder):
+    r = _git(folder, "rev-parse", "--show-toplevel")
+    return Path(r.stdout.strip()).resolve() if r.returncode == 0 and r.stdout.strip() else None
+
+
+def _head(top):
+    r = _git(top, "rev-parse", "HEAD")
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def _commit_paths(state):
+    top = Path(state["git_top"])
+    cand = state["paths"]
+    tracked = set(_git(top, "ls-files", "-z", "--", *cand).stdout.split("\0"))
+    keep = [p for p in cand if (top / p).exists() or p in tracked]
+    return [p for p in keep if _git(top, "check-ignore", "-q", "--", p).returncode != 0]
+
+
+def _found_commit(state):
+    """The commit this apply made (its message names the run), looked for after head_before; None when there is none."""
+    top = state.get("git_top")
+    if not top:
         return None
-    folder, skill = Path(a["folder"]), a["skill"]
-    now = skills.fingerprint(folder)
-    if now == a["to"] and a["from"] != a["to"]:
-        a["recovering"] = True
-        res = _complete(run, plan or store.read_plan(run), verdict or _read_json(run / "verdict.json"), a)
-        return f"finished the interrupted {a['kind']}: {a['from']} → {a['to']}" + (f", commit {res['commit']}" if res["commit"] else "")
-    if not _restore(folder, skill, a["from"]):
-        raise Refused(f"{skill}: an earlier {a['kind']} stopped half way and version {a['from']} could not be restored; "
-                      f"see {run / APPLY}")
-    a.update(state="rolled_back", error="interrupted")
-    _write_json(run / APPLY, a)
-    return f"rolled back the interrupted {a['kind']}: {skill} is at {a['from']}"
+    rng = f"{state['head_before']}..HEAD" if state.get("head_before") else "HEAD"
+    r = _git(top, "log", rng, "--format=%H%x1f%B%x1e")
+    if r.returncode != 0:
+        return None
+    for entry in r.stdout.split("\x1e"):
+        sha, _, body = entry.strip().partition("\x1f")
+        if sha and f"Run: {state['run_id']}" in body.splitlines() and f"Action: {state['action']}" in body.splitlines():
+            return sha
+    return None
 
 
-def _guard(run, fn):
-    store.acquire(run)
+def _commit(state):
+    if not state.get("git_top"):
+        return None
+    top = Path(state["git_top"])
+    keep = _commit_paths(state)
+    if not keep:
+        return None
+    body = [f"Verdict: {state['verdict']}", f"Run: {state['run_id']}", f"Action: {state['action']}"]
+    if state.get("reason"):  # one line, so a typed reason cannot add a Run: or Action: line (decision.json keeps it as typed)
+        body.append(f"Reason: {' '.join(state['reason'].split())}")
+    r = _git(top, "add", "-A", "--", *keep)
+    if r.returncode == 0:
+        r = _git(top, "commit", "--only", "-m", state["subject"], "-m", "\n".join(body), "--", *keep)
+    if r.returncode != 0:
+        _git(top, "reset", "-q", "--", *state["paths"])
+        tail = (r.stderr.strip() or r.stdout.strip()).splitlines()[-3:]
+        raise Refused(f"{state['skill']}: git commit failed, skill left at {state['old']}: {' | '.join(tail)}")
+    return _head(top)
+
+
+# records
+
+def _finish(state, conn):
+    """Everything after the files and the commit: the new version, the change, opt_applied, decision.json. Safe to run
+    twice (recover), because each row is looked for first."""
+    run_dir, skill, folder = Path(state["run_dir"]), state["skill"], Path(state["folder"])
+    skills.record(conn, skill, folder, state["at"], "optimize")
+    conn.commit()
+    note = (f"Optimize {'approved' if state['action'] == 'approve' else 'reverted'}: "
+            f"{state['old']} → {state['new']} ({state['run_id']})")
+    change_error = None
+    conn.executescript(changes.CHANGES_SCHEMA)
+    have = conn.execute("SELECT 1 FROM changes WHERE at = ? AND skill = ? AND note = ?", (state["at"], skill, note)).fetchone()
+    if not have:
+        try:
+            changes.add_change(conn, note, skill=skill, at=state["at"])
+        except sqlite3.Error as e:  # the version and the files stand; the marker is the only thing missing (#181)
+            change_error = f"{type(e).__name__}: {e}"
+    conn.execute("INSERT OR IGNORE INTO opt_applied VALUES (?,?,?,?,?,?,?,?,?)",
+                 (state["run_id"], skill, state["action"], state["old"], state["new"], state.get("commit_sha"),
+                  state["verdict"], state.get("reason"), state["at"]))
+    conn.commit()
+    record = {"decision": state["action"], "run_id": state["run_id"], "skill": skill, "verdict": state["verdict"],
+              "reason": state.get("reason"), "old_fingerprint": state["old"], "new_fingerprint": state["new"],
+              "commit_sha": state.get("commit_sha"), "at": state["at"]}
+    if change_error:
+        record["change_error"] = change_error
+    _push(run_dir, record)
+    (run_dir / APPLY_JSON).unlink(missing_ok=True)
+    return record
+
+
+def _push(run_dir, record):
+    """Write decision.json with the earlier decision(s) kept in history."""
+    prev = _read_json(Path(run_dir) / DECISION_JSON)
+    history = []
+    if prev:
+        history = list(prev.get("history", []))
+        history.append({k: v for k, v in prev.items() if k != "history"})
+    _write_json(Path(run_dir) / DECISION_JSON, {**record, "history": history})
+
+
+def _latest_applied(run_dir):
+    """The latest approve or revert of a run (rejects are ignored), or None."""
+    d = _read_json(Path(run_dir) / DECISION_JSON)
+    if not d:
+        return None
+    for rec in [d, *reversed(d.get("history", []))]:
+        if rec.get("decision") in ("approve", "revert"):
+            return rec
+    return None
+
+
+# locks and recovery
+
+class _Locked:
+    """One lock for every approve, reject, revert and recovery, so a recovery never undoes an apply that is running."""
+
+    def __enter__(self):
+        d = store.runs_dir().parent / ".apply"
+        d.mkdir(parents=True, exist_ok=True)
+        self.dir = d
+        store.acquire(d)
+        return self
+
+    def __exit__(self, *exc):
+        store.release(self.dir)
+
+
+def _related(state, run_id):
+    """True when a stuck apply is the target run's own or touches the target run's skill."""
+    if run_id is None or state.get("run_id") == run_id:
+        return True
     try:
-        return fn()
-    finally:
-        store.release(run)
+        return store.read_plan(store.find_run(run_id)).get("skill") == state.get("skill")
+    except (ValueError, OSError):
+        return True
 
 
-def _go(run, plan, verdict, kind, folder, src, to_fp, reason):
-    """Steps 3 to 7: apply.json, record the old version, replace, check, commit, record."""
-    skill = plan["skill"]
-    from_fp = skills.fingerprint(folder)
-    top, _ = _repo(folder)
-    subject = _subject(kind, skill, from_fp, to_fp)
-    a = {"kind": kind, "state": "writing", "skill": skill, "folder": str(folder), "from": from_fp, "to": to_fp,
-         "src": str(src), "git_top": str(top) if top else None, "subject": subject,
-         "body": _body(run, kind, verdict, reason), "reason": reason, "changed": [], "commit": None, "started": _now()}
-    conn = _conn()
+def recover(log=print, run_id=None):
+    """Finish or undo every apply that stopped half way. Returns the run ids it handled. With `run_id`, a stuck apply
+    that cannot be recovered and belongs to another run of another skill is reported and skipped, not raised."""
+    done = []
+    for f in sorted(store.runs_dir().glob(f"*/{APPLY_JSON}")):
+        state = _read_json(f)
+        if not state or "folder" not in state:
+            f.unlink(missing_ok=True)
+            continue
+        try:
+            _recover_one(f, state, log)
+        except Refused as e:
+            if _related(state, run_id):
+                raise
+            log(f"tokscope: skipped the stuck apply of {state['run_id']}: {e}")
+            continue
+        done.append(state["run_id"])
+    return done
+
+
+def _recover_one(f, state, log):
+    folder = Path(state["folder"])
+    live = skills.fingerprint(folder)
+    committed = state.get("phase") == "committed"  # files installed and committed (or nothing to commit)
+    sha = state.get("commit_sha") if committed else None
+    sha = sha or _found_commit(state)
+    if sha or committed:
+        if live != state["new"]:
+            what = f"commit {sha} was made" if sha else "the apply was installed"
+            raise Refused(f"{state['run_id']}: {what} but {folder} no longer matches it "
+                          f"(fingerprint {live}); fix the folder by hand, then delete {f}")
+        conn = _db()
+        try:
+            _finish({**state, "commit_sha": sha}, conn)
+        finally:
+            conn.close()
+        log(f"tokscope: finished the interrupted {state['action']} of {state['run_id']}")
+    else:
+        if state.get("git_top"):
+            _git(state["git_top"], "reset", "-q", "--", *state["paths"])
+        if live != state["old"]:
+            _restore(state)
+        _clean_tmp(folder)
+        f.unlink(missing_ok=True)
+        log(f"tokscope: undid the interrupted {state['action']} of {state['run_id']}; {state['skill']} is at {state['old']}")
+
+
+# the pipeline shared by approve and revert
+
+def _install(run, folder, action, src, cur_fp, target_fp, verdict, reason, subject, now):
+    run, folder = Path(run), Path(folder)
+    skill = store.read_plan(run)["skill"]
+    at = _now(now)
+    top = _toplevel(folder)
+    head_before = None
+    if top:
+        if _git(top, "symbolic-ref", "-q", "HEAD").returncode != 0:
+            raise Refused(f"{skill}: git is on a detached HEAD; check out a branch first")
+        head_before = _head(top)
+    have, want = _files(folder), _files(src)
+    for rel in want:  # a covered draft file must not land on a file the fingerprint does not cover (over 1 MB)
+        link = _symlinked_parent(folder, rel)
+        if link:
+            raise Refused(f"{skill}: {link.relative_to(folder)} is a symlink, so {rel} would be written outside the "
+                          f"skill folder; nothing was changed")
+        if (folder / rel).is_file() and rel not in have:
+            raise Refused(f"{skill}: {rel} exists in the skill but is not covered by the fingerprint (over 1 MB); "
+                          f"move it first")
+    rel_top = (lambda rel: Path(os.path.relpath(folder / rel, top)).as_posix()) if top else (lambda rel: rel)
+    state = {"action": action, "run_id": run.name, "run_dir": str(run), "skill": skill, "folder": str(folder),
+             "old": cur_fp, "new": target_fp, "source": str(src), "git_top": str(top) if top else None,
+             "head_before": head_before, "phase": "writing", "at": at, "verdict": verdict, "reason": reason,
+             "subject": subject, "paths": sorted({rel_top(r) for r in {*have, *want}})}
+    _write_json(run / APPLY_JSON, state)  # first, as the ticket says; a stop before the files change is undone by recover
     try:
-        a["changed"] = _planned(folder, src)
-        _write_json(run / APPLY, a)
-        skills.record(conn, skill, folder, _now(), "optimize")  # keeps the files of the version being replaced
-        conn.commit()
-        if skills.fingerprint(skills.snapshot_dir(skill, from_fp)) != from_fp:
-            a.update(state="rolled_back", error="no snapshot")
-            _write_json(run / APPLY, a)
-            raise Refused(f"{skill}: the snapshot of {from_fp} could not be kept; nothing was changed")
+        conn = _db()
+        try:
+            skills.record(conn, skill, folder, at, "optimize")  # keeps the snapshot of the old version
+            conn.commit()
+        finally:
+            conn.close()
+        if skills.fingerprint(skills.snapshot_dir(skill, cur_fp)) != cur_fp:
+            raise Refused(f"{skill}: could not keep a snapshot of {cur_fp}; nothing was changed")
+    except BaseException:
+        (run / APPLY_JSON).unlink(missing_ok=True)
+        raise
+    try:
         _replace(folder, src)
-        if skills.fingerprint(folder) != to_fp:
-            ok = _restore(folder, skill, from_fp)
-            a.update(state="rolled_back", error="fingerprint mismatch")
-            _write_json(run / APPLY, a)
-            raise Refused(f"{skill}: the fingerprint after writing is not {to_fp}; "
-                          + (f"restored {from_fp}" if ok else f"could not restore {from_fp}, see {run / APPLY}"))
-        return _complete(run, plan, verdict, a, conn)
+    except OSError as e:
+        _restore(state)
+        (run / APPLY_JSON).unlink(missing_ok=True)
+        raise Refused(f"{skill}: writing the skill failed ({e}); it is back at {cur_fp}") from None
+    if skills.fingerprint(folder) != target_fp:
+        _restore(state)
+        (run / APPLY_JSON).unlink(missing_ok=True)
+        raise Refused(f"{skill}: the installed files do not match fingerprint {target_fp}; it is back at {cur_fp}")
+    state["phase"] = "written"
+    _write_json(run / APPLY_JSON, state)
+    try:
+        state["commit_sha"] = _commit(state)
+    except Refused:
+        _restore(state)
+        (run / APPLY_JSON).unlink(missing_ok=True)
+        raise
+    state["phase"] = "committed"
+    _write_json(run / APPLY_JSON, state)
+    conn = _db()
+    try:
+        return _finish(state, conn)
     finally:
         conn.close()
 
 
-def approve(run_id, reason=None):
-    """Replace the skill with the run's measured draft. Refused (the skill unchanged): the skill or the draft is not
-    the version the run measured, the verdict is Reject, Not enough evidence has no reason, or HEAD is detached."""
-    run, plan, verdict = _open(run_id)
-
-    def work():
-        note = recover(run, plan, verdict)
-        if verdict is None:
-            raise Refused(f"{run.name}: no verdict yet; resume the run first")
-        v = verdict.get("verdict")
-        if v == stats.REJECT:
-            raise Refused(f"{run.name}: the verdict is Reject; approve is not offered (reject records it)")
-        if v == stats.NOT_ENOUGH and not (reason or "").strip():
-            raise Refused(f"{run.name}: Not enough evidence needs --reason <text>")
-        if v not in (stats.APPLY, stats.NOT_ENOUGH):
-            raise Refused(f"{run.name}: unknown verdict {v!r}")
-        draft, want = verdict.get("draft_version"), verdict.get("draft_fingerprint")
-        if not draft or not want:
-            raise Refused(f"{run.name}: the run has no draft to apply")
-        folder = _folder(plan)
-        if skills.fingerprint(folder) != plan["base_fingerprint"]:
-            raise Refused(f"{plan['skill']}: the skill changed after this run (now {skills.fingerprint(folder)}, "
-                          f"the run measured {plan['base_fingerprint']}); run optimize again")
-        src = run / "versions" / draft
-        if skills.fingerprint(src) != want:
-            raise Refused(f"{run.name}: the draft {draft} changed after it was confirmed; run optimize again")
-        if want == plan["base_fingerprint"]:
-            raise Refused(f"{run.name}: the draft is the same version as the skill; nothing to apply")
-        res = _go(run, plan, verdict, "approve", folder, src, want, (reason or "").strip() or None)
-        res["recovered"] = note
-        return res
-
-    return _guard(run, work)
+def _run_lock(run_id):
+    run = store.find_run(run_id)
+    store.acquire(run)  # refuses while `run` or `resume` holds it
+    return run
 
 
-def revert(run_id):
-    """Put the version the run replaced back, through the same checks and commit. Only after an approve."""
-    run, plan, verdict = _open(run_id)
-
-    def work():
-        note = recover(run, plan, verdict)
-        d = _read_json(run / DECISION)
-        if not d or d.get("decision") != "approved":
-            raise Refused(f"{run.name}: this run was not approved; there is nothing to revert")
-        if d.get("reverted"):
-            raise Refused(f"{run.name}: already reverted")
-        old, new = d["old_fingerprint"], d["new_fingerprint"]
-        folder = _folder(plan)
-        if skills.fingerprint(folder) != new:
-            raise Refused(f"{plan['skill']}: the skill is not the approved version {new} any more "
-                          f"(now {skills.fingerprint(folder)}); revert is refused")
-        snap = skills.snapshot_dir(plan["skill"], old)
-        if skills.fingerprint(snap) != old:
-            raise Refused(f"{plan['skill']}: the kept files of {old} are missing or changed; revert is refused")
-        res = _go(run, plan, verdict, "revert", folder, snap, old, None)
-        res["recovered"] = note
-        return res
-
-    return _guard(run, work)
-
-
-def reject(run_id):
-    """Record that the owner rejected the run. Always allowed, except after an approve (use revert)."""
-    run, plan, verdict = _open(run_id)
-
-    def work():
-        note = recover(run, plan, verdict)
-        d = _read_json(run / DECISION)
-        if d and d.get("decision") == "approved" and not d.get("reverted"):
-            raise Refused(f"{run.name}: it was approved; use revert to undo it")
-        now = _now()
-        decision = {"decision": "rejected", "run_id": run.name, "skill": plan["skill"],
-                    "verdict": (verdict or {}).get("verdict"), "time": now}
-        _write_json(run / DECISION, decision)
-        conn = _conn()
+def approve(run_id, reason=None, cwd=None, now=None):
+    with _Locked():
+        recover(run_id=run_id)
+        run = _run_lock(run_id)
         try:
-            conn.execute("INSERT INTO opt_applied(run_id, skill, kind, old_fingerprint, new_fingerprint, commit_sha, at, reason)"
-                         " VALUES (?,?,?,?,?,?,?,?)", (run.name, plan["skill"], "reject", None, None, None, now, None))
-            conn.commit()
+            v = _read_json(run / "verdict.json")
+            if not v:
+                raise Refused(f"{run_id}: no verdict.json; the run has not finished")
+            if v.get("verdict") == stats.REJECT:
+                raise Refused(f"{run_id}: the verdict is {stats.REJECT}; nothing to apply")
+            if v.get("verdict") == stats.NOT_ENOUGH and not (reason or "").strip():
+                raise Refused(f"{run_id}: the verdict is {stats.NOT_ENOUGH}; give --reason to approve it anyway")
+            if v.get("verdict") not in (stats.APPLY, stats.NOT_ENOUGH):
+                raise Refused(f"{run_id}: unknown verdict {v.get('verdict')!r}")
+            if not (v.get("draft_version") and v.get("draft_fingerprint")):
+                raise Refused(f"{run_id}: no draft to apply")
+            if v["draft_fingerprint"] == v.get("base_fingerprint"):
+                raise Refused(f"{run_id}: the draft is the same version as the skill; nothing to apply")
+            folder = suite._folder(store.read_plan(run)["skill"], cwd)
+            live = skills.fingerprint(folder)
+            last = _latest_applied(run)
+            if live == v["draft_fingerprint"] and last and last.get("decision") == "approve":
+                raise Refused(f"{run_id}: already approved ({live}); `tokscope optimize revert {run_id}` undoes it")
+            if live != v["base_fingerprint"]:
+                raise Refused(f"{run_id}: the skill was edited after the run (now {live}, measured {v['base_fingerprint']}); "
+                              f"run the optimize again")
+            draft = run / "versions" / v["draft_version"]
+            if skills.fingerprint(draft) != v["draft_fingerprint"]:
+                raise Refused(f"{run_id}: the draft in {draft} changed after the run; run the optimize again")
+            subject = f"optimize({v['skill']}): {live} → {v['draft_fingerprint']}"
+            return _install(run, folder, "approve", draft, live, v["draft_fingerprint"], v["verdict"],
+                            (reason or "").strip() or None, subject, now)
         finally:
-            conn.close()
-        return {**decision, "kind": "reject", "recovered": note}
-
-    return _guard(run, work)
+            store.release(run)
 
 
-def report(res):
-    """Lines to print."""
-    if res["kind"] == "reject":
-        return [f"rejected {res['run_id']}; {res['skill']} is unchanged"]
-    out = []
-    if res.get("recovered"):
-        out.append(res["recovered"])
-    verb = "approved" if res["kind"] == "approve" else "reverted"
-    out.append(f"{verb} {res['run_id']}: {res['skill']} {res['old_fingerprint']} → {res['new_fingerprint']}")
-    out.append(f"commit {res['commit']}" if res["commit"] else "no commit (not in git); the old version is kept in the snapshot")
-    if res.get("change_error"):
-        out.append(f"note: the changes row was not written ({res['change_error']})")
-    return out
+def reject(run_id, reason=None, cwd=None, now=None):
+    with _Locked():
+        recover(run_id=run_id)
+        run = _run_lock(run_id)
+        try:
+            plan = store.read_plan(run)
+            v = _read_json(run / "verdict.json") or {}
+            try:
+                fp = skills.fingerprint(suite._folder(plan["skill"], cwd))
+            except ValueError:
+                fp = None
+            applied = (_latest_applied(run) or {}).get("decision") == "approve"
+            record = {"decision": "reject", "run_id": run.name, "skill": plan["skill"], "verdict": v.get("verdict"),
+                      "reason": (reason or "").strip() or None, "old_fingerprint": fp, "new_fingerprint": fp,
+                      "commit_sha": None, "at": _now(now)}
+            conn = _db()
+            try:
+                conn.execute("INSERT OR IGNORE INTO opt_applied VALUES (?,?,?,?,?,?,?,?,?)",
+                             (run.name, plan["skill"], "reject", fp, fp, None, record["verdict"], record["reason"],
+                              record["at"]))
+                conn.commit()
+            finally:
+                conn.close()
+            _push(run, record)
+            return {**record, "history": [], "approve_still_applied": applied}
+        finally:
+            store.release(run)
+
+
+def revert(run_id, cwd=None, now=None):
+    with _Locked():
+        recover(run_id=run_id)
+        run = _run_lock(run_id)
+        try:
+            last = _latest_applied(run)
+            if not last or last.get("decision") != "approve":
+                raise Refused(f"{run_id}: nothing to revert; the run has no approve that is still applied")
+            skill = last["skill"]
+            folder = suite._folder(skill, cwd)
+            live = skills.fingerprint(folder)
+            if live != last["new_fingerprint"]:
+                raise Refused(f"{run_id}: the skill was edited after the approve (now {live}, approved "
+                              f"{last['new_fingerprint']}); revert by hand")
+            snap = skills.snapshot_dir(skill, last["old_fingerprint"])
+            if skills.fingerprint(snap) != last["old_fingerprint"]:
+                raise Refused(f"{run_id}: the old version {last['old_fingerprint']} is not kept at {snap}")
+            subject = f"optimize({skill}): {live} → {last['old_fingerprint']} (revert {run.name})"
+            return _install(run, folder, "revert", snap, live, last["old_fingerprint"], last["verdict"], None, subject, now)
+        finally:
+            store.release(run)
