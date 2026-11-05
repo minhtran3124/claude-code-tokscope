@@ -692,6 +692,14 @@ class OverviewTest(unittest.TestCase):
         labels = re.findall(r'<text x="[\d.]+" y="194" text-anchor="\w+">([\d-]+)</text>', narrow)
         self.assertEqual(len(labels), 4)
 
+    def test_daily_chart_bar_is_never_wider_than_36_for_a_one_day_range(self):
+        self.add(0)
+        body = self.page()
+        for c in ("wide", "narrow"):
+            svg = re.search(rf'<svg class="{c}".*?</svg>', body, re.S).group(0)
+            widths = [float(w) for w in re.findall(r'<rect class="m"[^>]* width="([\d.]+)"', svg)]
+            self.assertTrue(widths and max(widths) <= 36, (c, widths))
+
     def test_phone_section_is_in_the_layout_sheet_and_the_static_report_has_no_menu(self):
         from tokscope.web.theme.layout import LAYOUT_DASH_CSS
         block = LAYOUT_DASH_CSS.split("/* phone */", 1)[1].split("/* end phone */", 1)[0]
