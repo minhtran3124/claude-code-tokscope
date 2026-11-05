@@ -154,11 +154,26 @@ class DataTest(Fixture):
         with mock.patch.object(page, "_started_at", return_value=now):
             self.assertEqual(next(r for r in page.runs() if r["id"] == APPLY_RUN)["state"], "stopped")
 
-    def test_a_lock_with_an_unreadable_start_time_counts_as_running(self):
+    def test_an_unreadable_start_time_falls_back_to_the_lock_age(self):
         (self.run_dir() / "verdict.json").unlink()
-        (self.run_dir() / "run.lock").write_text(str(os.getpid()))
+        lock = self.run_dir() / "run.lock"
+        lock.write_text(str(os.getpid()))
         with mock.patch.object(page, "_started_at", return_value=None):
             self.assertEqual(next(r for r in page.runs() if r["id"] == APPLY_RUN)["state"], "running")
+            old = time.time() - page.RUN_MAX_AGE - 60
+            os.utime(lock, (old, old))  # older than any run lives: the pid was reused
+            self.assertEqual(next(r for r in page.runs() if r["id"] == APPLY_RUN)["state"], "stopped")
+
+    def test_start_time_without_proc_comes_from_ps_etime(self):
+        self.assertEqual(page._etime_seconds("05:07\n"), 307)
+        self.assertEqual(page._etime_seconds("2-03:04:05"), 2 * 86400 + 3 * 3600 + 4 * 60 + 5)
+        self.assertRaises(ValueError, page._etime_seconds, "")
+        with mock.patch.object(page.Path, "read_text", side_effect=OSError), \
+                mock.patch.object(page.subprocess, "run", return_value=mock.Mock(stdout="01:00:00\n")):
+            self.assertAlmostEqual(page._started_at(1), time.time() - 3600, delta=5)
+        with mock.patch.object(page.Path, "read_text", side_effect=OSError), \
+                mock.patch.object(page.subprocess, "run", side_effect=OSError):
+            self.assertIsNone(page._started_at(1))
 
     def test_no_runs_dir_gives_an_empty_list(self):
         shutil.rmtree(store.runs_dir())

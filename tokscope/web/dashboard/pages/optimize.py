@@ -60,33 +60,55 @@ def _text(path, limit=None):
     return t[:limit] if limit else t
 
 
+def _etime_seconds(text):
+    """Seconds in a ps `etime` value, [[dd-]hh:]mm:ss."""
+    days, _, clock = text.strip().rpartition("-")
+    parts = [int(x) for x in clock.split(":")]
+    if not 2 <= len(parts) <= 3:
+        raise ValueError(text)
+    secs = 0
+    for x in parts:
+        secs = secs * 60 + x
+    return int(days or 0) * 86400 + secs
+
+
 def _started_at(pid):
-    """Epoch seconds the process `pid` started (Linux /proc), or None when it cannot be read."""
+    """Epoch seconds the process `pid` started: Linux /proc, else `ps -o etime=` (macOS). None when neither works."""
     try:
         stat = Path(f"/proc/{pid}/stat").read_text()
         ticks = int(stat.rsplit(")", 1)[1].split()[19])
         boot = next(int(ln.split()[1]) for ln in Path("/proc/stat").read_text().splitlines() if ln.startswith("btime"))
         return boot + ticks / os.sysconf("SC_CLK_TCK")
     except (OSError, ValueError, IndexError, StopIteration):
+        pass
+    try:
+        out = subprocess.run(["ps", "-o", "etime=", "-p", str(pid)], capture_output=True, text=True, timeout=5).stdout
+        return time.time() - _etime_seconds(out)
+    except (OSError, ValueError, subprocess.SubprocessError):
         return None
 
 
 CLOCK_SLACK = 10  # seconds the lock may predate its pid's start (tick rounding, small clock steps); the worker writes
 # the lock after it starts and never touches it again, so a lock older than that names a pid the OS reused
+RUN_MAX_AGE = 24 * 3600  # seconds; with no start time to compare, a lock older than this is a dead run's
 
 
 def _holder_alive(run):
     """True when run.lock names a live pid, unless the lock was written before that pid started: then the OS reused the
-    pid for an unrelated process."""
+    pid for an unrelated process. When the start time cannot be read, a lock younger than RUN_MAX_AGE counts as
+    running (a double click must not pay twice) and an older one as stopped (a reused pid must not block for ever)."""
     lock = Path(run) / store.LOCK
     pid = store._holder(lock)
     if not (pid and store._alive(pid)):
         return False
     started = _started_at(pid)
     try:
-        return started is None or lock.stat().st_mtime >= started - CLOCK_SLACK
+        written = lock.stat().st_mtime
     except OSError:
         return False
+    if started is None:
+        return time.time() - written < RUN_MAX_AGE
+    return written >= started - CLOCK_SLACK
 
 
 # the list
