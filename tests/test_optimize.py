@@ -61,5 +61,12 @@ class WriteGuardTest(unittest.TestCase):
             self.assertIn('<meta name="tokscope-token" content="tok">', r.read().decode())
 
 
+class DeadCssTest(unittest.TestCase):
+    def test_the_deleted_job_page_and_compare_view_leave_no_css_behind(self):
+        from tokscope.web.theme.layout import LAYOUT_TOKEN_DASH_CSS
+        for dead in ("ol.steps", ".runline", ".cmp .viewbar", ".cmp .path", ".opt .note", ".runbar{", ".runbar i{"):
+            self.assertNotIn(dead, LAYOUT_TOKEN_DASH_CSS)
+
+
 if __name__ == "__main__":
     unittest.main()

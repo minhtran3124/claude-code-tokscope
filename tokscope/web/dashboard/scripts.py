@@ -11,8 +11,6 @@ a.sk:hover{transform:translate(-2px,-2px);box-shadow:5px 6px 0 var(--shadow)}
 .seg .chip:is(:hover,.on) b{color:inherit}
 .sk.reg:hover{box-shadow:none}
 .ask{border:var(--line-w) solid var(--ink)}
-.runbar{height:8px;border-radius:4px}
-.runbar i{border-radius:4px}
 table.sbs th{font:600 12px var(--sans)}
 table.sbs td.gap{background:var(--chip)}
 .decide{border:var(--line-w) solid var(--ink)}
