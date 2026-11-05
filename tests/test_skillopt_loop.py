@@ -413,8 +413,10 @@ if editor:
     if mode == "crash":
         sys.exit(1)
     text = Path("SKILL.md").read_text()
-    if mode in ("edit", "nohyp"):
+    if mode in ("edit", "nohyp", "symlink"):
         text += "\nDRAFT edit %d\n" % n
+    if mode == "symlink":
+        os.symlink(os.environ["FAKE_SECRET"], "notes.md")
     if mode == "desc":
         text = text.replace("description: Summarize notes", "description: Something else") + "\nDRAFT\n"
     Path("SKILL.md").write_text(text)
@@ -615,6 +617,16 @@ class LoopTest(LoopBase):
         self.assertIn("same files", reasons[2]["reason"])
         self.assertFalse((run / "versions" / "v1").exists())
         self.assertNotIn("confirm", {p.name for p in (run / "results").iterdir()})
+
+    def test_a_symlink_in_the_editor_workspace_is_not_copied(self):
+        secret = self.tmp / "secret.txt"
+        secret.write_text("aws_secret\n")
+        self.set_cfg(editor={"1": "symlink"})
+        with mock.patch.dict(os.environ, {"FAKE_SECRET": str(secret)}):
+            run, v = self.go()
+        self.assertTrue((run / "versions" / "v1" / "SKILL.md").is_file())
+        self.assertFalse(os.path.lexists(run / "versions" / "v1" / "notes.md"))
+        self.assertEqual(v["draft_fingerprint"], skills.fingerprint(run / "versions" / "v1"))
 
     def test_an_editor_with_no_result_is_charged_its_cap(self):
         self.set_cfg(editor={"1": "crash"})

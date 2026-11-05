@@ -308,6 +308,8 @@ def ensure_editor(ctx, n):
         tmp = run / "versions" / f"v{n}.tmp"
         tmp.mkdir(parents=True)
         for f in skills._files(ws):
+            if f.is_symlink():  # the editor's symlink (say to ~/.aws/credentials) never becomes a draft file
+                continue
             target = tmp / f.relative_to(ws)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(f, target)
