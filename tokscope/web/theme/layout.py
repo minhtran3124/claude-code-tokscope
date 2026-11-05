@@ -871,16 +871,6 @@ table.sbs{font-size:11.5px}
 .decide{position:sticky;bottom:12px;z-index:6;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;margin:14px 0 0;padding:10px 14px;border-radius:12px;background:var(--surface);animation:reveal var(--t-layout) var(--ease) both}
 .decide .note{margin-left:6px}
 .btn.danger{color:var(--fail)}
-#bench .verdict{font-size:14px;margin:6px 0 10px}
-#bench-form{margin:10px 0}
-#bench-form select{font:inherit;font-size:13px;padding:var(--pad-sel);border:var(--line-w) solid var(--line-c);border-radius:var(--r-ctl);background:var(--surface);color:var(--ink);max-width:100%}
-#task-form label.wide{display:flex;flex-direction:column;gap:4px;font-size:13px;margin:0 0 8px}
-#task-form input,#task-form textarea{font:inherit;font-size:13px;padding:6px 8px;border:var(--line-w) solid var(--line-c);border-radius:8px;background:var(--surface);color:var(--ink)}
-#task-form textarea{font-family:var(--mono)}
-#task-new{margin-top:10px}
-table.bres td:not(:first-child),table.bres th:not(:first-child){text-align:right}
-table.bres td:last-child,table.bres th:last-child{text-align:left}
-details.more#optimize-panel{margin:-4px 0 14px}
 .opt .note{margin:0}
 .optrow select,.optrow input{font:inherit;font-size:13px;padding:var(--pad-sel);border:var(--line-w) solid var(--line-c);border-radius:var(--r-ctl);background:var(--surface);color:var(--ink)}
 .optrow input{width:6em}
@@ -902,9 +892,9 @@ select option{background:var(--surface);color:var(--ink)}
 .tdot{stroke-width:1.5}
 .privacy{border:var(--line-w) solid var(--line-c);border-radius:var(--r-box);padding:8px 12px;margin:0 0 12px;font-size:13px;color:var(--ink2);background:var(--surface)}
 .privacy b{color:var(--mark-ink);text-transform:uppercase;font-size:11px;margin-right:6px;margin:0}
-.filters select,.libtools select,#bench-form select,.optrow select,.optrow input,#reg-form input,#mcp-form select{font-family:var(--num-font);font-size:var(--ctl-size);font-weight:400}
+.filters select,.libtools select,.optrow select,.optrow input,#reg-form input,#mcp-form select{font-family:var(--num-font);font-size:var(--ctl-size);font-weight:400}
 .filters a,.fresh,.kpi .dl .trend,.state,.st .pill,.badge,a.sk .meta,.libview .ste-n,.runline b,.range-dates,.cause,.vs .trend,.tag,.movers td:not(:first-child):not(.tagc),.movers th{font-family:var(--num-font)}
-table.mcp td:is(:nth-child(2),:nth-child(3),:nth-child(8)),table.bres td:last-child,table.bres td:first-child{font-family:var(--sans)}
+table.mcp td:is(:nth-child(2),:nth-child(3),:nth-child(8)){font-family:var(--sans)}
 table.mcp td.st{font-family:var(--num-font)}
 .latest>.note:first-child{font-family:var(--num-font);font-weight:var(--lab-w);font-size:var(--lab-size);text-transform:var(--lab-case);letter-spacing:var(--lab-track)}
 .latest>.note:first-child time{font-weight:400}

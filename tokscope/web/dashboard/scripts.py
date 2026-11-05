@@ -69,11 +69,6 @@ function ask(anchor,text,ok='OK'){return new Promise(res=>{document.querySelecto
   acts.append(y,n);box.append(el('p','',text),acts);anchor.after(box);box.scrollIntoView({block:'nearest'});y.focus()})}
 function busy(b,text){b.dataset.label=b.textContent;b.disabled=true;b.classList.add('busy');b.textContent=text}
 function idle(b){b.disabled=false;b.classList.remove('busy');b.textContent=b.dataset.label||b.textContent}
-document.getElementById('optimize')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.target,b=f.querySelector('button[type=submit]'),
-  guides=[...f.querySelectorAll('[name=guide]:checked')].map(x=>x.value),budget=+f.budget.value;
-  if(!await ask(b.closest('.optrow'),`Run claude -p with ${guides.join(', ')||'no guide'} on a copy of this skill? It spends at most $${budget}. The skill changes only when you apply the result.`,'Run it'))return;
-  busy(b,'Starting…');
-  try{const j=await send('/api/optimize',{skill:f.dataset.skill,guides,model:f.model.value,budget});location.href=j.url}catch(err){showErr(err);idle(b)}});
 document.getElementById('mcp-check')?.addEventListener('click',async e=>{const b=e.target,when=document.getElementById('mcp-when');
   b.disabled=true;when.textContent='Checking… this can take a minute.';
   try{await send(`/api/projects/${document.getElementById('mcp').dataset.project}/health`);location.reload()}
@@ -120,46 +115,6 @@ document.querySelectorAll('[data-mcp-remove]').forEach(b=>b.addEventListener('cl
   busy(b,'Removing…');
   try{await send(`/api/projects/${mcpCard.dataset.project}/mcp/remove`,{name:b.dataset.mcpRemove,scope:b.dataset.scope});location.reload()}
   catch(x){showErr(x);idle(b)}}));
-// a running job: the clock ticks every second, the steps and files come every two; the page reloads into the result
-const jobEl=document.getElementById('job');
-const clock=s=>{s=Math.max(0,Math.round(s));return s>=60?Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s':s+'s'};
-if(jobEl&&jobEl.dataset.state==='running'){const t0=+jobEl.dataset.started;document.title='⏳ '+document.title;
-  setInterval(()=>{const e=document.getElementById('run-elapsed');if(e)e.textContent=clock(Date.now()/1000-t0)},1000);
-  setInterval(async()=>{try{const j=await (await fetch('/api/optimize/'+jobEl.dataset.job)).json();if(j.state!=='running'){location.reload();return}
-    document.getElementById('run-count').textContent=j.nsteps+' steps';
-    const w=document.getElementById('run-idle');w.hidden=j.idle<=120;document.getElementById('run-idle-s').textContent=clock(j.idle);
-    const list=document.getElementById('run-list'),at=list.scrollTop+list.clientHeight>=list.scrollHeight-8;
-    list.replaceChildren(...j.steps.map(st=>{const li=el('li',st.kind+(st.sub?' sub':''));li.append(el('time','','+'+clock(st.t-t0)),el('span','',st.text));return li}));
-    if(at)list.scrollTop=list.scrollHeight;
-    const files=document.getElementById('run-files');files.replaceChildren(...(j.files.length?j.files.map(([r,k])=>{const li=el('li');li.append(el('code','',r),' '+k);return li}):[el('li','note','none yet')]))}
-  catch(_){}},2000)}
-document.querySelectorAll('[data-job-act]').forEach(b=>b.addEventListener('click',async()=>{const act=b.dataset.jobAct,where=b.closest('.acts')||b;
-  if(act==='apply'&&!await ask(where,'Write these changes into the skill folder? tokscope keeps the old version, so a benchmark can compare the two.','Apply'))return;
-  if(act==='cancel'&&!await ask(where,'Stop the run? What it spent so far stays spent; the copy stays in the job folder until you discard it.','Stop it'))return;
-  if(act==='discard'&&b.closest('.decide')&&!await ask(where,'Reject the draft? The job folder and its copy are deleted; the skill stays as it is.','Reject'))return;
-  busy(b,{apply:'Applying…',discard:'Discarding…',cancel:'Stopping…'}[act]);
-  try{await send(`/api/optimize/${jobEl.dataset.job}/${act}`);act==='discard'?location.href=location.pathname+'?skill='+new URLSearchParams(location.search).get('skill'):location.reload()}
-  catch(err){showErr(err);idle(b)}}));
-// compare: each changed file has its own tabs (side by side, diff, after, before)
-document.querySelectorAll('.cmp').forEach(c=>c.querySelectorAll('[data-cmp]').forEach(b=>b.addEventListener('click',()=>{
-  c.querySelectorAll('[data-cmp]').forEach(x=>x.classList.toggle('on',x===b));
-  c.querySelectorAll('[data-cmp-pane]').forEach(p=>p.hidden=p.dataset.cmpPane!==b.dataset.cmp)})));
-// benchmark: the cap is runs x 2 versions x the task's cap per run; the page follows the runs and reloads at the end
-const bf=document.getElementById('bench-form'),benchErr=x=>{const e=document.getElementById('bench-err');e.textContent=x.message;e.hidden=false};
-function benchCap(){if(!bf)return 0;const o=bf.task.selectedOptions[0],cap=+(o?.dataset.cap||0)*2*+bf.runs.value;
-  document.getElementById('bench-cap').textContent=`${+bf.runs.value*2} runs, at most $${cap.toFixed(2)} in all`;return cap}
-if(bf){bf.task.addEventListener('change',benchCap);bf.runs.addEventListener('change',benchCap);benchCap();
-  bf.addEventListener('submit',async e=>{e.preventDefault();const b=bf.querySelector('button[type=submit]'),cap=benchCap();
-    if(!await ask(bf,`Run ${bf.task.value} ${bf.runs.value} times on the current skill and ${bf.runs.value} times on the draft? It spends at most $${cap.toFixed(2)}.`,'Run it'))return;
-    busy(b,'Starting…');try{await send(`/api/optimize/${jobEl.dataset.job}/bench`,{task:bf.task.value,runs:+bf.runs.value});location.reload()}
-    catch(x){benchErr(x);idle(b)}})}
-document.getElementById('task-form')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.target,b=f.querySelector('button[type=submit]');
-  busy(b,'Saving…');try{await send(`/api/optimize/${jobEl.dataset.job}/task`,{name:f.elements['name'].value,prompt:f.prompt.value,
-    grader:f.grader.value,paths:f.paths.value,budget:+f.budget.value});location.reload()}catch(x){benchErr(x);idle(b)}});
-const benchEl=document.getElementById('bench');
-if(benchEl&&benchEl.dataset.bench==='running')setInterval(async()=>{try{const j=await (await fetch('/api/optimize/'+jobEl.dataset.job)).json();
-  if(j.bench.state!=='running'){location.reload();return}const pre=document.getElementById('bench-log');pre.textContent=j.bench.log.join('\\n')||'starting…'}
-  catch(_){}},3000);
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('on',x===b));
   document.querySelectorAll('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==b.dataset.view)}));
