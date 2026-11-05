@@ -607,6 +607,19 @@ class StartTest(unittest.TestCase):
         self.assertIn("tokscope: boom", out["error"])
         self.assertEqual([p.name for p in store.runs_dir().parent.glob(".worker-*")], [])
 
+    @unittest.skipUnless(os.path.isdir("/proc/self/fd"), "needs /proc")
+    def test_the_worker_stdout_is_a_file_so_a_server_stop_cannot_break_its_pipe(self):
+        run = store.new_run("demo")
+        store.write_plan(run, {"skill": "demo", "budget_usd": 1})
+        code_ = f"import time; print('run {run}', flush=True); time.sleep(60)"
+        cmd = [sys.executable, "-c", code_]
+        with mock.patch.object(page, "_command", return_value=cmd), self.watch():
+            code, out = self.post(confirm=True)
+        self.assertEqual(code, 200, out)
+        target = os.readlink(f"/proc/{self.procs[0].pid}/fd/1")
+        self.assertFalse(target.startswith("pipe:"), target)
+        self.assertTrue((run / "worker.out").is_file())
+
     def test_a_worker_that_prints_nothing_is_stopped_and_gives_500(self):
         cmd = [sys.executable, "-c", "import time; time.sleep(60)"]
         with mock.patch.object(page, "_command", return_value=cmd), mock.patch.object(page, "START_WAIT_S", 0.5), self.watch():

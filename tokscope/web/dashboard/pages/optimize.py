@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 from .... import paths
@@ -577,52 +578,61 @@ def _tail(path, n=8):
     return " | ".join(lines[-n:])
 
 
+def _first_line(path):
+    try:
+        with open(path, errors="replace") as fh:
+            line = fh.readline()
+    except OSError:
+        return ""
+    return line if line.endswith("\n") else ""  # a half-written line is not yet the run folder
+
+
 def spawn(p):
     """Start `tokscope optimize run` in its own process, as the CLI would, and return the run id it prints first. The
     process outlives this request and the run keeps its own lock. ValueError when it stops before it prints (with its
     last stderr lines), RuntimeError when it prints nothing in START_WAIT_S seconds (it is stopped; no paid call began)."""
     work = store.runs_dir().parent
     work.mkdir(parents=True, exist_ok=True)
-    fd, log = tempfile.mkstemp(prefix=".worker-", suffix=".log", dir=work)  # a file, not a pipe: nobody has to read it
+    fd, log = tempfile.mkstemp(prefix=".worker-", suffix=".log", dir=work)  # files, not pipes: a server stop must not kill the run
+    ofd, out = tempfile.mkstemp(prefix=".worker-", suffix=".out", dir=work)
     root = str(Path(paths.__file__).resolve().parents[1])
     env = {**os.environ, "PYTHONPATH": os.pathsep.join(x for x in (root, os.environ.get("PYTHONPATH")) if x)}
     try:
-        proc = subprocess.Popen(_command(p), cwd=str(p["root"]), env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+        proc = subprocess.Popen(_command(p), cwd=str(p["root"]), env=env, stdin=subprocess.DEVNULL, stdout=ofd,
                                 stderr=fd, text=True, start_new_session=True)
     except OSError:
         Path(log).unlink(missing_ok=True)
+        Path(out).unlink(missing_ok=True)
         raise
     finally:
         os.close(fd)
-    first, seen = [], threading.Event()
-
-    def pump():
-        # keep reading so the worker never blocks on a full pipe, then reap it: an unreaped child still passes os.kill(pid, 0)
-        try:
-            for line in proc.stdout:
-                if not first:
-                    first.append(line)
-                    seen.set()
-        finally:
-            proc.stdout.close()
-            proc.wait()
-            seen.set()
-
-    threading.Thread(target=pump, daemon=True).start()
-    seen.wait(START_WAIT_S)
-    line = first[0].strip() if first else ""
+        os.close(ofd)
+    # reap it when it ends: an unreaped child still passes os.kill(pid, 0)
+    threading.Thread(target=proc.wait, daemon=True).start()
+    end = time.monotonic() + START_WAIT_S
+    first = ""
+    while True:
+        done = proc.poll() is not None  # read once more after it ends, so a line written just before exit is seen
+        first = _first_line(out)
+        if first or done or time.monotonic() >= end:
+            break
+        time.sleep(0.05)
+    line = first.strip()
     if not line.startswith("run "):
         if proc.poll() is None:
             _stop(proc)
             Path(log).unlink(missing_ok=True)
+            Path(out).unlink(missing_ok=True)
             raise RuntimeError(f"the worker printed no run folder in {START_WAIT_S} s; it was stopped before any paid call")
         tail = _tail(log)
         Path(log).unlink(missing_ok=True)
+        Path(out).unlink(missing_ok=True)
         raise ValueError("the worker stopped before it started a run" + (f": {tail}" if tail else ""))
     run = Path(line[4:].strip())
     try:
         found = store.find_run(run.name)
         os.replace(log, found / "worker.log")  # its stderr stays with the run
+        os.replace(out, found / "worker.out")
     except ValueError:
         _stop(proc)
         raise RuntimeError(f"the worker named a run folder that is not under the data home: {run}") from None
