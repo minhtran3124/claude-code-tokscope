@@ -415,6 +415,13 @@ def main():
     pres.add_argument("run_id")
     preg = po_sub.add_parser("regrade", help="grade the stored results of an optimize run again and recompute its verdict (no claude call, no cost)")
     preg.add_argument("run_id")
+    pap = po_sub.add_parser("approve", help="replace the skill with the run's measured draft after fingerprint checks, and commit when the skill is in git; exit 0 done, 1 refused (skill unchanged) or failed, 2 load error")
+    pap.add_argument("run_id")
+    pap.add_argument("--reason", help="why; required when the verdict is Not enough evidence")
+    prj = po_sub.add_parser("reject", help="record that you rejected an optimize run; the skill is not touched")
+    prj.add_argument("run_id")
+    prv = po_sub.add_parser("revert", help="put back the version an approved run replaced, with the same checks and commit")
+    prv.add_argument("run_id")
     tz_help = "IANA zone for days (default: local, or TOKSCOPE_TZ), e.g. UTC"
     pv = sub.add_parser("serve", help="live dashboard on 127.0.0.1 that ingests new transcripts as they land")
     pv.add_argument("--port", type=int, default=8765)
@@ -598,6 +605,23 @@ def main():
         except ValueError as e:
             print(f"tokscope: {e}", file=sys.stderr)
             sys.exit(2)
+    elif args.cmd == "optimize" and args.optimize_cmd in ("approve", "reject", "revert"):
+        from .experiments.skillopt import apply as skillopt_apply
+
+        try:
+            if args.optimize_cmd == "approve":
+                res = skillopt_apply.approve(args.run_id, args.reason)
+            elif args.optimize_cmd == "reject":
+                res = skillopt_apply.reject(args.run_id)
+            else:
+                res = skillopt_apply.revert(args.run_id)
+        except skillopt_apply.Refused as e:
+            print(f"tokscope: {e}", file=sys.stderr)
+            sys.exit(1)
+        except ValueError as e:  # no such run, or another process holds it
+            print(f"tokscope: {e}", file=sys.stderr)
+            sys.exit(2)
+        print("\n".join(skillopt_apply.report(res)))
     elif args.cmd == "optimize" and args.optimize_cmd in ("run", "resume", "regrade"):
         from .experiments.skillopt import loop
 
