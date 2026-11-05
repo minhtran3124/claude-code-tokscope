@@ -60,9 +60,29 @@ def _text(path, limit=None):
     return t[:limit] if limit else t
 
 
+def _started_at(pid):
+    """Epoch seconds the process `pid` started (Linux /proc), or None when it cannot be read."""
+    try:
+        stat = Path(f"/proc/{pid}/stat").read_text()
+        ticks = int(stat.rsplit(")", 1)[1].split()[19])
+        boot = next(int(ln.split()[1]) for ln in Path("/proc/stat").read_text().splitlines() if ln.startswith("btime"))
+        return boot + ticks / os.sysconf("SC_CLK_TCK")
+    except (OSError, ValueError, IndexError, StopIteration):
+        return None
+
+
 def _holder_alive(run):
-    pid = store._holder(Path(run) / store.LOCK)
-    return bool(pid) and store._alive(pid)
+    """True when run.lock names a live pid that started before the lock was written; a pid the OS reused for an
+    unrelated process started after it, so it does not count."""
+    lock = Path(run) / store.LOCK
+    pid = store._holder(lock)
+    if not (pid and store._alive(pid)):
+        return False
+    started = _started_at(pid)
+    try:
+        return started is None or lock.stat().st_mtime >= started - 2
+    except OSError:
+        return False
 
 
 # the list

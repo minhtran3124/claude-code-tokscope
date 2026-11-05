@@ -133,6 +133,14 @@ class DataTest(Fixture):
         self.assertEqual(page.running_for("demo"), APPLY_RUN)
         self.assertIsNone(page.running_for("other"))
 
+    def test_a_lock_older_than_its_pid_is_a_reused_pid_not_a_running_run(self):
+        (self.run_dir() / "verdict.json").unlink()
+        lock = self.run_dir() / "run.lock"
+        lock.write_text(str(os.getpid()))
+        os.utime(lock, (1, 1))  # written long before this process started
+        self.assertEqual(next(r for r in page.runs() if r["id"] == APPLY_RUN)["state"], "stopped")
+        self.assertIsNone(page.running_for("demo"))
+
     def test_no_runs_dir_gives_an_empty_list(self):
         shutil.rmtree(store.runs_dir())
         self.assertEqual(page.runs(), [])
