@@ -16,7 +16,7 @@ from unittest import mock
 from tokscope import paths
 from tokscope.core import ingest, skills
 from tokscope.features import postship
-from tokscope.experiments.skillopt import stats, store
+from tokscope.experiments.skillopt import apply, stats, store
 from tokscope.web.dashboard import server, shell
 from tokscope.web.dashboard.pages import optimize as page
 from tests.test_skillopt_loop import CFG, FAKE, IDS
@@ -832,12 +832,7 @@ class ScriptSyntaxTest(unittest.TestCase):
             self.assertEqual(done.returncode, 0, f"{name}: {done.stderr}")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 def apply_table():
-    from tokscope.experiments.skillopt import apply
     return apply.TABLE
 
 
@@ -984,3 +979,16 @@ class PostShipTest(Fixture):
         self.assertIn('id="postship"', body)
         self.assertIn("Only 0 loads on the old version: too few to compare.", body)
         self.assertIn("Decide", body)
+
+
+class MainGuardTest(unittest.TestCase):
+    def test_main_guard_is_the_last_statement(self):
+        """Classes after the guard never run when the file is executed directly."""
+        import ast
+        last = ast.parse(Path(__file__).read_text()).body[-1]
+        self.assertIsInstance(last, ast.If)
+        self.assertIn("__main__", ast.unparse(last.test))
+
+
+if __name__ == "__main__":
+    unittest.main()
