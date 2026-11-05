@@ -376,7 +376,7 @@ def _num(ci, fmt):
 
 def _compare_section(d):
     if not d["draft"]:
-        return ('<section class="card" id="compare"><h2 class="sec">Compare</h2><p class="note">No draft was made, so there is '
+        return ('<section class="card" id="beforeafter"><h2 class="sec">Compare</h2><p class="note">No draft was made, so there is '
                 'nothing to compare. The editor rounds above say why.</p></section>')
     files = "".join(f'<section class="card"><h3 class="path">{_e(rel)} <span class="note">{kind}</span></h3>'
                     f'<div class="scroll">{_side_by_side(before, after)}</div></section>' for rel, kind, before, after in d["files"])
@@ -386,7 +386,7 @@ def _compare_section(d):
     table = ('<h3 class="sub3">Per arm</h3><p class="note">Mean per run over cases, with a 95% interval (bootstrap by case, '
              'the plan\'s seed). Pass rate is in points.</p><div class="scroll"><table><thead><tr><th>Stage</th><th>Arm</th><th>Counted runs</th>'
              f'<th>Pass rate</th><th>Cost per run</th><th>Tokens per run</th></tr></thead><tbody>{rows}</tbody></table></div>') if rows else ""
-    return (f'<section class="card" id="compare"><h2 class="sec">Before and after</h2><p class="note">{len(d["files"])} file'
+    return (f'<section class="card" id="beforeafter"><h2 class="sec">Before and after</h2><p class="note">{len(d["files"])} file'
             f'{"s" * (len(d["files"]) != 1)} changed between <code>v0</code> and <code>{_e(d["draft"])}</code>.</p>{table}</section>{files}')
 
 

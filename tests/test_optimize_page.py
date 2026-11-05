@@ -291,6 +291,7 @@ class RenderTest(Fixture):
             self.assertIn(f'<h3 class="path">{path} ', body)
         self.assertEqual(body.count('class="note">[') , 12)  # pass, cost and tokens for four arms
         self.assertIn("Per arm", body)
+        self.assertNotIn('id="compare"', body)  # the theme hides #compare (the Sessions compare tray) until it opens
 
     def test_a_run_without_a_draft_shows_only_the_editor(self):
         v = json.loads((self.run_dir() / "verdict.json").read_text())
