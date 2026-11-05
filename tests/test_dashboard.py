@@ -874,7 +874,11 @@ class OverviewTest(unittest.TestCase):
         body = self.page({"range": ["7"]})
         self.assertEqual(body.count('class="spark"'), 6)
         for label in ("Range", "Project", "Model", "Skill"):
-            self.assertIn(f"<label class=\"fl\"><span>{label}</span>", body)
+            self.assertRegex(body, rf'<label class="fl fl-\w+"><span>{label}</span>')
+        self.assertIn('class="range-tabs"', body)
+        self.assertRegex(body, r'<a href="[^"]*range=7[^"]*" class=on aria-current=true>7 days</a>')
+        self.assertIn('>All time</a>', body)
+        self.assertNotIn('class="range-tabs"', dashboard.render(self.conn, "settings", {}, "stamp"))
         self.assertRegex(body, r'class="range-dates note">\d\d \w{3} \d{4} – \d\d \w{3} \d{4}<')
         self.assertIn('Sessions<span class="cnt" title="All time, not filtered">1</span></a>', body)
         self.assertIn('Projects<span class="cnt" title="All time, not filtered">1</span></a>', body)
