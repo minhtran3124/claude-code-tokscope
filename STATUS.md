@@ -19,7 +19,7 @@ Owner reviews and merges PR #221 by hand.
 
 ## Recent
 - 2026-11-05: Resolved PR #221 conflicts with `main` (DECISIONS.md, STATUS.md). #193 removed the guide-based Optimize. #195 added a Real sessions card on an approved run. #192 added the `/optimize` page, Approve and Reject routes and Library start. Dashboard redesign steps merged into `main`, then `main` (with PR #220) merged into PR #221's branch. PR #221 security fixes: approve refuses symlinked subfolders, draft copies skip symlinks, and the commit reason stays on one line.
-- 2026-11-05: Background service: `setup.sh` and the Linux desktop app (first launch) turn the user service on by themselves (PR 1); the Settings card (status, Stop/Start, autostart toggle) is next (PR 2). DECISIONS.md updated.
+- 2026-11-05: Background service: `setup.sh` and the Linux desktop app (first launch) turn the user service on by themselves (#222); Settings page gets a Background service card (status, Stop/Start, Start automatically; PR 2). DECISIONS.md updated.
 - 2026-11-04: #190 merged into the feat branch (PR #206): `tokscope optimize approve|reject|revert` installs the measured draft, commits only the skill's files and can finish or undo an interrupted apply.
 - 2026-11-04: #194 merged into the feat branch (PR #207): description changes are gated by a trigger eval; a budget stop saves a partial state that resumes.
 - 2026-11-04: Skill Optimize v2 slice 1: #187-#189 merged; final PR #200 merged into `main` (`073f017`).
