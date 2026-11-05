@@ -71,16 +71,19 @@ def _started_at(pid):
         return None
 
 
+CLOCK_SLACK = 3600  # seconds the lock may predate its pid's start before the pid counts as reused (clock steps, copies)
+
+
 def _holder_alive(run):
-    """True when run.lock names a live pid that started before the lock was written; a pid the OS reused for an
-    unrelated process started after it, so it does not count."""
+    """True when run.lock names a live pid, unless the lock was written long before that pid started: then the OS
+    reused the pid for an unrelated process. A wrong "stopped" allows a second paid start, so doubt means running."""
     lock = Path(run) / store.LOCK
     pid = store._holder(lock)
     if not (pid and store._alive(pid)):
         return False
     started = _started_at(pid)
     try:
-        return started is None or lock.stat().st_mtime >= started - 2
+        return started is None or lock.stat().st_mtime >= started - CLOCK_SLACK
     except OSError:
         return False
 

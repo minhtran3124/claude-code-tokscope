@@ -142,6 +142,15 @@ class DataTest(Fixture):
             self.assertEqual(next(r for r in page.runs() if r["id"] == APPLY_RUN)["state"], "stopped")
             self.assertIsNone(page.running_for("demo"))
 
+    def test_a_lock_slightly_older_than_its_pid_still_counts_as_running(self):
+        (self.run_dir() / "verdict.json").unlink()
+        lock = self.run_dir() / "run.lock"
+        lock.write_text(str(os.getpid()))
+        now = time.time()
+        os.utime(lock, (now - 60, now - 60))  # a clock step or restored data home, not a reused pid
+        with mock.patch.object(page, "_started_at", return_value=now):
+            self.assertEqual(next(r for r in page.runs() if r["id"] == APPLY_RUN)["state"], "running")
+
     def test_a_lock_with_an_unreadable_start_time_counts_as_running(self):
         (self.run_dir() / "verdict.json").unlink()
         (self.run_dir() / "run.lock").write_text(str(os.getpid()))
