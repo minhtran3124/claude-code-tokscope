@@ -66,6 +66,28 @@ def _clean_tmp(folder):
             p.unlink(missing_ok=True)
 
 
+def _symlinked_parent(folder, rel):
+    """The first folder between `folder` and `rel` that is a symlink (rglob does not follow those, so a file written
+    below one would land outside the skill), or None."""
+    p = Path(folder)
+    for part in Path(rel).parts[:-1]:
+        p = p / part
+        if p.is_symlink():
+            return p
+    return None
+
+
+def _prune(path, folder):
+    """Remove the empty folders above `path`, up to `folder`."""
+    parent = path.parent
+    while parent != folder:
+        try:
+            parent.rmdir()
+        except OSError:
+            break
+        parent = parent.parent
+
+
 def _replace(folder, src):
     """Make the covered files of `folder` (the fingerprint's file set) the covered files of `src`. Removed files go
     first (so a file can become a folder); each new file is written beside its target and renamed into place.
@@ -74,14 +96,11 @@ def _replace(folder, src):
     want, have = _files(src), _files(folder)
     for rel in sorted(set(have) - set(want)):
         have[rel].unlink(missing_ok=True)
-        parent = have[rel].parent
-        while parent != folder:
-            try:
-                parent.rmdir()
-            except OSError:
-                break
-            parent = parent.parent
+        _prune(have[rel], folder)
     for rel, f in want.items():
+        link = _symlinked_parent(folder, rel)
+        if link:
+            raise OSError(f"{link} is a symlink; {rel} would be written outside the skill")
         target = folder / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         tmp = target.parent / TMP.format(target.name, os.getpid())
@@ -100,6 +119,13 @@ def _restore(state):
                       f"copy it over {folder} by hand, then delete {state['run_dir']}/{APPLY_JSON}")
     try:
         _replace(folder, snap)
+        src = Path(state.get("source") or "")
+        if state.get("source") and src.is_dir():  # a file the apply created that the old version does not list
+            for rel in set(_files(src)) - set(_files(snap)):
+                p = folder / rel
+                if not _symlinked_parent(folder, rel) and p.is_file() and not p.is_symlink():
+                    p.unlink()
+                    _prune(p, folder)
     except OSError as e:
         raise Refused(f"{state['skill']}: restoring {state['old']} failed ({e}); copy {snap} over {folder} by hand") from None
     if skills.fingerprint(folder) != state["old"]:
@@ -310,6 +336,10 @@ def _install(run, folder, action, src, cur_fp, target_fp, verdict, reason, subje
         head_before = _head(top)
     have, want = _files(folder), _files(src)
     for rel in want:  # a covered draft file must not land on a file the fingerprint does not cover (over 1 MB)
+        link = _symlinked_parent(folder, rel)
+        if link:
+            raise Refused(f"{skill}: {link.relative_to(folder)} is a symlink, so {rel} would be written outside the "
+                          f"skill folder; nothing was changed")
         if (folder / rel).is_file() and rel not in have:
             raise Refused(f"{skill}: {rel} exists in the skill but is not covered by the fingerprint (over 1 MB); "
                           f"move it first")

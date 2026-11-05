@@ -148,6 +148,19 @@ class TestApprove(Base):
         with self.assertRaisesRegex(apply.Refused, "already approved"):
             self.approve()
 
+    def test_symlinked_subfolder_is_refused_and_nothing_written_outside(self):
+        outside = self.tmp / "outside"
+        outside.mkdir()
+        shutil.rmtree(self.folder / "refs")
+        (self.folder / "refs").symlink_to(outside, target_is_directory=True)
+        self.old = self.fp()
+        self.set_verdict()
+        with self.assertRaisesRegex(apply.Refused, "symlink"):
+            self.approve()
+        self.assertEqual(list(outside.iterdir()), [])
+        self.assertEqual(self.fp(), self.old)
+        self.assertFalse((self.run_dir / apply.APPLY_JSON).exists())
+
     def test_run_lock_refuses(self):
         store.acquire(self.run_dir)
         self.addCleanup(store.release, self.run_dir)
