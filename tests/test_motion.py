@@ -3,12 +3,10 @@ import unittest
 
 from tokscope.web import dashboard
 from tokscope.web.report.scripts import JS_CORE
-from tokscope.web.theme.classic import CLASSIC_CSS, CLASSIC_DASH_CSS
 from tokscope.web.theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS
 from tokscope.web.report.styles import CSS
 
-SHEETS = {"layout": LAYOUT_CSS, "layout-dash": LAYOUT_DASH_CSS, "ink": CSS, "ink-dash": dashboard.DASH_CSS,
-          "classic": CLASSIC_CSS, "classic-dash": CLASSIC_DASH_CSS}
+SHEETS = {"layout": LAYOUT_CSS, "layout-dash": LAYOUT_DASH_CSS, "ink": CSS, "ink-dash": dashboard.DASH_CSS}
 DURATION = re.compile(r"(?<![\w.#-])(\d*\.\d+|\d+)m?s(?![\w-])")
 
 
@@ -58,7 +56,7 @@ class MotionTokensTest(unittest.TestCase):
             self.assertNotIn(".flash", css, name)
 
     def test_session_rows_do_not_lift_on_hover(self):
-        for name in ("ink", "classic"):
+        for name in ("ink",):
             self.assertIsNone(re.search(r"\.srow:hover\{[^}]*transform", SHEETS[name]), name)
 
     def test_a_swapped_region_never_replays_an_entrance(self):
@@ -73,7 +71,7 @@ class MotionTokensTest(unittest.TestCase):
         self.assertIn("[data-count]:not([data-key])", JS_CORE)   # no count-up on live values
         self.assertIn(".dot.ring{animation:ring 600ms var(--ease) 1}", LAYOUT_DASH_CSS)
         self.assertIn(".fresh.stale .dot,body.offline h2>.dot{background:transparent", LAYOUT_DASH_CSS)   # offline: hollow
-        for name in ("ink-dash", "classic-dash"):
+        for name in ("ink-dash",):
             self.assertNotIn("stale .dot", SHEETS[name], name)             # a skin rule would win over the layout one
 
     def test_every_keyframes_set_that_moves_something_has_a_reduced_motion_answer(self):
@@ -86,12 +84,11 @@ class MotionTokensTest(unittest.TestCase):
             for kf, body in re.findall(r"@keyframes ([\w-]+)\{(.*?)\}\n", css):
                 if "transform" in body or "translate" in body:
                     moving.add(kf)
-        self.assertEqual(moving - twins, {"spin", "slide", "drift"})
+        self.assertEqual(moving - twins, {"spin", "slide"})
         for kf in twins:
             self.assertNotIn("transform", "".join(re.findall(r"@keyframes %s\{([^\n]*)\}\n" % kf, LAYOUT_CSS.split("prefers-reduced-motion:reduce){", 1)[1] + LAYOUT_DASH_CSS.split("prefers-reduced-motion:reduce){", 1)[1])))
 
     def test_the_hero_glow_and_the_spinners_stop_under_reduced_motion(self):
-        self.assertRegex(CLASSIC_CSS, r"@media \(prefers-reduced-motion:reduce\)\{\s*\.hero::before\{animation:none\}")
         from tokscope.web.theme.layout import LAYOUT_TOKEN_DASH_CSS
         self.assertRegex(LAYOUT_TOKEN_DASH_CSS, r"@media \(prefers-reduced-motion:reduce\)\{\s*\.runbar i,\.spin,\.busy::before\{animation:none\}")
         self.assertIn("#navload i{animation:none;width:100%}", LAYOUT_TOKEN_DASH_CSS)   # the page-load bar stops, full width

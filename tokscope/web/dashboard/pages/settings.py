@@ -20,8 +20,6 @@ def _row(label_id, label, note, control):
 def page_settings(level):
     look = (_row("set-theme", "Theme", "Auto follows your system.",
                  _seg("set-theme", [("theme", m, m.capitalize()) for m in ("light", "dark", "auto")]))
-            + _row("set-skin", "Design", "Ink is the current look. Classic is the older one.",
-                   _seg("set-skin", [("skin", m, m.capitalize()) for m in ("ink", "classic")]))
             + _row("set-tz", "Time zone", "Times are stored in UTC.",
                    _seg("set-tz", [("tz", "local", "Local"), ("tz", "utc", "UTC")])))
     data = (_row("set-privacy", "Privacy level", "Names and text follow it. It is set when the server starts: "
@@ -29,7 +27,7 @@ def page_settings(level):
             + _row("set-version", "Version", "Python standard library only. Works offline.",
                    f'<span class="pill-static">{html.escape(__version__)}</span>'))
     keys = "".join(f"<div><span>{what}</span><kbd>{key}</kbd></div>" for key, what in (
-        ("t", "Light or dark theme"), ("s", "Classic or Ink design"), ("g", "Back to the top"),
+        ("t", "Light or dark theme"), ("g", "Back to the top"),
         ("/", "Filter sessions (Sessions page)"), ("?", "Show this list")))
     return (f'<section class="card" id="set-look"><h2>Appearance</h2><div class="setrows">{look}</div></section>'
             f'<section class="card" id="set-data"><h2>Data</h2><div class="setrows">{data}</div></section>'

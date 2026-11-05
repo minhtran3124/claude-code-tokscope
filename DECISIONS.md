@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-11-05 · Classic is retired; Ink is the only look
+
+| Decision | Why | Rejected |
+| --- | --- | --- |
+| The Classic skin, its Design button, its Settings row and the `s` shortcut are removed (`tokscope/web/theme/classic.py` is deleted). Ink is the only look; the layout sheet and the Ink tokens stay as they are. Supersedes "Keep Classic next to Ink" (2026-10-21). | The owner chose the new direction (graphite console) for the redesign and does not want two looks to keep in step. One look halves the screens to test. | Keeping Classic behind a setting: every new screen would need a Classic check. A stale `tokscope-skin` value in a browser is harmless and is ignored. |
+
 ## 2026-11-02 · The OTel receiver reads a refused body before it answers
 
 | Decision | Why | Rejected |
@@ -28,7 +34,7 @@
 | The window opens only `http:` and `https:` links in the browser and blocks redirects off the dashboard. (PR #61 security review.) | The port is fixed, so any local process can answer on it while the service is down, and the window runs with `--no-sandbox`. A page there must not reach `file:`, `smb:` or app schemes. The "tokscope" text check does not prove who answers; the service itself only listens on loopback. | Trusting the text check alone. |
 | The desktop app ships as a `.deb` built by electron-builder (`npm run dist` in `desktop/`). It bundles Electron plus `bin/` and `tokscope/` under `/opt/tokscope/resources`, depends on `python3 (>= 3.10)`, installs the setuid `chrome-sandbox` (so no `--no-sandbox`), and `postinst` writes the user service file but does not enable it: each user runs `systemctl --user enable --now tokscope`. (Enabling it with `--global` would let another local user reach the dashboard on the shared loopback port; PR #62 security review.) It has no `pyproject.toml`, so the CLI keeps its data in `~/.local/share/tokscope`. (Owner, 2026-10-22; target: Ubuntu 22.04 x86_64.) | The owner wants to install it on another machine with one command. Ubuntu 22.04 ships Python 3.10. | AppImage (no service, no setuid sandbox); Flatpak or Snap (their sandbox blocks `~/.claude`); a user building from a clone on each machine. |
 
-## 2026-10-21 · Keep Classic next to Ink
+## 2026-10-21 · Keep Classic next to Ink (superseded 2026-11-05: Classic is retired)
 
 | Decision | Why | Rejected |
 | --- | --- | --- |
@@ -42,7 +48,7 @@
 | Decision | Why | Rejected |
 | --- | --- | --- |
 | Three duration tokens (`--t-fast` 120 ms, `--t-state` 200 ms, `--t-layout` 320 ms) and `--ease-exit` live in the layout sheet. Entrances play on the first paint only (`html.settled`). A live value changes at once and shows a delta chip. | The 2 s poll swaps regions, so every entrance, blur-in and count-up replayed on each update. About 30 durations made the motion uneven. | Keeping the count-up for live values; a duration per rule. |
-| Reduced motion: the entrance, chip, ring and toast keyframes have an opacity-only twin in the layout sheet; the spinner, run bar and Classic hero glow are switched off by their own rule; there is no global `animation:none`. | An update must still show for a person who asks for less motion. A global off switch hid it. | `*{animation:none!important}` (what it was). |
+| Reduced motion: the entrance, chip, ring and toast keyframes have an opacity-only twin in the layout sheet; the spinner and run bar are switched off by their own rule; there is no global `animation:none`. | An update must still show for a person who asks for less motion. A global off switch hid it. | `*{animation:none!important}` (what it was). |
 
 ## 2026-10-22 · Overview answers "is today normal?" (issue #23, step 2)
 
