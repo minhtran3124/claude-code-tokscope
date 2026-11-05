@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-11-05 · The background service turns on by itself on Linux
+
+| Decision | Why | Rejected |
+| --- | --- | --- |
+| `./setup.sh` runs `tokscope service install` (skip with `--no-service` or `TOKSCOPE_NO_SERVICE=1`, `--uninstall` removes it). The Linux desktop app does the same at its first launch, once per user (marker `service-autostart` in its user-data folder, so a user who turns it off is not switched back on), and waits for the service before it shows the window. macOS: `setup.sh` also installs it, but the app's "Start at login" stays opt-in (2026-10-25). (Owner, 2026-11-05: "no question, start in the background".) | The owner wants the server running after an install, with no extra step. A `.deb` postinst runs as root outside the user's session, so it cannot enable a user service. | `systemctl --global enable` in the `.deb` postinst (every user would run the unit on the fixed port 8770: the second user's service fails, and others can reach the first user's dashboard; PR #62 review); asking before the first start. |
+
 ## 2026-11-05 · Classic is retired; Ink is the only look
 
 | Decision | Why | Rejected |

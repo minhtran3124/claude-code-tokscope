@@ -27,6 +27,7 @@
       "loading.js",
       "server-command.js",
       "mac-integration.js",
+      "autostart.js",
       "package.json"
     ],
     "extraResources": [
