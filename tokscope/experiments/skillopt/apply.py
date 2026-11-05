@@ -313,20 +313,24 @@ def _install(run, folder, action, src, cur_fp, target_fp, verdict, reason, subje
         if (folder / rel).is_file() and rel not in have:
             raise Refused(f"{skill}: {rel} exists in the skill but is not covered by the fingerprint (over 1 MB); "
                           f"move it first")
-    conn = _db()
-    try:
-        skills.record(conn, skill, folder, at, "optimize")
-        conn.commit()
-    finally:
-        conn.close()
-    if skills.fingerprint(skills.snapshot_dir(skill, cur_fp)) != cur_fp:
-        raise Refused(f"{skill}: could not keep a snapshot of {cur_fp}; nothing was changed")
     rel_top = (lambda rel: Path(os.path.relpath(folder / rel, top)).as_posix()) if top else (lambda rel: rel)
     state = {"action": action, "run_id": run.name, "run_dir": str(run), "skill": skill, "folder": str(folder),
              "old": cur_fp, "new": target_fp, "source": str(src), "git_top": str(top) if top else None,
              "head_before": head_before, "phase": "writing", "at": at, "verdict": verdict, "reason": reason,
              "subject": subject, "paths": sorted({rel_top(r) for r in {*have, *want}})}
-    _write_json(run / APPLY_JSON, state)
+    _write_json(run / APPLY_JSON, state)  # first, as the ticket says; a stop before the files change is undone by recover
+    try:
+        conn = _db()
+        try:
+            skills.record(conn, skill, folder, at, "optimize")  # keeps the snapshot of the old version
+            conn.commit()
+        finally:
+            conn.close()
+        if skills.fingerprint(skills.snapshot_dir(skill, cur_fp)) != cur_fp:
+            raise Refused(f"{skill}: could not keep a snapshot of {cur_fp}; nothing was changed")
+    except BaseException:
+        (run / APPLY_JSON).unlink(missing_ok=True)
+        raise
     try:
         _replace(folder, src)
     except OSError as e:
@@ -405,6 +409,7 @@ def reject(run_id, reason=None, cwd=None, now=None):
                 fp = skills.fingerprint(suite._folder(plan["skill"], cwd))
             except ValueError:
                 fp = None
+            applied = (_latest_applied(run) or {}).get("decision") == "approve"
             record = {"decision": "reject", "run_id": run.name, "skill": plan["skill"], "verdict": v.get("verdict"),
                       "reason": (reason or "").strip() or None, "old_fingerprint": fp, "new_fingerprint": fp,
                       "commit_sha": None, "at": _now(now)}
@@ -417,7 +422,7 @@ def reject(run_id, reason=None, cwd=None, now=None):
             finally:
                 conn.close()
             _push(run, record)
-            return {**record, "history": []}
+            return {**record, "history": [], "approve_still_applied": applied}
         finally:
             store.release(run)
 

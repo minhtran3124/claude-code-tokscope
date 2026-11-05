@@ -635,7 +635,11 @@ def main():
             print(f"tokscope: {e}", file=sys.stderr)
             sys.exit(2)
         if d["decision"] == "reject":
-            print(f"rejected {d['run_id']} ({d['skill']} unchanged)")
+            if d.get("approve_still_applied"):
+                print(f"rejected {d['run_id']} (recorded); {d['skill']} is NOT unchanged: the approved change is still "
+                      f"live, run `tokscope optimize revert {d['run_id']}` to undo it")
+            else:
+                print(f"rejected {d['run_id']} ({d['skill']} unchanged)")
         else:
             verb = "approved" if d["decision"] == "approve" else "reverted"
             print(f"{verb} {d['skill']}: {d['old_fingerprint']} → {d['new_fingerprint']}, commit {(d['commit_sha'] or 'none')[:10]}")

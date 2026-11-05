@@ -227,6 +227,31 @@ class TestRecover(Base):
         self.assertEqual(self.fp(), self.old)
         self.assertFalse((self.run_dir / apply.APPLY_JSON).exists())
 
+    def test_apply_json_is_written_before_the_old_version_is_recorded(self):
+        seen = []
+        real = skills.record
+
+        def spy(conn, skill, folder, at, source):
+            seen.append((self.run_dir / apply.APPLY_JSON).exists())
+            return real(conn, skill, folder, at, source)
+        with mock.patch.object(skills, "record", spy):
+            self.approve()
+        self.assertEqual(seen[0], True)
+
+    def test_stop_after_apply_json_before_files_change_is_undone(self):
+        with mock.patch.object(skills, "record", side_effect=KeyboardInterrupt), self.assertRaises(KeyboardInterrupt):
+            self.approve()
+        self.assertFalse((self.run_dir / apply.APPLY_JSON).exists())  # nothing was changed, so no leftover
+        self.assertEqual(self.fp(), self.old)
+        # a stop that leaves apply.json behind (hard kill) is cleaned by the next command
+        (self.run_dir / apply.APPLY_JSON).write_text(json.dumps({
+            "action": "approve", "run_id": RUN, "run_dir": str(self.run_dir), "skill": "demo", "folder": str(self.folder),
+            "old": self.old, "new": self.new, "git_top": None, "head_before": None, "phase": "writing",
+            "at": "t", "verdict": stats.APPLY, "reason": None, "subject": "s", "paths": []}))
+        apply.reject(RUN, cwd=str(self.cwd))
+        self.assertEqual(self.fp(), self.old)
+        self.assertFalse((self.run_dir / apply.APPLY_JSON).exists())
+
     def test_written_phase_without_commit_rolls_back(self):
         self.git_repo()
         with self.interrupt("_commit"), self.assertRaises(KeyboardInterrupt):
@@ -335,7 +360,10 @@ class TestRejectRevert(Base):
                 mock.patch("os.getcwd", return_value=str(self.cwd)):
             cli.main()
         self.assertIn("rejected", out.getvalue())
+        self.assertIn("NOT unchanged", out.getvalue())
+        self.assertIn(f"tokscope optimize revert {RUN}", out.getvalue())
         self.assertEqual(self.fp(), self.new)
+        self.assertEqual([r[0] for r in self.rows("SELECT action FROM opt_applied ORDER BY rowid")], ["approve", "reject"])
 
     def test_revert_refusals(self):
         with self.assertRaisesRegex(apply.Refused, "nothing to revert"):
@@ -375,6 +403,8 @@ class TestCli(Base):
         self.assertEqual((code, self.fp()), (0, self.old))
         code, out, _ = self.call("optimize", "reject", RUN, "--reason", "nope")
         self.assertEqual(code, 0)
+        self.assertIn("demo unchanged", out)
+        self.assertNotIn("NOT unchanged", out)
 
     def test_refusal_exits_2(self):
         self.set_verdict(stats.REJECT)
