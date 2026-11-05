@@ -11,6 +11,8 @@ MOD = str(ROOT / "mod")
 
 
 class SetupScriptTest(unittest.TestCase):
+    extra_env = {}
+
     def setUp(self):
         self.home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.home, ignore_errors=True)
@@ -18,8 +20,9 @@ class SetupScriptTest(unittest.TestCase):
         self.link = self.home / ".local" / "bin" / "tokscope"
 
     def run_setup(self, *args):
-        env = {**os.environ, "HOME": str(self.home), "TOKSCOPE_HOME": str(self.home / "data")}
+        env = {**os.environ, "HOME": str(self.home), "TOKSCOPE_HOME": str(self.home / "data"), "TOKSCOPE_NO_SERVICE": "1"}
         env.pop("CLAUDE_CONFIG_DIR", None)
+        env.update(self.extra_env)
         return subprocess.run(["sh", str(ROOT / "setup.sh"), *args], env=env, capture_output=True, text=True, check=True)
 
     def dirs(self):
@@ -79,3 +82,43 @@ class LauncherCwdTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SetupServiceTest(SetupScriptTest):
+    """setup.sh turns the background service on unless told not to. A fake systemctl on the PATH records the calls."""
+
+    def setUp(self):
+        super().setUp()
+        bindir = self.home / "fakebin"
+        bindir.mkdir()
+        self.calls = self.home / "calls"
+        fake = bindir / "systemctl"
+        fake.write_text('#!/bin/sh\necho "$@" >> "%s"\n' % self.calls)
+        fake.chmod(0o755)
+        self.extra_env = {"PATH": f"{bindir}:{os.environ['PATH']}", "XDG_CONFIG_HOME": str(self.home / "cfg")}
+        self.unit = self.home / "cfg" / "systemd" / "user" / "tokscope.service"
+
+    def run_setup(self, *args):
+        env = {**os.environ, "HOME": str(self.home), "TOKSCOPE_HOME": str(self.home / "data"), **self.extra_env}
+        env.pop("CLAUDE_CONFIG_DIR", None)
+        env.pop("TOKSCOPE_NO_SERVICE", None)
+        return subprocess.run(["sh", str(ROOT / "setup.sh"), *args], env=env, capture_output=True, text=True, check=True)
+
+    @unittest.skipIf(os.uname().sysname == "Darwin", "Linux systemd path")
+    def test_it_installs_and_starts_the_service(self):
+        out = self.run_setup()
+        self.assertIn(str(ROOT / "bin" / "tokscope"), self.unit.read_text())
+        self.assertIn("enable --now tokscope.service", self.calls.read_text())
+        self.assertIn("service: tokscope serve runs in the background", out.stdout)
+
+    def test_no_service_flag_skips_it(self):
+        out = self.run_setup("--no-service")
+        self.assertFalse(self.unit.exists())
+        self.assertIn("service: skipped", out.stdout)
+
+    @unittest.skipIf(os.uname().sysname == "Darwin", "Linux systemd path")
+    def test_uninstall_removes_the_service(self):
+        self.run_setup()
+        self.run_setup("--uninstall")
+        self.assertFalse(self.unit.exists())
+        self.assertIn("disable --now tokscope.service", self.calls.read_text())

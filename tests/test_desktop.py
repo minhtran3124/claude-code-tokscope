@@ -209,3 +209,23 @@ class FetchPython(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class Autostart(unittest.TestCase):
+    def js(self, expr):
+        js = "const a=require('./autostart');console.log(JSON.stringify(%s))" % expr
+        return json.loads(subprocess.run([NODE, "-e", js], cwd=DESKTOP, capture_output=True, text=True, check=True).stdout)
+
+    def test_install_command_quotes_the_launcher_in_the_unit(self):
+        r = self.js("a.installCommand({root:'/opt/tokscope/resources'})")
+        exe = "/opt/tokscope/resources/bin/tokscope"
+        self.assertEqual(r["cmd"], [exe, "service", "install", "--exe", exe, "--quote-exe"])
+
+    def test_first_run_happens_once_per_user_and_only_on_linux(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            q = json.dumps(d)
+            self.assertFalse(self.js("a.firstRun({dir:%s,platform:'darwin'})" % q))
+            self.assertTrue(self.js("a.firstRun({dir:%s,platform:'linux'})" % q))
+            self.assertFalse(self.js("a.firstRun({dir:%s,platform:'linux'})" % q))
