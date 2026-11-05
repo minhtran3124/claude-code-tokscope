@@ -137,6 +137,10 @@ class ServerTest(unittest.TestCase):
         self.assertNotIn("dead", over)
         self.assertNotEqual(json.loads(self.get("/api/version")[1])["live"], "")
 
+    def test_breakdowns_opens_with_the_needs_a_look_card(self):
+        body = self.get("/breakdowns")[1]
+        self.assertLess(body.index('data-region="attention"'), body.index('id="summary"'))
+
     def test_overview_has_a_right_rail_with_attention_budgets_and_cache_reuse(self):
         body = self.get("/overview")[1]
         rail = re.search(r'<aside class="ov-rail".*?</aside>', body, re.S).group(0)

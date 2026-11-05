@@ -550,7 +550,7 @@ def _attention(conn, f, cmp):
         now, before = _totals(conn, cond, params)[0] or 0, _totals(conn, pcond, pparams)[0] or 0
         if before and (now / cmp["now"]) / (before / cmp["before"]) >= 1.5:
             rise = (now / cmp["now"]) / (before / cmp["before"]) - 1
-            items.append(("Token use jumped", f"+{rise:.0%} per day against the window before", "#changed"))
+            items.append(("Token use jumped", f"+{rise:.0%} per day against the window before", f.link("overview") + "#changed"))
     try:
         found = budgets.load()
         result = budgets.check(conn, found) if found is not None else {"items": []}
@@ -558,7 +558,7 @@ def _attention(conn, f, cmp):
         result = {"items": []}
     for i in result["items"]:
         if i["state"] in ("near", "over"):
-            items.append((f'{i["label"]} {"is over" if i["state"] == "over" else "is near"} its limit', i["text"], "#budgets"))
+            items.append((f'{i["label"]} {"is over" if i["state"] == "over" else "is near"} its limit', i["text"], f.link("overview") + "#budgets"))
     cond, params = f.cond()
     since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     reqs, misses = cache.scan(conn, f"{cond} AND r.ts >= ?" if cond else "WHERE r.ts >= ?", (*params, since))
