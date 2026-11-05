@@ -42,17 +42,6 @@ function toggleTheme(x,y,mode){const apply=()=>setTheme(mode||(isDark()?'light':
 if(themeBtn)themeBtn.addEventListener('click',e=>{const b=themeBtn.getBoundingClientRect();toggleTheme(e.clientX||b.left+b.width/2,e.clientY||b.top+b.height/2)});
 document.querySelectorAll('[data-set-theme]').forEach(btn=>btn.addEventListener('click',e=>{const b=btn.getBoundingClientRect();
   toggleTheme(e.clientX||b.left+b.width/2,e.clientY||b.top+b.height/2,btn.dataset.setTheme)}));syncTheme();
-// Classic/Ink switch: two stylesheets, one enabled by its media attribute. #skin-ink and #skin-classic have no null
-// check, so a page needs both (the `s` key throws without them); #skin and [data-set-skin] are optional
-const skinBtn=document.getElementById('skin'),skinInk=document.getElementById('skin-ink'),skinClassic=document.getElementById('skin-classic');
-function setSkin(classic){skinInk.media=classic?'not all':'all';skinClassic.media=classic?'all':'not all';root.dataset.skin=classic?'classic':'';
-  if(skinBtn){skinBtn.textContent=classic?'Ink':'Classic';skinBtn.setAttribute('aria-pressed',classic)}
-  document.querySelectorAll('[data-set-skin]').forEach(b=>b.setAttribute('aria-pressed',(b.dataset.setSkin==='classic')===classic));
-  try{classic?localStorage.setItem('tokscope-skin','classic'):localStorage.removeItem('tokscope-skin')}catch(_){}}
-function toggleSkin(){setSkin(skinClassic.media!=='all')}
-if(skinBtn){skinBtn.addEventListener('click',toggleSkin);skinBtn.textContent=skinClassic.media==='all'?'Ink':'Classic';skinBtn.setAttribute('aria-pressed',skinClassic.media==='all')}
-document.querySelectorAll('[data-set-skin]').forEach(b=>{b.addEventListener('click',()=>setSkin(b.dataset.setSkin==='classic'));
-  b.setAttribute('aria-pressed',(b.dataset.setSkin==='classic')===(skinClassic.media==='all'))});
 const io='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{rootMargin:'0px 0px -6% 0px'}):null;
 document.querySelectorAll('.reveal,main>details.more,#breakdowns>details').forEach(el=>{el.classList.add('reveal');io?io.observe(el):el.classList.add('in')});
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -73,15 +62,14 @@ function setTz(mode){TZ=mode==='utc'?'utc':'local';try{TZ==='utc'?localStorage.s
   tzSync();if(window.onTz)window.onTz()}
 document.querySelectorAll('[data-set-tz]').forEach(b=>{b.addEventListener('click',()=>setTz(b.dataset.setTz));b.setAttribute('aria-pressed',b.dataset.setTz===TZ)});
 tzSync();
-// keyboard: t theme, s design (Classic or Ink), g top, ? this list; pages add their own keys
+// keyboard: t theme, g top, ? this list; pages add their own keys
 const keysDlg=document.getElementById('keys');
 addEventListener('keydown',e=>{const typing=/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   if(typing||e.metaKey||e.ctrlKey||e.altKey)return;
-  if(e.key==='t'){const b=(themeBtn||document.querySelector('[data-set-theme]')).getBoundingClientRect();toggleTheme(b.left+b.width/2,b.top+b.height/2)}
-  else if(e.key==='s')toggleSkin()
+  if(e.key==='t'){const el=themeBtn||document.querySelector('[data-set-theme]'),b=el?el.getBoundingClientRect():{left:innerWidth/2,top:innerHeight/2,width:0,height:0};toggleTheme(b.left+b.width/2,b.top+b.height/2)}
   else if(e.key==='g')scrollTo({top:0})
   else if(e.key==='?'){keysDlg.open?keysDlg.close():keysDlg.showModal()}});
-document.getElementById('keys-btn').addEventListener('click',()=>keysDlg.showModal());
+const keysBtn=document.getElementById('keys-btn');if(keysBtn)keysBtn.addEventListener('click',()=>keysDlg.showModal());
 keysDlg.addEventListener('click',e=>{if(e.target===keysDlg)keysDlg.close()});
 """
 SORT_SEG = ('<span class="seg" id="s-sort" role="group" aria-label="Sort sessions">'

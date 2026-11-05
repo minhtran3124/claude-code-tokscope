@@ -64,20 +64,19 @@ Shapes
 - Selection (picked row) = 2px ink outline, never a ring of tint. Primary button is a filled pill
   that inverts to paper on hover. Session rows do not lift on hover (colour only). Diff gap cells are flat chip colour.
 
-Skin tokens (write a new rule once, in `tokscope/web/theme/layout.py`; Classic then needs no copy)
-- A skin is tokens plus a short look block. A rule reads a token, never a literal outline, radius or font, so both skins show it.
-  Ink value | Classic value. The full list sits above `LAYOUT_TOKEN_CSS` in `layout.py`.
-- Outline: `border:var(--line-w) solid var(--line-c)` (1.5px ink | 1px edge). Focus ring: `outline:2px solid var(--focus-c)`.
+Tokens (write a new rule once, in `tokscope/web/theme/layout.py`; Classic is retired, Ink is the only look)
+- Ink is tokens plus a short look block. A rule reads a token, never a literal outline, radius or font.
+  The full list sits above `LAYOUT_TOKEN_CSS` in `layout.py`.
+- Outline: `border:var(--line-w) solid var(--line-c)` (1px edge). Focus ring: `outline:2px solid var(--focus-c)`.
   Row and day rules: `var(--row-c)`.
-- Radius: `--r-card` (cards, 14 | 12), `--r-tile` (rows, KPIs, 12 | 10), `--r-box` (panels, 12 | 8), `--r-ctl` (inputs, selects, chips,
-  pill | 8), `--r-btn` (small buttons), `--r-bar` (bar tracks).
+- Radius: `--r-card` (cards, 10), `--r-tile` (rows, KPIs, 8), `--r-box` (panels, 8), `--r-ctl` (inputs, selects, chips,
+  8), `--r-btn` (small buttons), `--r-bar` (bar tracks).
 - Controls: `--pad-sel`, `--pad-in`, `--pad-chip`, `--pad-btn` (padding), `--in-bg` (input background), `--ctl-size` (text size),
   `--btn-w` (weight).
-- Type: `font-family:var(--num-font)` for labels, numbers and controls (mono | sans). A label reads `--lab-case`, `--lab-track`,
+- Type: `font-family:var(--num-font)` for labels, numbers and controls (mono). A label reads `--lab-case`, `--lab-track`,
   `--lab-size`, `--lab-w` and `--lab-c`. A number cell reads `--cell-size`.
 - Charts: `--seg-ring` (ring round a segment), `--trace-c` (line and sparkline colour), `--dot-edge` (edge of a dot), `--bar-h`, `--key-s`.
-- Only what differs in kind goes in a skin's look block: the answer-card emphasis (Ink flat navy shadow | Classic tinted outline,
-  no shadow), the hero glow, hover and pressed looks, delta style. Add a token only when two or more rules need it.
+- Only what differs in kind goes in the look block: the answer-card emphasis (flat navy shadow), hover and pressed looks, delta style. Add a token only when two or more rules need it.
 
 Motion (working tool: state changes are fast, nothing loops)
 - Three durations, as CSS tokens in the layout sheet (`tokscope/web/theme/layout.py`): --t-fast 120ms (press, hover colour),
@@ -89,7 +88,7 @@ Motion (working tool: state changes are fast, nothing loops)
 - The live dot is still. One ring (600ms) shows when a poll finds new data. Offline is a hollow dot.
 - Reduced motion keeps opacity and colour and removes travel and scale; an update still shows. The entrance, chip, ring and toast
   keyframes each have an opacity-only twin inside `@media (prefers-reduced-motion:reduce)`; the endless motions (spinner,
-  run bar, Classic hero glow) are switched off by their own rule in that media query. There is no global `animation:none`.
+  run bar) are switched off by their own rule in that media query. There is no global `animation:none`.
 - Event map (names after motion-prompt, github.com/showheyohtaki/motion-prompt). Built now: #052 Accordion (open a
   session row or a fold, 320ms), #054 Tooltip (hover or focus a chart bar, 200ms, rises 6px), #056 Toast ("New data
   · reload" and copy feedback, 320ms), #060 Segmented control (range, sort, grouping, 200ms), #068 Step indicator

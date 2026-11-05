@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from ... import paths
 from ...core import otel, privacy, tz
 from ..theme import fonts
-from ..theme.classic import CLASSIC_CSS, SKIN_APPLY, SKIN_BUTTON
 from ..theme.layout import LAYOUT_CSS, LAYOUT_TOKEN_CSS
 from ..theme.brand import MARK, favicon_link
 from ...features.changes import BENCH_PROJECT, list_changes
@@ -82,7 +81,7 @@ def write_report(db_path, out_path, where="", params=(), tasks_dir=None, level="
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>tokscope report{"" if level == "full" else f" ({level})"}</title>{favicon_link()}<script>document.documentElement.classList.add('js');
 try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElement.dataset.theme=t}}catch(_){{}}</script>
-<style>{fonts.face_css(True)}</style><style id="layout">{LAYOUT_CSS}{LAYOUT_TOKEN_CSS}</style><style id="skin-ink">{CSS}</style><style id="skin-classic" media="not all">{CLASSIC_CSS}</style>{SKIN_APPLY}</head><body><div id="progress"></div><div class="layout">
+<style>{fonts.face_css(True)}</style><style id="layout">{LAYOUT_CSS}{LAYOUT_TOKEN_CSS}</style><style id="skin-ink">{CSS}</style></head><body><div id="progress"></div><div class="layout">
 <aside class="side" aria-label="Sections"><div class="brand">{MARK}tokscope</div><nav class="toc">
 <a href="#overview">Overview</a>
 <a href="#sessions">Sessions<span class="cnt">{n_sess:,}</span></a>
@@ -96,7 +95,7 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 <a href="#by-owner">By owner</a><a href="#by-skill">By skill</a><a href="#agent-types">Subagent types</a><a href="#errors">Errors</a><a href="#cache">Prompt cache</a><a href="#context">Context</a></div>
 </nav><div class="side-foot"><button type="button" class="chip" id="theme">Theme</button>
 <span class="segctl" role="group" aria-label="Time zone"><button type="button" class="chip" data-set-tz="local" aria-pressed="false" title="Show times in this browser's time zone">Local</button><button type="button" class="chip" data-set-tz="utc" aria-pressed="false">UTC</button></span>
-<button type="button" class="chip" id="keys-btn" aria-label="Keyboard shortcuts"><kbd>?</kbd></button>{SKIN_BUTTON}</div></aside><main>
+<button type="button" class="chip" id="keys-btn" aria-label="Keyboard shortcuts"><kbd>?</kbd></button></div></aside><main>
 <div id="overview">
 <h1>Claude Code token usage</h1>
 {f'<p class="privacy" role="note"><b>{level}</b> {PRIVACY_NOTE[level]}</p>' if level != "full" else ""}
@@ -134,7 +133,7 @@ Sessions do different work, so a comparison describes them; for a controlled bef
 <div id="breakdowns">{_breakdowns(conn, cond, params)}</div>
 </main></div><div id="tip"></div><div id="toast" role="status" aria-live="polite"></div>
 <dialog class="keys" id="keys"><h3 style="margin:0">Keyboard shortcuts</h3><dl>
-<dt><kbd>/</kbd></dt><dd>Filter sessions</dd><dt><kbd>t</kbd></dt><dd>Light or dark theme</dd><dt><kbd>s</kbd></dt><dd>Classic or Ink design</dd>
+<dt><kbd>/</kbd></dt><dd>Filter sessions</dd><dt><kbd>t</kbd></dt><dd>Light or dark theme</dd>
 <dt><kbd>c</kbd></dt><dd>Compare the ticked sessions</dd><dt><kbd>g</kbd></dt><dd>Back to the top</dd>
 <dt><kbd>Esc</kbd></dt><dd>Clear the filter, close this</dd><dt><kbd>?</kbd></dt><dd>Show this list</dd></dl></dialog>
 <button type="button" class="totop" id="totop" aria-label="Back to top" title="Back to top">↑</button>

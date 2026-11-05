@@ -137,10 +137,23 @@ class ServerTest(unittest.TestCase):
         self.assertNotIn("dead", over)
         self.assertNotEqual(json.loads(self.get("/api/version")[1])["live"], "")
 
+    def test_breakdowns_opens_with_the_needs_a_look_card(self):
+        body = self.get("/breakdowns")[1]
+        self.assertLess(body.index('data-region="attention"'), body.index('id="summary"'))
+
+    def test_overview_has_a_right_rail_with_attention_budgets_and_cache_reuse(self):
+        body = self.get("/overview")[1]
+        rail = re.search(r'<aside class="ov-rail".*?</aside>', body, re.S).group(0)
+        self.assertIn('data-region="attention"', rail)
+        self.assertIn('data-region="budgets"', rail)
+        self.assertIn('data-region="cache"', rail)
+        self.assertLess(body.index('class="ov-today"'), body.index('class="ov-rail"'))  # rail follows Today on a narrow screen
+        self.assertLess(body.index('class="ov-rail"'), body.index('class="ov-rest"'))
+
     def test_the_today_heading_and_the_running_line_share_one_row(self):
         from tokscope.web.theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS
         self.open_session(os.getpid(), "now1-aaaa", "busy")
-        self.assertRegex(self.get("/overview")[1], r'<div class="live-head">\s*<h2><span class="dot"></span>Today</h2>\s*<div data-region="running">\s*<p class="runnow">.*?</p>\s*</div>\s*</div>\s*<div data-region="today">', re.S)
+        self.assertRegex(self.get("/overview")[1], r'<div class="live-head">\s*<h2>Today</h2>\s*<div data-region="running">\s*<p class="runnow">.*?</p>\s*</div>\s*</div>\s*<div data-region="today">', re.S)
         self.assertRegex(self.get("/overview")[1], r'</b> <span class="lbl">sessions? running</span><span class="note">')
         (self.claude / "sessions" / f"{os.getpid()}.json").unlink()
         self.assertRegex(self.get("/overview")[1], r'<div class="live-head">\s*<h2>.*?Today</h2>\s*<div data-region="running">\s*<p class="runnow none">', re.S)
@@ -189,12 +202,26 @@ class ServerTest(unittest.TestCase):
             opener.open(urllib.request.Request(f"http://127.0.0.1:{self.port}/managed?refresh=1&agent=agent_01%2FA"))
         self.assertEqual(e.exception.headers["Location"], "/managed?agent=agent_01%2FA")
 
-    def test_pages_carry_both_skins_and_the_switch_button(self):
+    def test_pages_carry_one_skin_and_no_design_switch(self):
         _, page = self.get("/overview")
         self.assertIn('<style id="skin-ink">', page)
-        self.assertIn('<style id="skin-classic" media="not all">', page)
-        self.assertIn('data-set-skin="classic"', page)
-        self.assertIn('data-set-theme="auto"', page)
+        self.assertNotIn("skin-classic", page)
+        _, settings = self.get("/settings")
+        self.assertNotIn("data-set-skin", settings)               # Classic is retired: no Design row
+        self.assertIn('data-set-theme="auto"', settings)
+        self.assertIn('data-set-tz="utc"', settings)
+        self.assertIn('id="keys-btn"', settings)
+
+    def test_the_sidebar_groups_the_pages_and_holds_no_settings_controls(self):
+        _, page = self.get("/overview")
+        side = page.split('<aside class="side"', 1)[1].split("</aside>", 1)[0]
+        groups = re.findall(r'<div class="grp">(\w+)</div>', side)
+        self.assertEqual(groups, ["Usage", "Workspace", "Connect", "System"])
+        order = re.findall(r'<a href="/(\w+)[?"]', side.split('<nav class="toc"', 1)[1])
+        self.assertEqual(order, ["overview", "sessions", "breakdowns", "projects", "library", "optimize", "benchmarks", "managed",
+                                 "settings"])
+        self.assertNotIn("data-set-theme", side)
+        self.assertNotIn("data-set-tz", side)
 
     def test_fonts_are_served_from_the_package_and_nothing_else_is(self):
         _, page = self.get("/overview")
@@ -339,9 +366,8 @@ class SessionsTableTest(unittest.TestCase):
         self.assertIsNone(re.search(r"duration:\s*\d", js))
         self.assertIsNone(re.search(r"easing:'ease", js))
 
-    def test_an_opened_session_is_one_tinted_panel_in_every_skin(self):
+    def test_an_opened_session_is_one_tinted_panel(self):
         from tokscope.web.theme.layout import LAYOUT_CSS
-        from tokscope.web.theme.classic import CLASSIC_CSS
         from tokscope.web.report.styles import CSS
         block = LAYOUT_CSS.split("/* sessions:", 1)[1].split("/* end sessions */", 1)[0]
         rule = re.search(r"#session-list \.srow\[open\],#session-list \.srow\[open\]:hover\{([^}]*)\}", block)
@@ -350,7 +376,7 @@ class SessionsTableTest(unittest.TestCase):
         self.assertIn("inset 4px 0 0 var(--mark)", rule.group(1))
         self.assertNotRegex(rule.group(1), r"#[0-9a-fA-F]{3,8}\b")             # theme tokens only, no raw colour
         # one place defines the open-row look: no rule outside the layout sheet's panel rules styles an [open] row's ground
-        for name, sheet in (("classic", CLASSIC_CSS), ("ink", CSS), ("layout", LAYOUT_CSS.replace(block, ""))):
+        for name, sheet in (("ink", CSS), ("layout", LAYOUT_CSS.replace(block, ""))):
             for sel, body in re.findall(r"([^{}]*\.srow[^{},]*\[open\][^{}]*)\{([^}]*)\}", sheet):
                 self.assertNotRegex(body, r"(?:^|;)\s*(?:background|box-shadow|border-color)\s*:", f"{name}: {sel.strip()}")
         # opened and picked: explicit selectors (1,3,0 and 1,4,0) so hover and the skins' .picked rule lose in any file order
@@ -360,8 +386,7 @@ class SessionsTableTest(unittest.TestCase):
         self.assertIn("var(--tint)", picked.group(1))
         self.assertNotRegex(picked.group(1), r"#[0-9a-fA-F]{3,8}\b")
         self.assertLess(block.index(rule.group(0)), block.index(picked.group(0)))
-        for sheet in (CSS, CLASSIC_CSS):
-            self.assertIn("--tint:", sheet)
+        self.assertIn("--tint:", CSS)
 
     def test_rows_are_44px_and_children_keep_their_indent_in_the_layout_sheet(self):
         from tokscope.web.theme.layout import LAYOUT_CSS
@@ -374,8 +399,7 @@ class SessionsTableTest(unittest.TestCase):
         self.assertIn("@media (prefers-reduced-motion:reduce){#sessions .pickbar,#sessions .pickbar.show{transform:none}}", block)
         self.assertNotIn(".srow:hover>summary .split{transform", LAYOUT_CSS)    # no hover lift on a row's bar
 
-    def test_each_skin_adds_only_the_look(self):
-        from tokscope.web.theme.classic import CLASSIC_CSS, CLASSIC_DASH_CSS
+    def test_the_ink_sheet_adds_only_the_look(self):
         from tokscope.web.theme.layout import LAYOUT_TOKEN_CSS, LAYOUT_TOKEN_DASH_CSS
         from tokscope.web.report.styles import CSS
         layout = LAYOUT_TOKEN_CSS + LAYOUT_TOKEN_DASH_CSS
@@ -383,10 +407,7 @@ class SessionsTableTest(unittest.TestCase):
         self.assertIn("#session-list{border:var(--line-w) solid var(--line-c);border-radius:var(--r-box)", layout)
         self.assertIn("text-transform:var(--lab-case)", layout)
         self.assertIn("--lab-case:uppercase", CSS)
-        self.assertIn("--lab-case:none", CLASSIC_CSS)
         self.assertIn("border-radius:999px", CSS + dashboard.DASH_CSS)  # the Ink tray is a filled ink pill
-        self.assertNotIn("uppercase", CLASSIC_DASH_CSS)
-        self.assertIn("box-shadow:0 10px 30px -12px", CLASSIC_CSS)     # the Classic tray: tinted, soft shadow
 
     def test_a_hostile_session_id_is_escaped_everywhere_the_script_writes_html(self):
         js = JS_SESSIONS
@@ -542,7 +563,7 @@ console.log(JSON.stringify([before,after,old,turn.match(S[2]),turn.whyOf(S[2]),J
 
 
 class SkinSwitchReportTest(unittest.TestCase):
-    def test_a_report_carries_both_skins_and_the_switch_button(self):
+    def test_a_report_carries_one_skin_and_no_switch_button(self):
         with tempfile.TemporaryDirectory() as d:
             db = Path(d) / "t.db"
             connect(db).close()
@@ -551,11 +572,10 @@ class SkinSwitchReportTest(unittest.TestCase):
             write_report(db, out, tasks_dir=Path(d))
             page = out.read_text()
         self.assertIn('<style id="skin-ink">', page)
-        self.assertIn('<style id="skin-classic" media="not all">', page)
-        self.assertIn('id="skin"', page)
+        self.assertNotIn("skin-classic", page)
+        self.assertNotIn('id="skin"', page)
 
-    def test_one_layout_sheet_comes_before_both_skins(self):
-        from tokscope.web.theme.classic import CLASSIC_CSS
+    def test_one_layout_sheet_comes_before_the_skin(self):
         from tokscope.web.theme.layout import LAYOUT_CSS
         from tokscope.web.report import write_report
         from tokscope.web.report.styles import CSS
@@ -570,15 +590,6 @@ class SkinSwitchReportTest(unittest.TestCase):
         rule = ".changes{display:grid;"
         self.assertIn(rule, LAYOUT_CSS)                   # a rule both skins share is written once, not in each skin
         self.assertNotIn(rule, CSS)
-        self.assertNotIn(rule, CLASSIC_CSS)
-
-    def test_classic_nests_child_sessions_like_ink(self):
-        from tokscope.web.theme.classic import CLASSIC_CSS, CLASSIC_DASH_CSS
-        from tokscope.web.theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS
-        classic_sheets = LAYOUT_CSS + LAYOUT_DASH_CSS + CLASSIC_CSS + CLASSIC_DASH_CSS    # the sheets a Classic page applies
-        for rule in (".srow.child{", ".srow.child::before{", ".btn.kids-more{", ".srow.orphan>summary .t{",
-                     ".srow>summary .from{", ".srow.dim:not(:hover)"):
-            self.assertIn(rule, classic_sheets)
 
 
 if __name__ == "__main__":
@@ -670,7 +681,7 @@ class OverviewTest(unittest.TestCase):
         sheet = body.split('<div class="sheet" id="sheet">', 1)[1].split("</aside>", 1)[0]
         self.assertIn('<nav class="toc"', sheet)                                   # the pages
         self.assertIn('class="filters sheet-filters"', sheet)                      # the same filter form
-        self.assertIn("data-set-theme", sheet)                                      # the theme control
+        self.assertIn('href="/settings"', sheet)                                    # the settings moved to their own page
         self.assertIn("Privacy level:", sheet)
         self.assertIn("<span>Last 30 days · app</span>", body)                     # the filters as one pill
         self.assertIn('aria-controls="sheet" aria-expanded="false" aria-haspopup="dialog"', body)
@@ -692,6 +703,14 @@ class OverviewTest(unittest.TestCase):
         labels = re.findall(r'<text x="[\d.]+" y="194" text-anchor="\w+">([\d-]+)</text>', narrow)
         self.assertEqual(len(labels), 4)
 
+    def test_daily_chart_bar_is_never_wider_than_36_for_a_one_day_range(self):
+        self.add(0)
+        body = self.page()
+        for c in ("wide", "narrow"):
+            svg = re.search(rf'<svg class="{c}".*?</svg>', body, re.S).group(0)
+            widths = [float(w) for w in re.findall(r'<rect class="m"[^>]* width="([\d.]+)"', svg)]
+            self.assertTrue(widths and max(widths) <= 36, (c, widths))
+
     def test_phone_section_is_in_the_layout_sheet_and_the_static_report_has_no_menu(self):
         from tokscope.web.theme.layout import LAYOUT_DASH_CSS
         block = LAYOUT_DASH_CSS.split("/* phone */", 1)[1].split("/* end phone */", 1)[0]
@@ -703,21 +722,12 @@ class OverviewTest(unittest.TestCase):
 
     def test_phone_breakpoint_is_639_in_css_and_script_and_the_sheet_leaves_dialog_and_select_keys_alone(self):
         from tokscope.web.theme.layout import LAYOUT_DASH_CSS
-        from tokscope.web.theme.classic import CLASSIC_DASH_CSS
         block = LAYOUT_DASH_CSS.split("/* phone */", 1)[1].split("/* end phone */", 1)[0]
         self.assertNotIn("max-width:640px", block)
-        self.assertNotIn("max-width:640px", CLASSIC_DASH_CSS.split("/* end overview */", 1)[1])
         self.assertIn("matchMedia('(max-width:639px)')", dashboard.DASH_JS)
         keys = dashboard.DASH_JS.split("document.addEventListener('keydown',e=>{if(!sheet.classList.contains('open'))return;", 1)[1][:400]
         self.assertIn("dialog[open]", keys.split("if(e.key==='Escape')", 1)[0])    # the shortcuts dialog keeps Escape and Tab
         self.assertIn("selOpen", keys)                                             # an open select keeps its Escape
-
-    def test_classic_phone_controls_get_an_outline_that_reads_3_to_1(self):
-        from tokscope.web.theme.classic import CLASSIC_DASH_CSS
-        rule = CLASSIC_DASH_CSS.split("the new controls have no other cue", 1)[1]
-        self.assertIn("body .menu-btn", rule)
-        self.assertIn("border-color:var(--muted)", rule.split("}", 1)[0])
-        self.assertIn("4.69:1", CLASSIC_DASH_CSS)                                  # the measured ratio, not 4.0
 
     def test_a_window_before_shorter_than_the_range_is_compared_per_day(self):
         self.add_hours(40 * 24)                                            # the same 100 an hour for 40 days
@@ -852,7 +862,11 @@ class OverviewTest(unittest.TestCase):
         body = self.page({"range": ["7"]})
         self.assertEqual(body.count('class="spark"'), 6)
         for label in ("Range", "Project", "Model", "Skill"):
-            self.assertIn(f"<label class=\"fl\"><span>{label}</span>", body)
+            self.assertRegex(body, rf'<label class="fl fl-\w+"><span>{label}</span>')
+        self.assertIn('class="range-tabs"', body)
+        self.assertRegex(body, r'<a href="[^"]*range=7[^"]*" class=on aria-current=true>7 days</a>')
+        self.assertIn('>All time</a>', body)
+        self.assertNotIn('class="range-tabs"', dashboard.render(self.conn, "settings", {}, "stamp"))
         self.assertRegex(body, r'class="range-dates note">\d\d \w{3} \d{4} – \d\d \w{3} \d{4}<')
         self.assertIn('Sessions<span class="cnt" title="All time, not filtered">1</span></a>', body)
         self.assertIn('Projects<span class="cnt" title="All time, not filtered">1</span></a>', body)

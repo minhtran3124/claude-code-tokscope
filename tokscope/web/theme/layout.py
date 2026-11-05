@@ -1,15 +1,10 @@
-"""The layout both skins share: grid, sizes, spacing, structure and every rule that differs between the skins only in value,
-as one stylesheet (<style id="layout">).
+"""The layout: grid, sizes, spacing and structure, as one stylesheet (<style id="layout">). Classic was retired; Ink is the only look.
 
-Each page loads it once, before the skin sheets. A skin (Ink in report/styles.py and dashboard/scripts.py, Classic in classic.py) is its
-tokens (the :root rules) plus a short look block: only what differs in kind, such as the answer-card emphasis, the hero glow,
-hover and pressed looks, and the few rules where one skin sets a value the other leaves to the browser. A rule that reads the
-same in both skins, or differs only in a value, lives here and reads a token (`border:var(--line-w) solid var(--line-c)`). The
-skin tokens are listed above LAYOUT_TOKEN_CSS. Order of the sheets: LAYOUT_CSS, LAYOUT_DASH_CSS, LAYOUT_TOKEN_CSS (rules that
+Each page loads it once, before the Ink sheet (report/styles.py and dashboard/scripts.py: the :root tokens plus a short look block).
+A rule that is layout lives here and reads a token (`border:var(--line-w) solid var(--line-c)`). The tokens are listed above LAYOUT_TOKEN_CSS. Order of the sheets: LAYOUT_CSS, LAYOUT_DASH_CSS, LAYOUT_TOKEN_CSS (rules that
 came from report.CSS), LAYOUT_TOKEN_DASH_CSS (from DASH_CSS); the report page loads LAYOUT_CSS and LAYOUT_TOKEN_CSS only.
-The skin sheets load after this one and win at equal specificity, so once a rule here reads a token, the skin must not set
-the same property for that element too (delete the skin copy). New markup gets its rules here first and reads tokens, so
-Classic needs no copy."""
+The Ink sheet loads after this one and wins at equal specificity, so once a rule here reads a token, the Ink sheet must not set
+the same property for that element too. New markup gets its rules here first and reads tokens."""
 
 LAYOUT_CSS = """
 /* motion tokens, shared by both skins. --t-fast: press, hover colour. --t-state: toggles, segments, tooltips, delta chip.
@@ -354,14 +349,31 @@ svg .vmark{cursor:default}
 .filters{align-items:flex-end}
 .dash-head .privacy{display:inline-flex;align-items:center;margin:0;padding:2px 10px;border-radius:999px;font-size:12px}
 .range-dates{flex:1 0 100%;margin:0;text-align:right}
-/* sidebar: counts beside the pages; Theme and Design as segmented controls */
-.side-foot.ctls{display:flex;flex-direction:column;align-items:stretch;gap:12px;margin:18px 0 0 4px}
+/* the range as tabs (wide screens); the Range select stays in the phone sheet. A filter change applies at once, so Apply is only for a page without script */
+.range-tabs{display:inline-flex;gap:2px;padding:3px;border:var(--line-w) solid var(--line-c);border-radius:var(--r-box);background:var(--surface)}
+.range-tabs a{padding:4px 12px;border-radius:calc(var(--r-box) - 3px);font:var(--btn-w) var(--ctl-size)/1.4 var(--num-font);color:var(--ink2);text-decoration:none;white-space:nowrap}
+.range-tabs a:hover{color:var(--ink);background:var(--chip)}
+.range-tabs a.on{background:var(--ink);color:var(--page)}
+.range-tabs a:focus-visible{outline:2px solid var(--focus-c);outline-offset:1px}
+.dash-head>.filters .fl-range{display:none}
+.js .filters .chip[type=submit]{display:none}
+/* sidebar: counts beside the pages, a small label over each group; the Settings page holds Theme, Design and Time zone as segmented controls */
+.toc .grp{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:16px 12px 4px}
+.toc .grp:first-child{padding-top:4px}
 .ctl{display:flex;flex-direction:column;gap:4px}
+.setrows{display:flex;flex-direction:column}
+.setrow{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--row-c)}
+.setrow:first-child{border-top:0}
+.setrow .note{margin:2px 0 0}
+.setrow .segctl{min-width:240px}
+.keyrows>div{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--row-c)}
+.keyrows>div:first-child{border-top:0}
+.pill-static{font:500 12px var(--mono);padding:2px 10px;border:var(--line-w) solid var(--line-c);border-radius:var(--r-btn)}
 .segctl{display:flex}
 .segctl .chip{flex:1;justify-content:center;border-radius:0;padding:5px 8px}
 .segctl .chip+.chip{margin-left:calc(-1*var(--line-w,1px))}
-.segctl .chip:first-child{border-radius:999px 0 0 999px}
-.segctl .chip:last-child{border-radius:0 999px 999px 0}
+.segctl .chip:first-child{border-radius:var(--r-btn) 0 0 var(--r-btn)}
+.segctl .chip:last-child{border-radius:0 var(--r-btn) var(--r-btn) 0}
 #keys-btn{align-self:flex-start}
 /* end overview */
 /* phone */
@@ -391,6 +403,7 @@ transition:opacity var(--t-layout) var(--ease),transform var(--t-layout) var(--e
 .sheet .toc{flex-direction:column;white-space:normal;gap:2px}
 .sheet .toc a{min-height:48px;padding:0 12px;font-size:16px}
 .sheet .toc a .cnt{display:inline}
+.sheet .toc .grp{display:block}
 .sheet .sub-toc{display:none}
 .sheet .sheet-filters{display:flex;flex-direction:column;align-items:stretch;gap:12px;margin:20px 0 0}
 .sheet-filters .ctl-l{margin:0}
@@ -398,13 +411,12 @@ transition:opacity var(--t-layout) var(--ease),transform var(--t-layout) var(--e
 .layout .sheet-filters select{width:100%;max-width:none;min-height:44px;font-size:16px}
 .sheet-filters .chip{align-self:flex-start;justify-content:center;min-height:44px;min-width:44px;padding:0 20px;font-size:14px}
 .sheet-filters a{display:inline-flex;align-items:center;min-height:44px}
-.sheet .side-foot.ctls{margin:20px 0 0}
 .sheet .segctl .chip{min-height:44px;font-size:14px}
 .sheet #keys-btn{display:none}
 .sheet .sheet-priv{display:block;margin:20px 0 0}
 /* the header: the title row, then the filters as one pill that opens the sheet */
 .dash-head{gap:8px 12px}
-.dash-head>.filters{display:none}
+.dash-head>.filters,.range-tabs{display:none}
 body .pill-btn{display:flex;flex:1 0 100%;align-items:center;justify-content:space-between;gap:10px;min-height:44px;padding:0 16px;font-size:14px;text-align:left}
 .pill-btn>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pill-i{display:block;flex:none;width:8px;height:8px;border:solid currentColor;border-width:0 2px 2px 0;transform:rotate(45deg) translate(-2px,-2px)}
@@ -476,7 +488,7 @@ details.finding-sec .empty code{overflow-wrap:anywhere}
 """
 
 # The skin tokens (set in the :root rule of both skins; the dark rules only change colours and the line weight and shadow tokens). Ink value | Classic value.
-#   --line-w 1.5px | 1px         outline width of a card, control or tray
+#   --line-w 1px | 1px           outline width of a card, control or tray
 #   --line-c ink | edge          outline colour;  --focus-c ink | mark: focus ring;  --row-c grid | edge: row and day rules
 #   --r-card 14px | 12px         radius of a card;  --r-tile 12px | 10px: tile, row, KPI;  --r-box 12px | 8px: panel, list
 #   --r-ctl 999px | 8px          radius of an input, select, chip;  --r-btn 999px | 6px: small button;  --r-bar 5px | 4px: bar track
@@ -566,8 +578,8 @@ mark{background:var(--hl);color:inherit;border-radius:2px}
 .side{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:28px 12px 20px 16px;border-right:1px solid var(--edge);background:var(--page);z-index:10}
 .brand{font-weight:600;font-size:13px;margin:0 0 14px 10px;display:flex;align-items:center;gap:7px}
 .toc a{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;color:var(--ink2);text-decoration:none;font-size:14px;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);position:relative;z-index:1}
-.toc a:hover{background:color-mix(in oklch,var(--mark) 10%,transparent);color:var(--ink);transform:translateX(2px)}
-.toc a.on{background:color-mix(in oklch,var(--mark) 15%,transparent);color:var(--mark-ink);font-weight:600}
+.toc a:hover{background:color-mix(in oklch,var(--ink) 7%,transparent);color:var(--ink)}
+.toc a.on{background:var(--chip);color:var(--ink);font-weight:600;box-shadow:inset 3px 0 0 var(--ink)}
 .toc a:focus-visible{outline:2px solid var(--focus-c);outline-offset:1px}
 .sub-toc{display:flex;flex-direction:column;gap:1px;margin:2px 0 4px 14px;padding-left:6px;border-left:1px solid var(--grid)}
 .sub-toc a{font-size:13px;padding:4px 10px}
@@ -581,7 +593,7 @@ body.picking .totop{bottom:92px}
 .layout{display:block}
 .side{height:auto;padding:8px 16px;border-right:0;border-bottom:1px solid var(--edge);overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 .side::-webkit-scrollbar{display:none}
-.brand,.sub-toc,.cnt{display:none}
+.brand,.sub-toc,.cnt,.toc .grp{display:none}
 .toc{flex-direction:row;white-space:nowrap}
 .toc a:hover{transform:none}
 }
@@ -637,10 +649,10 @@ tr.runs-row td{border-top:0;padding-top:0}
 #progress{position:fixed;inset:0 0 auto 0;height:3px;z-index:40;transform-origin:0 50%;transform:scaleX(0)}
 /* sidebar: one pill slides to the section in view */
 .toc{position:relative}
-.toc-pill{position:absolute;left:0;top:0;border-radius:8px;pointer-events:none;background:color-mix(in oklch,var(--mark) 15%,transparent);box-shadow:inset 3px 0 0 var(--mark);transition:transform var(--t-layout) var(--ease-expo),width var(--t-layout) var(--ease-expo),height var(--t-layout) var(--ease-expo),opacity var(--t-state)}
-.has-pill .toc a.on{background:transparent}
+.toc-pill{position:absolute;left:0;top:0;border-radius:8px;pointer-events:none;background:var(--chip);box-shadow:inset 3px 0 0 var(--ink);transition:transform var(--t-layout) var(--ease-expo),width var(--t-layout) var(--ease-expo),height var(--t-layout) var(--ease-expo),opacity var(--t-state)}
+.has-pill .toc a.on{background:transparent;box-shadow:none}
 .side-foot{display:flex;gap:6px;margin:18px 0 0 4px}
-.chip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);padding:var(--pad-chip);border:var(--line-w) solid var(--line-c);border-radius:999px}
+.chip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);padding:var(--pad-chip);border:var(--line-w) solid var(--line-c);border-radius:var(--r-ctl)}
 .chip:focus-visible{outline:2px solid var(--focus-c);outline-offset:2px}
 .chip kbd,.keys kbd{font:600 11px var(--mono);padding:1px 6px;border-radius:5px;border:1px solid var(--edge);border-bottom-width:2px;background:var(--surface);color:var(--ink)}
 ::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
@@ -900,4 +912,13 @@ table.mcp td.st{font-family:var(--num-font)}
 .movers th{font-size:var(--lab-size);text-transform:var(--lab-case);letter-spacing:var(--lab-track);color:var(--lab-c)}
 .spark polyline,.tline{stroke:var(--trace-c)}
 .tdot{fill:var(--trace-c);stroke:var(--dot-edge)}
+/* Overview: the page is a main column and a right rail (Needs a look, budgets, cache reuse); one column under 1100 px, rail after Today */
+.ovgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;grid-template-areas:"today rail" "rest rail";gap:0 20px;align-items:start}
+.ov-today{grid-area:today;min-width:0}.ov-rest{grid-area:rest;min-width:0}.ov-rail{grid-area:rail;min-width:0}
+@media (max-width:1100px){.ovgrid{grid-template-columns:minmax(0,1fr);grid-template-areas:"today" "rail" "rest"}}
+ol.attn{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
+ol.attn li{display:flex;gap:10px;align-items:flex-start}ol.attn .k{font:500 11px var(--mono);color:var(--muted);padding-top:3px}
+ol.attn .note{margin:2px 0 0}
+.reuse-n{font:600 28px var(--mono);color:var(--pass)}
+.bar-track{height:var(--bar-h);background:var(--track);border-radius:var(--r-bar);overflow:hidden}.bar-track u{display:block;height:100%;background:var(--pass);text-decoration:none}
 """

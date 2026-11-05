@@ -22,7 +22,7 @@ table.sbs th{font:500 11px/1.45 var(--mono)}
 .answer{box-shadow:10px 12px 0 var(--shadow);margin:0 10px 14px 0}
 .tband{fill:color-mix(in oklch,var(--mark) 24%,transparent)}
 .privacy b{font:600 11px var(--mono);letter-spacing:.08em}
-.segctl{border-radius:999px}
+.segctl{border-radius:var(--r-btn)}
 /* end overview */
 .state{font-size:11px}
 .st .pill,.state{font-weight:500}
@@ -218,6 +218,8 @@ DASH_JS = """
 document.querySelectorAll('form.filters').forEach(fm=>fm.addEventListener('submit',e=>{e.preventDefault();const q=new URLSearchParams();
   fm.querySelectorAll('select').forEach(x=>{if(x.value&&!(x.name==='range'&&x.value==='30'))q.set(x.name,x.value)});
   location.href=fm.getAttribute('action')+(q.toString()?'?'+q:'')}));
+// a changed select applies at once, so the Apply button is hidden when scripts run
+document.querySelectorAll('form.filters select').forEach(x=>x.addEventListener('change',()=>x.form.requestSubmit()));
 // phone menu: the Menu button and the filter pill open one sheet. While it is open the page behind is inert, focus moves
 // into the sheet and wraps there, Escape closes it, and focus goes back to the control that opened it
 (()=>{const sheet=document.getElementById('sheet'),bar=document.getElementById('menu-btn'),main=document.querySelector('main'),

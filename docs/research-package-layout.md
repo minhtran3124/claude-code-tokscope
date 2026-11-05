@@ -32,7 +32,7 @@ tokscope/
   integrations/    outside services: managed (ant CLI), registry (MCP Registry)
   experiments/     paid runs of claude -p: bench, replay, optimize
   web/             HTML: dashboard (server and pages), report, charts
-    theme/         look: layout, classic, brand, fonts
+    theme/         look: layout, brand, fonts
 ```
 
 Dependency rule, checked by `tests/test_layout.py`:
