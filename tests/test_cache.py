@@ -168,11 +168,11 @@ class CacheTest(unittest.TestCase):
         self.assertIn("top cause ttl_expired_5m", head)
         self.assertIn("keep the session warm", page)
 
-    def test_the_overview_finding_covers_the_last_7_days_only(self):
+    def test_the_needs_a_look_cache_item_covers_the_last_7_days_only(self):
         from tokscope.web.dashboard.common import Filters
-        from tokscope.web.dashboard.pages.overview import _cache_finding
+        from tokscope.web.dashboard.pages.overview import _attention
         f = Filters({})
-        self.assertEqual(_cache_finding(self.conn, f), "")
+        self.assertIn("Nothing needs a look", _attention(self.conn, f, None))
         now = datetime.now(timezone.utc)
         for base, session in ((now - timedelta(days=1), "s1"), (now - timedelta(days=20), "old")):
             self.conn.execute("INSERT OR IGNORE INTO sessions (session_id, project) VALUES (?, '-home-u-app')", (session,))
@@ -182,7 +182,7 @@ class CacheTest(unittest.TestCase):
                     "INSERT INTO requests (session_id, request_key, ts, model, input, output, cache_read, cache_write_5m, "
                     "cache_write_1h, cost_usd) VALUES (?,?,?,?,0,0,?,?,0,0)",
                     (session, f"k{self.n}", (base + timedelta(seconds=secs)).isoformat(), MODEL, cr, cw))
-        out = _cache_finding(self.conn, f)
+        out = _attention(self.conn, f, None)
         self.assertIn("1 likely miss,", out)
         self.assertIn("top cause: ttl_expired_5m", out)
 

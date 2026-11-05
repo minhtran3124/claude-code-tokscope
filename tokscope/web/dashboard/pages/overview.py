@@ -526,20 +526,6 @@ def _budgets(conn):
             f'<ul class="plain">{"".join(_budget_row(i) for i in result["items"])}</ul>{note}</section>')
 
 
-def _cache_finding(conn, f):
-    """One line when the last 7 days re-cached the prompt: the dollars and the top likely cause. Nothing without a miss."""
-    cond, params = f.cond()
-    since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-    reqs, misses = cache.scan(conn, f"{cond} AND r.ts >= ?" if cond else "WHERE r.ts >= ?", (*params, since))
-    if not misses:
-        return ""
-    t = cache.totals(reqs, misses)
-    return (f'<section class="card cache-finding"><h2>Prompt cache</h2><p class="note">{_usd(t["recache_usd"])} of re-cache in the '
-            f'last 7 days ({t["misses"]:,} likely miss{"es" * (t["misses"] != 1)}, {_tok(t["recache_tokens"])} tokens), '
-            f'top cause: {html.escape(t["top_cause"])}; hit ratio {cache.pct(t["hit_ratio"])}. '
-            f'<a href="{f.link("breakdowns")}#cache">Prompt cache</a> has the hints.</p></section>')
-
-
 def _attention(conn, f, cmp):
     """Up to three things worth a look: tokens per day well above the window before, a budget near or over its limit, and
     prompt re-caching in the last 7 days. Each is one line with a link to where the detail is."""
@@ -564,7 +550,7 @@ def _attention(conn, f, cmp):
     reqs, misses = cache.scan(conn, f"{cond} AND r.ts >= ?" if cond else "WHERE r.ts >= ?", (*params, since))
     if misses:
         t = cache.totals(reqs, misses)
-        items.append(("Prompt cache missed", f'{_usd(t["recache_usd"])} re-cached in 7 days, top cause: {t["top_cause"]}',
+        items.append(("Prompt cache missed", f'{t["misses"]:,} likely miss{"es" if t["misses"] != 1 else ""}, {_usd(t["recache_usd"])} re-cached in 7 days, top cause: {t["top_cause"]}',
                       f.link("breakdowns") + "#cache"))
     if not items:
         return '<section class="card attention"><h2>Needs a look</h2><p class="note">Nothing needs a look.</p></section>'
