@@ -480,7 +480,7 @@ def start(skill, budget, runs=3, model="sonnet", cwd=None, log=print):
             raise ValueError(f"{skill}: the copy of the skill is not the same version")
         store.write_plan(run, {
             "schema": store.SCHEMA_VERSION, "skill": skill, "run_id": run.name, "base_fingerprint": base,
-            "description": description, "suite_hash": suite.suite_hash(live.data), "dev": dev, "holdout": hold,
+            "source": str(live.folder.resolve()), "description": description, "suite_hash": suite.suite_hash(live.data), "dev": dev, "holdout": hold,
             "runs": runs, "model": model, "claude_version": _claude_version(), "budget_usd": float(budget),
             "per_run_cap_usd": min(sandbox.MAX_BUDGET_USD, float(budget)), "max_rounds": MAX_ROUNDS,
             "seed": random.SystemRandom().getrandbits(32), "resamples": RESAMPLES, "ci": CI, "gates": stats.GATES,
