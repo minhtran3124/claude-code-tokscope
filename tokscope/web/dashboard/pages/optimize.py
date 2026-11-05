@@ -408,7 +408,8 @@ def _post_ship_section(conn, d):
     try:
         sides = postship.post_ship(conn, skill, old, new, at)
     except (ValueError, TypeError):
-        return ""
+        return ('<section class="card" id="postship"><h2 class="sec">Real sessions</h2><p class="warn" role="note">'
+                "The numbers from your sessions could not be read for this approve (its time or versions look malformed).</p></section>")
     o, n = sides["old"], sides["new"]
     dash = lambda v, f: "–" if v is None else f(v)
     rows = "".join(f"<tr><td>{label}</td><td>{dash(o[key], f)}</td><td>{dash(n[key], f)}</td></tr>" for label, key, f in (

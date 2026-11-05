@@ -970,6 +970,14 @@ class PostShipTest(Fixture):
         self.assertNotIn('id="postship"', body)
         self.assertIn("Decide", body)
 
+    def test_an_approved_run_with_unreadable_numbers_says_so_instead_of_hiding_the_card(self):
+        self.approve()
+        with mock.patch.object(postship, "post_ship", side_effect=ValueError("bad ts")):
+            body = self.render()
+        self.assertIn('id="postship"', body)
+        self.assertIn("could not be read", body)
+        self.assertIn("Decide", body)
+
     def test_an_approved_run_without_loads_renders_and_keeps_decide(self):
         self.approve()
         body = self.render()
