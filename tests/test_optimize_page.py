@@ -889,7 +889,7 @@ class PostShipTest(Fixture):
         finally:
             conn.close()
 
-    def test_turn_cost_is_split_over_the_turn_loads(self):
+    def test_each_load_gets_the_full_turn_sum_even_with_several_loads_in_the_turn(self):
         self.approve()
         self.loads(self.new, 1, 15, tokens=1000, cost=1.0)
         conn = ingest.connect(self.db)
@@ -898,7 +898,14 @@ class PostShipTest(Fixture):
         conn.commit()
         conn.close()
         got = self.numbers()["new"]
-        self.assertEqual((got["tokens_median"], got["cost_median"]), (500, 0.5))
+        self.assertEqual((got["tokens_median"], got["cost_median"]), (1000, 1.0))
+
+    def test_failed_loads_count_in_the_token_and_cost_medians(self):
+        self.approve()
+        self.loads(self.new, 2, 15, failed=1, tokens=100, cost=0.5)
+        got = self.numbers()["new"]
+        self.assertEqual(got["tokens_median"], 100.5)  # 100 (failed) and 101
+        self.assertAlmostEqual(got["cost_median"], 0.505)
 
     def test_post_ship_function(self):
         self.approve()
@@ -907,8 +914,8 @@ class PostShipTest(Fixture):
         got = self.numbers()
         self.assertEqual((got["old"]["loads"], got["old"]["errors"], got["old"]["few"]), (6, 2, False))
         self.assertAlmostEqual(got["old"]["error_rate"], 2 / 6)
-        self.assertEqual(got["old"]["tokens_median"], 1003.5)  # medians over the 4 ok loads: 1002..1005
-        self.assertAlmostEqual(got["old"]["cost_median"], 1.035)
+        self.assertEqual(got["old"]["tokens_median"], 1002.5)  # medians over all 6 loads: 1000..1005
+        self.assertAlmostEqual(got["old"]["cost_median"], 1.025)
         self.assertEqual((got["new"]["loads"], got["new"]["tokens_median"], got["new"]["few"]), (3, 501, True))
         self.assertEqual(got["new"]["error_rate"], 0)
 
@@ -947,7 +954,7 @@ class PostShipTest(Fixture):
         got = self.numbers()
         self.assertEqual((got["old"]["loads"], got["new"]["loads"]), (5, 5))
 
-    def test_bench_sessions_stay_out_of_loads_and_errors_and_loads_without_requests_out_of_the_medians(self):
+    def test_bench_sessions_count_and_loads_without_requests_stay_out_of_the_medians(self):
         self.approve()
         self.loads(self.old, 2, 5, session="sb", failed=2)
         self.loads(self.old, 5, 6)
@@ -956,7 +963,7 @@ class PostShipTest(Fixture):
         conn.commit()
         conn.close()
         got = self.numbers()["old"]
-        self.assertEqual((got["loads"], got["errors"], got["few"]), (5, 0, False))
+        self.assertEqual((got["loads"], got["errors"], got["few"]), (7, 2, False))
         self.assertIsNotNone(got["tokens_median"])
 
     def test_an_unapproved_run_has_no_section_and_keeps_decide(self):

@@ -4,7 +4,6 @@ import statistics
 from ..core import skills
 
 MIN_LOADS = 5  # a side with fewer loads is too few to compare
-BENCH = "%tokscope%-bench-%"
 
 
 def _has_table(conn, name):
@@ -21,28 +20,20 @@ def approved(conn, run_id):
 
 
 def _turns(conn, keys):
-    """{(session_id, prompt_idx): (tokens, cost)} per load: the requests of each turn split evenly over the turn's ok
-    skill loads (of any skill), so a turn with several loads is not counted in full for each. Bench sessions left out."""
-    sessions = {k[0] for k in keys}
+    """{(session_id, prompt_idx): (tokens, cost)}: the full sum of the requests rows of the turn after a load."""
     out = {}
-    for sid in sessions:
+    for sid in {k[0] for k in keys}:
         for i, tokens, cost in conn.execute(
-                f"SELECT r.prompt_idx, sum({skills.TOKENS}), sum(COALESCE(r.cost_usd, 0)) FROM requests r "
-                "JOIN sessions s USING (session_id) WHERE r.session_id = ? AND s.project NOT LIKE ? GROUP BY r.prompt_idx",
-                (sid, BENCH)):
+                f"SELECT prompt_idx, sum({skills.TOKENS}), sum(COALESCE(cost_usd, 0)) FROM requests "
+                "WHERE session_id = ? GROUP BY prompt_idx", (sid,)):
             out[(sid, i)] = (tokens or 0, cost or 0.0)
-        for i, n in conn.execute("SELECT prompt_idx, count(*) FROM skill_calls WHERE session_id = ? AND COALESCE(failed, 0) = 0 "
-                                 "GROUP BY prompt_idx", (sid,)):
-            if (sid, i) in out and n > 1:
-                t, c = out[(sid, i)]
-                out[(sid, i)] = (t / n, c / n)
     return out
 
 
 def _side(loads, failed, turns):
     """loads, failed: lists of (session_id, prompt_idx) of the ok and the failed loads of one version."""
     every = loads + failed
-    measured = [turns[k] for k in loads if k in turns]
+    measured = [turns[k] for k in every if k in turns]
     n = len(every)
     return {"loads": n, "tokens_median": statistics.median(t for t, _ in measured) if measured else None,
             "cost_median": statistics.median(c for _, c in measured) if measured else None,
@@ -52,13 +43,12 @@ def _side(loads, failed, turns):
 def post_ship(conn, skill, old, new, at):
     """{"old": side, "new": side}: loads, median tokens and cost per load, errors and error rate from real sessions. A
     load counts by its version: the old version before `at`, the new one from `at` on; any other version (a later hand
-    edit) and any load in a bench session is left out. A side is `few` under MIN_LOADS loads."""
+    edit) is left out. Tokens and cost are the full sum of the turn's requests after each load, ok or failed. A side is `few` under MIN_LOADS loads."""
     boundary = skills._dt(at)
-    bench = {r[0] for r in conn.execute("SELECT session_id FROM sessions WHERE project LIKE ?", (BENCH,))}
     pick = {"old": ([], []), "new": ([], [])}
     for failed in (False, True):
         for sid, i, sk, ts, version, _ in skills.load_versions(conn, failed=failed):
-            if sk != skill or not ts or version is None or sid in bench:
+            if sk != skill or not ts or version is None:
                 continue
             if version == old and skills._dt(ts) < boundary:
                 pick["old"][failed].append((sid, i))
