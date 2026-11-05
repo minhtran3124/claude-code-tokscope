@@ -789,5 +789,18 @@ class LibraryTest(Fixture):
         self.assertNotIn('id="optstart"', self.page())
 
 
+@unittest.skipUnless(shutil.which("node"), "node is not installed")
+class ScriptSyntaxTest(unittest.TestCase):
+    def test_the_dashboard_scripts_parse(self):
+        """One syntax error (an unescaped quote in a Python string) stops every button of the page."""
+        from tokscope.web.dashboard import scripts
+        for name in ("LIB_JS", "OPT_JS", "DASH_JS"):
+            with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as f:
+                f.write(getattr(scripts, name))
+            self.addCleanup(os.unlink, f.name)
+            done = subprocess.run([shutil.which("node"), "--check", f.name], capture_output=True, text=True)
+            self.assertEqual(done.returncode, 0, f"{name}: {done.stderr}")
+
+
 if __name__ == "__main__":
     unittest.main()
