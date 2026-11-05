@@ -10,7 +10,6 @@ from ... import paths
 from ...core import otel, tz
 from ...features import library, projects
 from ..theme import fonts
-from ..theme.classic import CLASSIC_CSS, CLASSIC_DASH_CSS, SKIN_APPLY
 from ..theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS, LAYOUT_TOKEN_CSS, LAYOUT_TOKEN_DASH_CSS
 from ..theme.brand import MARK, favicon_link
 from ...features.changes import BENCH_PROJECT
@@ -142,7 +141,7 @@ def render(conn, name, qs, stamp, level="full", token=""):
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>tokscope · {PAGES[name]}</title>{favicon_link()}<meta name="tokscope-token" content="{token}"><script>document.documentElement.classList.add('js');
 try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElement.dataset.theme=t}}catch(_){{}}</script>
-<style>{fonts.face_css(False)}</style><style id="layout">{LAYOUT_CSS}{LAYOUT_DASH_CSS}{LAYOUT_TOKEN_CSS}{LAYOUT_TOKEN_DASH_CSS}</style><style id="skin-ink">{CSS}{DASH_CSS}</style><style id="skin-classic" media="not all">{CLASSIC_CSS}{CLASSIC_DASH_CSS}</style>{SKIN_APPLY}</head><body data-page="{name}" data-stamp="{html.escape(stamp)}"><div id="progress"></div><div class="layout">
+<style>{fonts.face_css(False)}</style><style id="layout">{LAYOUT_CSS}{LAYOUT_DASH_CSS}{LAYOUT_TOKEN_CSS}{LAYOUT_TOKEN_DASH_CSS}</style><style id="skin-ink">{CSS}{DASH_CSS}</style></head><body data-page="{name}" data-stamp="{html.escape(stamp)}"><div id="progress"></div><div class="layout">
 <aside class="side" aria-label="Pages"><div class="brand">{MARK}tokscope</div>
 <button type="button" class="chip menu-btn" id="menu-btn" aria-controls="sheet" aria-expanded="false"><span class="menu-i" aria-hidden="true"></span>Menu</button>
 <div class="sheet" id="sheet"><nav class="toc" aria-label="Pages">{nav}</nav>{sheet_filters}
@@ -152,7 +151,7 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 {body}
 </main></div><div id="tip"></div><div id="toast" role="status" aria-live="polite"></div>
 <dialog class="keys" id="keys"><h3 style="margin:0">Keyboard shortcuts</h3><dl>
-<dt><kbd>t</kbd></dt><dd>Light or dark theme</dd><dt><kbd>s</kbd></dt><dd>Classic or Ink design</dd><dt><kbd>g</kbd></dt><dd>Back to the top</dd>
+<dt><kbd>t</kbd></dt><dd>Light or dark theme</dd><dt><kbd>g</kbd></dt><dd>Back to the top</dd>
 <dt><kbd>/</kbd></dt><dd>Filter sessions (Sessions page)</dd><dt><kbd>?</kbd></dt><dd>Show this list</dd></dl></dialog>
 <script>{scripts}</script></body></html>"""
 

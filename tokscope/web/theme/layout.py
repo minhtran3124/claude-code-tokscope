@@ -1,15 +1,10 @@
-"""The layout both skins share: grid, sizes, spacing, structure and every rule that differs between the skins only in value,
-as one stylesheet (<style id="layout">).
+"""The layout: grid, sizes, spacing and structure, as one stylesheet (<style id="layout">). Classic was retired; Ink is the only look.
 
-Each page loads it once, before the skin sheets. A skin (Ink in report/styles.py and dashboard/scripts.py, Classic in classic.py) is its
-tokens (the :root rules) plus a short look block: only what differs in kind, such as the answer-card emphasis, the hero glow,
-hover and pressed looks, and the few rules where one skin sets a value the other leaves to the browser. A rule that reads the
-same in both skins, or differs only in a value, lives here and reads a token (`border:var(--line-w) solid var(--line-c)`). The
-skin tokens are listed above LAYOUT_TOKEN_CSS. Order of the sheets: LAYOUT_CSS, LAYOUT_DASH_CSS, LAYOUT_TOKEN_CSS (rules that
+Each page loads it once, before the Ink sheet (report/styles.py and dashboard/scripts.py: the :root tokens plus a short look block).
+A rule that is layout lives here and reads a token (`border:var(--line-w) solid var(--line-c)`). The tokens are listed above LAYOUT_TOKEN_CSS. Order of the sheets: LAYOUT_CSS, LAYOUT_DASH_CSS, LAYOUT_TOKEN_CSS (rules that
 came from report.CSS), LAYOUT_TOKEN_DASH_CSS (from DASH_CSS); the report page loads LAYOUT_CSS and LAYOUT_TOKEN_CSS only.
-The skin sheets load after this one and win at equal specificity, so once a rule here reads a token, the skin must not set
-the same property for that element too (delete the skin copy). New markup gets its rules here first and reads tokens, so
-Classic needs no copy."""
+The Ink sheet loads after this one and wins at equal specificity, so once a rule here reads a token, the Ink sheet must not set
+the same property for that element too. New markup gets its rules here first and reads tokens."""
 
 LAYOUT_CSS = """
 /* motion tokens, shared by both skins. --t-fast: press, hover colour. --t-state: toggles, segments, tooltips, delta chip.
