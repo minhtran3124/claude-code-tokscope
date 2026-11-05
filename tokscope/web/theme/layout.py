@@ -638,7 +638,7 @@ tr.runs-row td{border-top:0;padding-top:0}
 /* sidebar: one pill slides to the section in view */
 .toc{position:relative}
 .toc-pill{position:absolute;left:0;top:0;border-radius:8px;pointer-events:none;background:var(--chip);box-shadow:inset 3px 0 0 var(--ink);transition:transform var(--t-layout) var(--ease-expo),width var(--t-layout) var(--ease-expo),height var(--t-layout) var(--ease-expo),opacity var(--t-state)}
-.has-pill .toc a.on{background:transparent}
+.has-pill .toc a.on{background:transparent;box-shadow:none}
 .side-foot{display:flex;gap:6px;margin:18px 0 0 4px}
 .chip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);padding:var(--pad-chip);border:var(--line-w) solid var(--line-c);border-radius:var(--r-ctl)}
 .chip:focus-visible{outline:2px solid var(--focus-c);outline-offset:2px}
