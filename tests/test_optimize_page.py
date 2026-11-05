@@ -889,7 +889,23 @@ class PostShipTest(Fixture):
         finally:
             conn.close()
 
-    def test_each_load_gets_the_full_turn_sum_even_with_several_loads_in_the_turn(self):
+    def test_one_turn_with_two_loads_counts_once_in_the_medians(self):
+        self.approve()
+        self.loads(self.new, 2, 15, tokens=1000, cost=1.0)  # turns 1 and 2: 1000 and 1001
+        self.loads(self.new, 1, 16, tokens=100, cost=0.1)  # turn 3: 100
+        conn = ingest.connect(self.db)
+        conn.execute("INSERT INTO skill_calls(session_id, ts, skill, source, prompt_idx, tool_use_id, failed) "
+                     "VALUES ('s1', '2026-03-16T01:00:00+00:00', 'demo', 'tool', 3, 'tdup', 0)")
+        conn.execute("INSERT INTO skill_load_versions VALUES ('s1', 'tdup', 'demo', ?, '2026-03-16T01:00:00+00:00')",
+                     (self.new,))
+        conn.commit()
+        conn.close()
+        got = self.numbers()["new"]
+        self.assertEqual(got["loads"], 4)
+        self.assertEqual(got["tokens_median"], 1000)  # turns 1000, 1001, 100; turn 3 not counted twice (550)
+        self.assertAlmostEqual(got["cost_median"], 1.0)
+
+    def test_a_turn_keeps_its_full_sum_when_another_skill_loads_in_it(self):
         self.approve()
         self.loads(self.new, 1, 15, tokens=1000, cost=1.0)
         conn = ingest.connect(self.db)
@@ -954,17 +970,25 @@ class PostShipTest(Fixture):
         got = self.numbers()
         self.assertEqual((got["old"]["loads"], got["new"]["loads"]), (5, 5))
 
-    def test_bench_sessions_count_and_loads_without_requests_stay_out_of_the_medians(self):
+    def test_loads_without_requests_stay_out_of_the_medians(self):
         self.approve()
-        self.loads(self.old, 2, 5, session="sb", failed=2)
         self.loads(self.old, 5, 6)
         conn = ingest.connect(self.db)
         conn.execute("DELETE FROM requests WHERE session_id = 's1' AND prompt_idx = 3")
         conn.commit()
         conn.close()
         got = self.numbers()["old"]
-        self.assertEqual((got["loads"], got["errors"], got["few"]), (7, 2, False))
-        self.assertIsNotNone(got["tokens_median"])
+        self.assertEqual((got["loads"], got["errors"], got["few"]), (5, 0, False))
+        self.assertEqual(got["tokens_median"], 102)  # 100, 101, 103, 104
+
+    def test_bench_session_loads_are_left_out_of_loads_errors_and_medians(self):
+        self.approve()
+        self.loads(self.old, 3, 5, session="sb", failed=2, tokens=9000, cost=9.0)
+        self.loads(self.old, 3, 6, tokens=100, cost=0.1)
+        got = self.numbers()["old"]
+        self.assertEqual((got["loads"], got["errors"], got["error_rate"], got["few"]), (3, 0, 0, True))
+        self.assertEqual(got["tokens_median"], 101)
+        self.assertAlmostEqual(got["cost_median"], 0.11)
 
     def test_an_unapproved_run_has_no_section_and_keeps_decide(self):
         self.approve()

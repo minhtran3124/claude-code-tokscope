@@ -418,7 +418,8 @@ def _post_ship_section(conn, d):
     notes = "".join(f'<p class="warn" role="note">Only {side["loads"]} load{"s" * (side["loads"] != 1)} on the {name} version: '
                     "too few to compare.</p>" for name, side in (("old", o), ("new", n)) if side["few"])
     return ('<section class="card" id="postship"><h2 class="sec">Real sessions</h2><p class="note">From your own sessions after the approve. '
-            "Counts only loads of these two versions; loads after a later edit are left out.</p>"
+            "Counts only loads of these two versions; loads after a later edit and tokscope's own bench runs are left out. "
+            "Tokens and cost are the turn after a load; a turn with several loads counts once.</p>"
             f'<div class="scroll"><table><thead><tr><th></th><th>Old <code>{_e(str(old)[:8])}</code></th>'
             f'<th>New <code>{_e(str(new)[:8])}</code></th></tr></thead><tbody>{rows}</tbody></table></div>{notes}</section>')
 

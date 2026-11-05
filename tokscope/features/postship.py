@@ -2,6 +2,7 @@
 import statistics
 
 from ..core import skills
+from .changes import BENCH_PROJECT
 
 MIN_LOADS = 5  # a side with fewer loads is too few to compare
 
@@ -31,9 +32,10 @@ def _turns(conn, keys):
 
 
 def _side(loads, failed, turns):
-    """loads, failed: lists of (session_id, prompt_idx) of the ok and the failed loads of one version."""
+    """loads, failed: lists of (session_id, prompt_idx) of the ok and the failed loads of one version. Each turn counts
+    once in the medians, however many loads it holds, so a turn with several loads is not counted several times."""
     every = loads + failed
-    measured = [turns[k] for k in every if k in turns]
+    measured = [turns[k] for k in set(every) if k in turns]
     n = len(every)
     return {"loads": n, "tokens_median": statistics.median(t for t, _ in measured) if measured else None,
             "cost_median": statistics.median(c for _, c in measured) if measured else None,
@@ -43,12 +45,14 @@ def _side(loads, failed, turns):
 def post_ship(conn, skill, old, new, at):
     """{"old": side, "new": side}: loads, median tokens and cost per load, errors and error rate from real sessions. A
     load counts by its version: the old version before `at`, the new one from `at` on; any other version (a later hand
-    edit) is left out. Tokens and cost are the full sum of the turn's requests after each load, ok or failed. A side is `few` under MIN_LOADS loads."""
+    edit) and any load in a bench session (tokscope's own paid runs) is left out. Tokens and cost are the sum of the
+    requests of the turn after a load, ok or failed, each turn taken once per side. A side is `few` under MIN_LOADS loads."""
     boundary = skills._dt(at)
+    bench = {r[0] for r in conn.execute("SELECT session_id FROM sessions WHERE project LIKE ?", (BENCH_PROJECT,))}
     pick = {"old": ([], []), "new": ([], [])}
     for failed in (False, True):
         for sid, i, sk, ts, version, _ in skills.load_versions(conn, failed=failed):
-            if sk != skill or not ts or version is None:
+            if sk != skill or not ts or version is None or sid in bench:
                 continue
             if version == old and skills._dt(ts) < boundary:
                 pick["old"][failed].append((sid, i))
