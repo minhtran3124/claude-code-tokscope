@@ -147,9 +147,12 @@ class DataTest(Fixture):
         lock = self.run_dir() / "run.lock"
         lock.write_text(str(os.getpid()))
         now = time.time()
-        os.utime(lock, (now - 60, now - 60))  # a clock step or restored data home, not a reused pid
+        os.utime(lock, (now - 5, now - 5))  # a small clock step, not a reused pid
         with mock.patch.object(page, "_started_at", return_value=now):
             self.assertEqual(next(r for r in page.runs() if r["id"] == APPLY_RUN)["state"], "running")
+        os.utime(lock, (now - 60, now - 60))  # a minute before the pid started: reused
+        with mock.patch.object(page, "_started_at", return_value=now):
+            self.assertEqual(next(r for r in page.runs() if r["id"] == APPLY_RUN)["state"], "stopped")
 
     def test_a_lock_with_an_unreadable_start_time_counts_as_running(self):
         (self.run_dir() / "verdict.json").unlink()
