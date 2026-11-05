@@ -633,19 +633,35 @@ def spawn(p):
     work = store.runs_dir().parent
     work.mkdir(parents=True, exist_ok=True)
     fd, log = tempfile.mkstemp(prefix=".worker-", suffix=".log", dir=work)  # files, not pipes: a server stop must not kill the run
-    ofd, out = tempfile.mkstemp(prefix=".worker-", suffix=".out", dir=work)
-    root = str(Path(paths.__file__).resolve().parents[1])
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join(x for x in (root, os.environ.get("PYTHONPATH")) if x)}
+    out = None
+    ofd = -1
+    proc = None
     try:
+        ofd, out = tempfile.mkstemp(prefix=".worker-", suffix=".out", dir=work)
+        root = str(Path(paths.__file__).resolve().parents[1])
+        env = {**os.environ, "PYTHONPATH": os.pathsep.join(x for x in (root, os.environ.get("PYTHONPATH")) if x)}
         proc = subprocess.Popen(_command(p), cwd=str(p["root"]), env=env, stdin=subprocess.DEVNULL, stdout=ofd,
                                 stderr=fd, text=True, start_new_session=True)
-    except OSError:
+    except BaseException:
         Path(log).unlink(missing_ok=True)
-        Path(out).unlink(missing_ok=True)
+        if out:
+            Path(out).unlink(missing_ok=True)
         raise
     finally:
         os.close(fd)
-        os.close(ofd)
+        if ofd >= 0:
+            os.close(ofd)
+    try:
+        return _await_run(proc, log, out)
+    except BaseException:
+        if proc.poll() is None:
+            _stop(proc)  # no paid worker may run without its run folder linked
+        Path(log).unlink(missing_ok=True)
+        Path(out).unlink(missing_ok=True)
+        raise
+
+
+def _await_run(proc, log, out):
     # reap it when it ends: an unreaped child still passes os.kill(pid, 0)
     threading.Thread(target=proc.wait, daemon=True).start()
     end = time.monotonic() + START_WAIT_S
@@ -659,24 +675,16 @@ def spawn(p):
     line = first.strip()
     if not line.startswith("run "):
         if proc.poll() is None:
-            _stop(proc)
-            Path(log).unlink(missing_ok=True)
-            Path(out).unlink(missing_ok=True)
             raise RuntimeError(f"the worker printed no run folder in {START_WAIT_S} s; it was stopped before any paid call")
         tail = _tail(log)
-        Path(log).unlink(missing_ok=True)
-        Path(out).unlink(missing_ok=True)
         raise ValueError("the worker stopped before it started a run" + (f": {tail}" if tail else ""))
     run = Path(line[4:].strip())
     try:
         found = store.find_run(run.name)
-        os.replace(log, found / "worker.log")  # its stderr stays with the run
-        os.replace(out, found / "worker.out")
     except ValueError:
-        _stop(proc)
         raise RuntimeError(f"the worker named a run folder that is not under the data home: {run}") from None
-    except OSError:
-        pass
+    os.replace(log, found / "worker.log")  # its stderr stays with the run
+    os.replace(out, found / "worker.out")
     return run.name
 
 

@@ -650,6 +650,31 @@ class StartTest(unittest.TestCase):
         self.assertFalse(target.startswith("pipe:"), target)
         self.assertTrue((run / "worker.out").is_file())
 
+    def test_a_failed_link_stops_the_worker_and_leaves_no_temp_files(self):
+        run = store.new_run("demo")
+        store.write_plan(run, {"skill": "demo", "budget_usd": 1})
+        cmd = [sys.executable, "-c", f"import time; print('run {run}', flush=True); time.sleep(60)"]
+        with mock.patch.object(page, "_command", return_value=cmd), self.watch(), \
+                mock.patch.object(page.os, "replace", side_effect=OSError("denied")):
+            code, out = self.post(confirm=True)
+        self.assertEqual(code, 500)
+        self.assertIsNotNone(self.procs[0].wait(timeout=10))
+        self.assertEqual([p.name for p in store.runs_dir().parent.glob(".worker-*")], [])
+
+    def test_a_failed_second_temp_file_removes_the_first(self):
+        real = tempfile.mkstemp
+        calls = []
+
+        def flaky(*a, **k):
+            calls.append(1)
+            if len(calls) == 2:
+                raise OSError("disk full")
+            return real(*a, **k)
+        with mock.patch.object(page.tempfile, "mkstemp", side_effect=flaky):
+            code, out = self.post(confirm=True)
+        self.assertEqual(code, 500)
+        self.assertEqual([p.name for p in store.runs_dir().parent.glob(".worker-*")], [])
+
     def test_a_worker_that_prints_nothing_is_stopped_and_gives_500(self):
         cmd = [sys.executable, "-c", "import time; time.sleep(60)"]
         with mock.patch.object(page, "_command", return_value=cmd), mock.patch.object(page, "START_WAIT_S", 0.5), self.watch():
