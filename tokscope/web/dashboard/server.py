@@ -142,6 +142,8 @@ def post(db, path, body, level):
             return 400, {"error": str(e)}
         except RuntimeError as e:
             return 502, {"error": str(e)}
+    if path == "optimize/start":
+        return optpage.start(db, body)
     if m := re.match(r"^optimize/([A-Za-z0-9._-]+)/(approve|reject)$", path):  # the run-file flow; not the old api/optimize jobs
         return optpage.decide(db, m.group(1), m.group(2), body)
     if path == "api/optimize":

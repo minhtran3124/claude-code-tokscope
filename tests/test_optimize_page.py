@@ -2,18 +2,23 @@ import json
 import os
 import re
 import shutil
+import signal
+import stat
 import subprocess
+import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from tokscope import paths
 from tokscope.core import ingest, skills
-from tokscope.experiments.skillopt import apply, stats, store
+from tokscope.experiments.skillopt import stats, store
 from tokscope.web.dashboard import server, shell
 from tokscope.web.dashboard.pages import optimize as page
+from tests.test_skillopt_loop import CFG, FAKE, IDS
 
 APPLY_RUN, NOT_ENOUGH_RUN, REJECT_RUN = "demo-20260101T000000Z", "demo-20260102T000000Z", "demo-20260103T000000Z"
 GATES = ["Valid", "Meaningful suite", "Safety", "No regression", "Benefit"]
@@ -465,6 +470,150 @@ class DecideMarkupTest(Fixture):
     def test_a_git_skill_names_its_branch(self):
         sh(self.root, "git", "init", "-q", "-b", "trunk")
         self.assertIn("on the git branch <code>trunk</code>", self.body(APPLY_RUN))
+
+
+class StartTest(unittest.TestCase):
+    """POST optimize/start: the estimate first, a worker only after confirm. The worker is the real CLI in a child
+    process with a fake claude, so the test waits for it and stops its process group before it deletes the folders."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp()).resolve()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        fake = self.tmp / "claude"
+        fake.write_text(FAKE)
+        fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+        (self.tmp / "cfg.json").write_text(json.dumps(CFG))
+        env = {"TOKSCOPE_HOME": str(self.tmp / "tok"), "HOME": str(self.tmp / "h"), "TOKSCOPE_CLAUDE": str(fake),
+               "FAKE_CFG": str(self.tmp / "cfg.json"), "FAKE_LOG": str(self.tmp / "calls.jsonl"),
+               "FAKE_MARKER": str(self.tmp / "marker"), "GIT_CONFIG_GLOBAL": "/dev/null"}
+        p = mock.patch.dict(os.environ, env)
+        p.start()
+        self.addCleanup(p.stop)
+        self.proj = self.tmp / "proj"
+        self.skill = self.proj / ".claude" / "skills" / "demo"
+        write(self.skill / "SKILL.md", "---\nname: demo\ndescription: Summarize notes\n---\nBASE body\n")
+        checks = [{"type": "answer_regex", "pattern": rf"\b{t}\b"} for t in "ABCD"]
+        write(self.skill / "evals" / "evals.json", {"checks": [{"type": "no_permission_denials", "safety": True}],
+                                                    "evals": [{"id": c, "prompt": f"do case {c}", "checks": checks} for c in IDS]})
+        self.db = paths.db()
+        conn = ingest.connect(self.db)
+        conn.execute("INSERT INTO sessions (session_id, project, cwd, title, prompts) VALUES ('s1', '-p', ?, 't', 1)", (str(self.proj),))
+        conn.commit()
+        conn.close()
+        self.sid = next(k["id"] for k in page.library.discover(ingest.connect(self.db)) if k["dir"] == "demo")
+        self.procs = []
+        self.addCleanup(self.stop_workers)
+
+    def stop_workers(self):
+        for proc in self.procs:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except OSError:
+                pass
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                pass
+
+    def post(self, **kw):
+        return server.post(self.db, "optimize/start", {"skill": self.sid, "budget": 5, "runs": 1, **kw}, "full")
+
+    def watch(self):
+        """Popen as spawn calls it, with the child remembered so the test can stop it."""
+        real = subprocess.Popen
+
+        def popen(*a, **k):
+            proc = real(*a, **k)
+            self.procs.append(proc)
+            return proc
+        return mock.patch.object(page.subprocess, "Popen", side_effect=popen)
+
+    def test_without_confirm_it_answers_the_estimate_and_starts_nothing(self):
+        with mock.patch.object(page.subprocess, "Popen") as popen:
+            code, out = self.post()
+        popen.assert_not_called()
+        e = out["estimate"]
+        self.assertEqual(code, 200)
+        self.assertEqual((e["cases"], e["calls"], e["per_call_cap"], e["budget"]), (6, 24, 2.0, 5.0))
+        self.assertEqual(e["calls_max"], 24 + 3 * (4 * 1 + 1))  # 4 dev cases of 6 with the default split
+        self.assertIsNone(e["cost_per_call"])
+        self.assertIn("unknown", " ".join(e["lines"]))
+        self.assertIn("About 24 paid runs", e["lines"][0])
+        self.assertFalse(store.runs_dir().exists())
+
+    def test_the_estimate_uses_the_median_cost_of_earlier_runs_of_the_skill(self):
+        run = store.new_run("demo")
+        store.write_plan(run, {"skill": "demo", "budget_usd": 1})
+        for cost in (0.1, 0.3, 0.2):
+            store.append(run, {"kind": "run", "cost_usd": cost})
+        store.append(run, {"kind": "editor", "cost_usd": 9})
+        e = self.post()[1]["estimate"]
+        self.assertAlmostEqual(e["cost_per_call"], 0.2)
+        self.assertAlmostEqual(e["cost"], 24 * 0.2)
+        self.assertEqual(e["samples"], 3)
+
+    def test_bad_input_is_400_and_spends_nothing(self):
+        (self.proj / ".claude" / "skills" / "bare").mkdir()
+        write(self.proj / ".claude" / "skills" / "bare" / "SKILL.md", "---\nname: bare\n---\nx\n")
+        write(self.tmp / "h" / ".claude" / "skills" / "ext" / "SKILL.md", "---\nname: ext\n---\nx\n")
+        write(self.tmp / "h" / ".claude" / "skills" / "ext" / ".tool-install.json", "{}")
+        found = {k["dir"]: k["id"] for k in page.library.discover(ingest.connect(self.db))}
+        bad = [{"budget": 0}, {"budget": -1}, {"budget": "5"}, {"budget": True}, {"runs": 0}, {"runs": 1.5}, {"model": "-x"},
+               {"model": "a b"}, {"skill": "nope"}, {"skill": found["bare"]}, {"skill": found["ext"]}]
+        with mock.patch.object(page.subprocess, "Popen") as popen:
+            for kw in bad:
+                code, out = self.post(**kw)
+                self.assertEqual(code, 400, kw)
+                self.assertIn("error", out)
+        popen.assert_not_called()
+        self.assertEqual(self.post(runs=2)[1]["estimate"]["calls"], 48)
+
+    def test_with_confirm_it_starts_the_cli_and_names_the_run(self):
+        with self.watch():
+            code, out = self.post(confirm=True)
+        self.assertEqual(code, 200, out)
+        run = store.runs_dir() / out["run"]
+        self.assertTrue((run / "plan.json").is_file())
+        self.assertEqual(out["url"], f"/optimize?run={out['run']}")
+        self.assertEqual(json.loads((run / "plan.json").read_text())["skill"], "demo")
+        end = time.monotonic() + 90
+        while not (run / "verdict.json").is_file() and time.monotonic() < end:
+            time.sleep(0.1)
+        self.assertTrue((run / "verdict.json").is_file(), "the worker finished its run")
+        end = time.monotonic() + 15
+        while self.procs[0].returncode is None and time.monotonic() < end:  # reaped by the reader thread, not by poll()
+            time.sleep(0.05)
+        self.assertEqual(self.procs[0].returncode, 0 if json.loads((run / "verdict.json").read_text())["verdict"] == "Apply" else 1)
+        self.assertEqual(next(r for r in page.runs() if r["id"] == out["run"])["state"], "done")
+        self.assertIsNone(page.running_for("demo"))
+        self.assertTrue((run / "worker.log").is_file())
+        self.assertEqual(self.skill.joinpath("SKILL.md").read_text().count("BASE body"), 1)  # a run never edits the skill
+
+    def test_a_run_that_is_going_refuses_a_second_start(self):
+        run = store.new_run("demo")
+        store.write_plan(run, {"skill": "demo", "budget_usd": 1})
+        (run / "run.lock").write_text(str(os.getpid()))
+        with mock.patch.object(page.subprocess, "Popen") as popen:
+            code, out = self.post(confirm=True)
+            popen.assert_not_called()
+        self.assertEqual((code, out["run"], out["url"]), (409, run.name, f"/optimize?run={run.name}"))
+        self.assertEqual(self.post()[0], 200)  # the estimate alone still answers
+
+    def test_a_worker_that_stops_early_gives_400_with_its_stderr(self):
+        cmd = [sys.executable, "-c", "import sys; print('tokscope: boom', file=sys.stderr); sys.exit(2)"]
+        with mock.patch.object(page, "_command", return_value=cmd):
+            code, out = self.post(confirm=True)
+        self.assertEqual(code, 400)
+        self.assertIn("tokscope: boom", out["error"])
+        self.assertEqual([p.name for p in store.runs_dir().parent.glob(".worker-*")], [])
+
+    def test_a_worker_that_prints_nothing_is_stopped_and_gives_500(self):
+        cmd = [sys.executable, "-c", "import time; time.sleep(60)"]
+        with mock.patch.object(page, "_command", return_value=cmd), mock.patch.object(page, "START_WAIT_S", 0.5), self.watch():
+            code, out = self.post(confirm=True)
+        self.assertEqual(code, 500)
+        self.assertIn("was stopped", out["error"])
+        self.assertIsNotNone(self.procs[0].wait(timeout=10))
 
 
 if __name__ == "__main__":

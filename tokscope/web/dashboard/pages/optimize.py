@@ -4,14 +4,21 @@ and before/after, and the Approve and Reject that call the same code as the CLI.
 
 import html
 import json
+import math
+import os
 import re
+import signal
 import statistics
+import subprocess
+import sys
+import tempfile
 import threading
 from pathlib import Path
 
+from .... import paths
 from ....core import skills
 from ....core.ingest import connect
-from ....experiments.skillopt import apply, loop, sandbox, stats, store
+from ....experiments.skillopt import apply, loop, sandbox, stats, store, suite
 from ....features import library
 from ...report.widgets import _tok, _usd
 from .library import _side_by_side
@@ -470,3 +477,181 @@ def _decide_section(conn, d):
             + f'<p class="acts">{approve}<button type="button" class="btn danger" data-opt-act="reject">Reject</button></p>'
             + f'<p class="note">{_git_note(k)} Reject records your decision and never changes the skill.</p>'
             + '<p class="err" id="opt-err" hidden></p></div></section>')
+
+
+# starting a run
+
+MODEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:\[\]-]{0,63}$")
+START_WAIT_S = 20  # the worker prints `run <folder>` right after it locks the plan, before any paid call
+_START_LOCK = threading.Lock()
+
+
+def project_root(k):
+    """The folder whose `.claude/skills` holds the skill `k` (what the optimize code takes as cwd): HOME for a personal one."""
+    return Path.home() if k["scope"] == "personal" else k["folder"].parents[2]
+
+
+def _number(body, key, default, whole=False):
+    v = body.get(key, default)
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or (whole and v != int(v)):
+        raise ValueError(f"{key} must be {'a whole ' if whole else 'a '}number")
+    return int(v) if whole else float(v)
+
+
+def plan_start(conn, body):
+    """What a start would run, checked with no spend: the skill, its suite and the numbers. ValueError says what is wrong.
+    The worker and opt_applied name a skill by its folder name (`dir`), which the Library name can differ from."""
+    k = next((k for k in library.discover(conn) if k["id"] == body.get("skill")), None)
+    if not k:
+        raise ValueError("no such skill")
+    if k["origin"] != "mine":
+        raise ValueError("installed skills cannot be optimized: the next update of the installer would undo the change")
+    budget, runs_, model = _number(body, "budget", 2.0), _number(body, "runs", 3, whole=True), body.get("model") or "sonnet"
+    if not budget > 0:
+        raise ValueError("budget must be above 0")
+    if runs_ < 1:
+        raise ValueError("runs must be at least 1")
+    if not isinstance(model, str) or not MODEL.match(model):
+        raise ValueError("model must be a model name such as sonnet")
+    root = project_root(k)
+    live = suite.load(k["dir"], str(root))
+    if live.problems:
+        raise ValueError("suite has problems: " + "; ".join(live.problems))
+    try:
+        dev, hold = suite.split(live, write=False)
+    except suite.Refused as e:
+        raise ValueError(str(e)) from None
+    return {"skill": k["id"], "name": k["dir"], "root": root, "budget": budget, "runs": runs_, "model": model,
+            "cases": len(live.cases), "dev": len(dev), "holdout": len(hold)}
+
+
+def _cost_per_call(skill):
+    """(median cost of a paid call, how many) over the ledgers of earlier runs of this skill, or (None, 0)."""
+    costs = []
+    try:
+        for d in store.runs_dir().iterdir():
+            if _dict(d / store.PLAN).get("skill") == skill:
+                costs += [l["cost_usd"] for l in store.lines(d) if l.get("kind") == "run"
+                          and isinstance(l.get("cost_usd"), (int, float)) and l["cost_usd"] > 0]
+    except OSError:
+        pass
+    return (statistics.median(costs), len(costs)) if costs else (None, 0)
+
+
+def estimate(p):
+    """The size of a run, with no spend and no claude call (loop.preflight pays for its own). The call counts leave out the
+    preflight and the trigger check, so they are about, not exact; the budget is the hard stop."""
+    base = 2 * p["cases"] * p["runs"] * 2  # baseline and confirm, two arms each
+    most = base + loop.MAX_ROUNDS * (p["dev"] * p["runs"] + 1)
+    per, n = _cost_per_call(p["name"])
+    cap = min(sandbox.MAX_BUDGET_USD, p["budget"])
+    lines = [f"About {base} paid runs for the baseline and the confirm, up to about {most} with {loop.MAX_ROUNDS} edit rounds "
+             f"({p['cases']} cases, {p['runs']} run{'s' * (p['runs'] != 1)} each, model {p['model']})."]
+    if per is None:
+        lines.append("The cost per run is unknown: no earlier run of this skill has a ledger to take it from.")
+    else:
+        lines.append(f"About ${base * per:.2f} to ${most * per:.2f} at ${per:.3f} a run (median of {n} earlier runs of this skill).")
+    lines.append(f"Each call is capped at ${cap:.2f}. The run stops before it passes ${p['budget']:.2f}, whatever the estimate says.")
+    return {"calls": base, "calls_max": most, "cases": p["cases"], "runs": p["runs"], "model": p["model"], "budget": p["budget"],
+            "per_call_cap": cap, "cost_per_call": per, "cost": per and base * per, "cost_max": per and most * per,
+            "samples": n, "lines": lines}
+
+
+def _command(p):
+    return [sys.executable, "-u", "-m", "tokscope.cli", "optimize", "run", p["name"], "--budget", str(p["budget"]),
+            "--runs", str(p["runs"]), "--model", p["model"]]
+
+
+def _stop(proc):
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)  # the worker leads its own session
+    except (AttributeError, OSError):
+        proc.terminate()
+
+
+def _tail(path, n=8):
+    try:
+        lines = [l for l in Path(path).read_text(errors="replace").splitlines() if l.strip()]
+    except OSError:
+        return ""
+    return " | ".join(lines[-n:])
+
+
+def spawn(p):
+    """Start `tokscope optimize run` in its own process, as the CLI would, and return the run id it prints first. The
+    process outlives this request and the run keeps its own lock. ValueError when it stops before it prints (with its
+    last stderr lines), RuntimeError when it prints nothing in START_WAIT_S seconds (it is stopped; no paid call began)."""
+    work = store.runs_dir().parent
+    work.mkdir(parents=True, exist_ok=True)
+    fd, log = tempfile.mkstemp(prefix=".worker-", suffix=".log", dir=work)  # a file, not a pipe: nobody has to read it
+    root = str(Path(paths.__file__).resolve().parents[1])
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(x for x in (root, os.environ.get("PYTHONPATH")) if x)}
+    try:
+        proc = subprocess.Popen(_command(p), cwd=str(p["root"]), env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                stderr=fd, text=True, start_new_session=True)
+    except OSError:
+        Path(log).unlink(missing_ok=True)
+        raise
+    finally:
+        os.close(fd)
+    first, seen = [], threading.Event()
+
+    def pump():
+        # keep reading so the worker never blocks on a full pipe, then reap it: an unreaped child still passes os.kill(pid, 0)
+        try:
+            for line in proc.stdout:
+                if not first:
+                    first.append(line)
+                    seen.set()
+        finally:
+            proc.stdout.close()
+            proc.wait()
+            seen.set()
+
+    threading.Thread(target=pump, daemon=True).start()
+    seen.wait(START_WAIT_S)
+    line = first[0].strip() if first else ""
+    if not line.startswith("run "):
+        if proc.poll() is None:
+            _stop(proc)
+            Path(log).unlink(missing_ok=True)
+            raise RuntimeError(f"the worker printed no run folder in {START_WAIT_S} s; it was stopped before any paid call")
+        tail = _tail(log)
+        Path(log).unlink(missing_ok=True)
+        raise ValueError("the worker stopped before it started a run" + (f": {tail}" if tail else ""))
+    run = Path(line[4:].strip())
+    try:
+        found = store.find_run(run.name)
+        os.replace(log, found / "worker.log")  # its stderr stays with the run
+    except ValueError:
+        _stop(proc)
+        raise RuntimeError(f"the worker named a run folder that is not under the data home: {run}") from None
+    except OSError:
+        pass
+    return run.name
+
+
+def start(db, body):
+    """(HTTP code, JSON) of POST optimize/start. Without `confirm` it only answers the estimate. With `confirm: true` it
+    starts the worker, unless a run of the skill is already going (a double click must not pay twice)."""
+    conn = connect(db)
+    try:
+        p = plan_start(conn, body)
+    except ValueError as e:
+        return 400, {"error": str(e)}
+    finally:
+        conn.close()
+    est = estimate(p)
+    if body.get("confirm") is not True:
+        return 200, {"estimate": est}
+    with _START_LOCK:
+        going = running_for(p["name"])
+        if going:
+            return 409, {"error": f"a run of {p['name']} is already going", "run": going, "url": f"/optimize?run={going}"}
+        try:
+            run_id = spawn(p)
+        except ValueError as e:
+            return 400, {"error": str(e)}
+        except (OSError, RuntimeError) as e:
+            return 500, {"error": str(e)}
+    return 200, {"run": run_id, "url": f"/optimize?run={run_id}", "estimate": est}
