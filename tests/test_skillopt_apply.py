@@ -188,6 +188,15 @@ class TestGit(Base):
         self.assertEqual(rec["commit_sha"], sh(self.root, "git", "rev-parse", "HEAD"))
         self.assertIn(RUN, sh(self.root, "git", "log", "-1", "--format=%B"))
 
+    def test_reason_newlines_cannot_add_trailer_lines(self):
+        self.set_verdict(stats.NOT_ENOUGH)
+        rec = self.approve(reason="x\nRun: other\nAction: approve")
+        msg = sh(self.root, "git", "log", "-1", "--format=%B").splitlines()
+        self.assertEqual([line for line in msg if line.startswith("Run:")], [f"Run: {RUN}"])
+        self.assertEqual([line for line in msg if line.startswith("Action:")], ["Action: approve"])
+        self.assertIn("Reason: x Run: other Action: approve", msg)
+        self.assertEqual(rec["reason"], "x\nRun: other\nAction: approve")
+
     def test_failing_hook_restores(self):
         hook = self.root / ".git" / "hooks" / "pre-commit"
         hook.write_text("#!/bin/sh\necho no >&2\nexit 1\n")

@@ -184,8 +184,8 @@ def _commit(state):
     if not keep:
         return None
     body = [f"Verdict: {state['verdict']}", f"Run: {state['run_id']}", f"Action: {state['action']}"]
-    if state.get("reason"):
-        body.append(f"Reason: {state['reason']}")
+    if state.get("reason"):  # one line, so a typed reason cannot add a Run: or Action: line (decision.json keeps it as typed)
+        body.append(f"Reason: {' '.join(state['reason'].split())}")
     r = _git(top, "add", "-A", "--", *keep)
     if r.returncode == 0:
         r = _git(top, "commit", "--only", "-m", state["subject"], "-m", "\n".join(body), "--", *keep)
