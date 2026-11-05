@@ -15,7 +15,8 @@ from unittest import mock
 
 from tokscope import paths
 from tokscope.core import ingest, skills
-from tokscope.experiments.skillopt import stats, store
+from tokscope.features import postship
+from tokscope.experiments.skillopt import apply, stats, store
 from tokscope.web.dashboard import server, shell
 from tokscope.web.dashboard.pages import optimize as page
 from tests.test_skillopt_loop import CFG, FAKE, IDS
@@ -829,6 +830,195 @@ class ScriptSyntaxTest(unittest.TestCase):
             self.addCleanup(os.unlink, f.name)
             done = subprocess.run([shutil.which("node"), "--check", f.name], capture_output=True, text=True)
             self.assertEqual(done.returncode, 0, f"{name}: {done.stderr}")
+
+
+def apply_table():
+    return apply.TABLE
+
+
+AT = "2026-03-10T12:00:00+00:00"
+
+
+class PostShipTest(Fixture):
+    """Real-session numbers on an approved run: loads, median tokens and cost, error rate per version."""
+
+    def setUp(self):
+        super().setUp()
+        self.new = skills.fingerprint(self.run_dir() / "versions" / "v1")
+        self.n = 0
+        conn = ingest.connect(self.db)
+        conn.execute("INSERT INTO sessions(session_id, project) VALUES ('s1', '-home-me-proj')")
+        conn.execute("INSERT INTO sessions(session_id, project) VALUES ('sb', '-home-me-tokscope-bench-1')")
+        conn.commit()
+        conn.close()
+
+    def approve(self, run=APPLY_RUN):
+        conn = ingest.connect(self.db)
+        conn.executescript(apply_table())
+        conn.execute("INSERT INTO opt_applied VALUES (?, 'demo', 'approve', ?, ?, NULL, 'apply', NULL, ?)",
+                     (run, self.old, self.new, AT))
+        conn.commit()
+        conn.close()
+
+    def loads(self, version, count, day, failed=0, tokens=100, cost=0.5, session="s1"):
+        conn = ingest.connect(self.db)
+        skills._ensure(conn)
+        for k in range(count):
+            self.n += 1
+            tid, ts = f"t{self.n}", f"2026-03-{day:02d}T0{k % 9}:00:00+00:00"
+            conn.execute("INSERT INTO skill_calls(session_id, ts, skill, source, prompt_idx, tool_use_id, failed) "
+                         "VALUES (?, ?, 'demo', 'tool', ?, ?, ?)", (session, ts, self.n, tid, int(k < failed)))
+            conn.execute("INSERT INTO skill_load_versions VALUES (?, ?, 'demo', ?, ?)", (session, tid, version, ts))
+            conn.execute("INSERT INTO requests(session_id, request_key, ts, prompt_idx, input, output, cache_read, "
+                         "cache_write_5m, cache_write_1h, cost_usd) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, ?)",
+                         (session, f"r{self.n}", ts, self.n, tokens + k, cost + k / 100))
+        conn.commit()
+        conn.close()
+
+    def numbers(self):
+        conn = ingest.connect(self.db)
+        try:
+            return postship.post_ship(conn, "demo", self.old, self.new, AT)
+        finally:
+            conn.close()
+
+    def render(self, run=APPLY_RUN):
+        conn = ingest.connect(self.db)
+        try:
+            return shell.render(conn, "optimize", {"run": [run]}, "stamp", "full")
+        finally:
+            conn.close()
+
+    def test_one_turn_with_two_loads_counts_once_in_the_medians(self):
+        self.approve()
+        self.loads(self.new, 2, 15, tokens=1000, cost=1.0)  # turns 1 and 2: 1000 and 1001
+        self.loads(self.new, 1, 16, tokens=100, cost=0.1)  # turn 3: 100
+        conn = ingest.connect(self.db)
+        conn.execute("INSERT INTO skill_calls(session_id, ts, skill, source, prompt_idx, tool_use_id, failed) "
+                     "VALUES ('s1', '2026-03-16T01:00:00+00:00', 'demo', 'tool', 3, 'tdup', 0)")
+        conn.execute("INSERT INTO skill_load_versions VALUES ('s1', 'tdup', 'demo', ?, '2026-03-16T01:00:00+00:00')",
+                     (self.new,))
+        conn.commit()
+        conn.close()
+        got = self.numbers()["new"]
+        self.assertEqual(got["loads"], 4)
+        self.assertEqual(got["tokens_median"], 1000)  # turns 1000, 1001, 100; turn 3 not counted twice (550)
+        self.assertAlmostEqual(got["cost_median"], 1.0)
+
+    def test_a_turn_keeps_its_full_sum_when_another_skill_loads_in_it(self):
+        self.approve()
+        self.loads(self.new, 1, 15, tokens=1000, cost=1.0)
+        conn = ingest.connect(self.db)
+        conn.execute("INSERT INTO skill_calls(session_id, ts, skill, source, prompt_idx, tool_use_id, failed) "
+                     "VALUES ('s1', '2026-03-15T01:00:00+00:00', 'other', 'tool', ?, 'tx', 0)", (self.n,))
+        conn.commit()
+        conn.close()
+        got = self.numbers()["new"]
+        self.assertEqual((got["tokens_median"], got["cost_median"]), (1000, 1.0))
+
+    def test_failed_loads_count_in_the_token_and_cost_medians(self):
+        self.approve()
+        self.loads(self.new, 2, 15, failed=1, tokens=100, cost=0.5)
+        got = self.numbers()["new"]
+        self.assertEqual(got["tokens_median"], 100.5)  # 100 (failed) and 101
+        self.assertAlmostEqual(got["cost_median"], 0.505)
+
+    def test_post_ship_function(self):
+        self.approve()
+        self.loads(self.old, 6, 5, failed=2, tokens=1000, cost=1.0)
+        self.loads(self.new, 3, 15, failed=0, tokens=500, cost=0.4)
+        got = self.numbers()
+        self.assertEqual((got["old"]["loads"], got["old"]["errors"], got["old"]["few"]), (6, 2, False))
+        self.assertAlmostEqual(got["old"]["error_rate"], 2 / 6)
+        self.assertEqual(got["old"]["tokens_median"], 1002.5)  # medians over all 6 loads: 1000..1005
+        self.assertAlmostEqual(got["old"]["cost_median"], 1.025)
+        self.assertEqual((got["new"]["loads"], got["new"]["tokens_median"], got["new"]["few"]), (3, 501, True))
+        self.assertEqual(got["new"]["error_rate"], 0)
+
+    def test_an_empty_side_has_no_numbers_and_no_division(self):
+        self.approve()
+        got = self.numbers()["new"]
+        self.assertEqual((got["loads"], got["tokens_median"], got["cost_median"], got["error_rate"], got["few"]),
+                         (0, None, None, None, True))
+
+    def test_both_sides_with_five_loads_show_their_numbers(self):
+        self.approve()
+        self.loads(self.old, 5, 5, failed=1, tokens=2000)
+        self.loads(self.new, 8, 15, failed=0, tokens=900)
+        body = self.render()
+        self.assertIn('id="postship"', body)
+        self.assertIn("Real sessions", body)
+        self.assertIn("20%", body)
+        self.assertNotIn("too few to compare", body)
+        self.assertIn(">5<", body)
+        self.assertIn(">8<", body)
+
+    def test_a_side_with_three_loads_gets_the_too_few_note(self):
+        self.approve()
+        self.loads(self.old, 6, 5)
+        self.loads(self.new, 3, 15)
+        body = self.render()
+        self.assertIn("Only 3 loads on the new version: too few to compare.", body)
+        self.assertNotIn("on the old version: too few", body)
+
+    def test_other_versions_and_old_loads_after_the_approve_are_not_counted(self):
+        self.approve()
+        self.loads(self.old, 5, 5)
+        self.loads(self.new, 5, 15)
+        self.loads("edited-by-hand", 7, 20)
+        self.loads(self.old, 2, 25)  # the old version read after the approve (a revert, a stale copy)
+        got = self.numbers()
+        self.assertEqual((got["old"]["loads"], got["new"]["loads"]), (5, 5))
+
+    def test_loads_without_requests_stay_out_of_the_medians(self):
+        self.approve()
+        self.loads(self.old, 5, 6)
+        conn = ingest.connect(self.db)
+        conn.execute("DELETE FROM requests WHERE session_id = 's1' AND prompt_idx = 3")
+        conn.commit()
+        conn.close()
+        got = self.numbers()["old"]
+        self.assertEqual((got["loads"], got["errors"], got["few"]), (5, 0, False))
+        self.assertEqual(got["tokens_median"], 102)  # 100, 101, 103, 104
+
+    def test_bench_session_loads_are_left_out_of_loads_errors_and_medians(self):
+        self.approve()
+        self.loads(self.old, 3, 5, session="sb", failed=2, tokens=9000, cost=9.0)
+        self.loads(self.old, 3, 6, tokens=100, cost=0.1)
+        got = self.numbers()["old"]
+        self.assertEqual((got["loads"], got["errors"], got["error_rate"], got["few"]), (3, 0, 0, True))
+        self.assertEqual(got["tokens_median"], 101)
+        self.assertAlmostEqual(got["cost_median"], 0.11)
+
+    def test_an_unapproved_run_has_no_section_and_keeps_decide(self):
+        self.approve()
+        body = self.render(REJECT_RUN)
+        self.assertNotIn('id="postship"', body)
+        self.assertIn("Decide", body)
+
+    def test_an_approved_run_with_unreadable_numbers_says_so_instead_of_hiding_the_card(self):
+        self.approve()
+        with mock.patch.object(postship, "post_ship", side_effect=ValueError("bad ts")):
+            body = self.render()
+        self.assertIn('id="postship"', body)
+        self.assertIn("could not be read", body)
+        self.assertIn("Decide", body)
+
+    def test_an_approved_run_without_loads_renders_and_keeps_decide(self):
+        self.approve()
+        body = self.render()
+        self.assertIn('id="postship"', body)
+        self.assertIn("Only 0 loads on the old version: too few to compare.", body)
+        self.assertIn("Decide", body)
+
+
+class MainGuardTest(unittest.TestCase):
+    def test_main_guard_is_the_last_statement(self):
+        """Classes after the guard never run when the file is executed directly."""
+        import ast
+        last = ast.parse(Path(__file__).read_text()).body[-1]
+        self.assertIsInstance(last, ast.If)
+        self.assertIn("__main__", ast.unparse(last.test))
 
 
 if __name__ == "__main__":
