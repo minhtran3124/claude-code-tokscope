@@ -16,13 +16,14 @@ from ..theme.brand import MARK, favicon_link
 from ...features.changes import BENCH_PROJECT
 from ..report.scripts import JS_BENCH, JS_CORE, JS_SESSIONS, JS_SUMMARY, JS_TREND
 from ..report.styles import CSS
-from .common import Filters, PAGES, RANGES, _q
+from .common import Filters, NAV_GROUPS, PAGES, RANGES, _q
 from .pages.benchmarks import page_benchmarks
 from .pages.breakdowns import page_breakdowns
 from .pages.library import page_library
 from .pages.managed import page_managed
 from .pages.overview import page_overview
 from .pages.projects import page_projects
+from .pages.settings import page_settings
 from .pages.sessions import page_sessions
 from .scripts import DASH_CSS, DASH_JS, LIB_JS, MANAGED_JS
 
@@ -102,17 +103,6 @@ def _range_dates(f):
     return f'<span class="range-dates note">{first:%d %b %Y} – {last:%d %b %Y}</span>'
 
 
-# the sidebar's two segmented controls: Theme (Light, Dark, Auto) and Design (Ink, Classic); report.JS_CORE drives them
-SIDE_CONTROLS = (
-    '<div class="side-foot ctls"><div class="ctl"><span class="ctl-l" id="theme-l">Theme</span><div class="segctl" role="group" aria-labelledby="theme-l">'
-    + "".join(f'<button type="button" class="chip" data-set-theme="{m}" aria-pressed="false">{m.capitalize()}</button>' for m in ("light", "dark", "auto"))
-    + '</div></div><div class="ctl"><span class="ctl-l" id="skin-l">Design</span><div class="segctl" role="group" aria-labelledby="skin-l">'
-    + "".join(f'<button type="button" class="chip" data-set-skin="{m}" aria-pressed="false">{m.capitalize()}</button>' for m in ("ink", "classic"))
-    + '</div></div>'
-    + '<div class="ctl"><span class="ctl-l" id="tz-l">Time zone</span><div class="segctl" role="group" aria-labelledby="tz-l"><button type="button" class="chip" data-set-tz="local" aria-pressed="false" title="Show times in this browser\'s time zone">Local</button><button type="button" class="chip" data-set-tz="utc" aria-pressed="false">UTC</button></div></div>'
-    + '<button type="button" class="chip" id="keys-btn" aria-label="Keyboard shortcuts"><kbd>?</kbd></button></div>')
-
-
 def render(conn, name, qs, stamp, level="full", token=""):
     f = Filters(qs)
     body = {"overview": lambda: page_overview(conn, f), "sessions": lambda: page_sessions(conn, f, qs),
@@ -120,7 +110,7 @@ def render(conn, name, qs, stamp, level="full", token=""):
             "projects": lambda: page_projects(conn, f, qs, level),
             "benchmarks": lambda: page_benchmarks(conn, f),
             "breakdowns": lambda: page_breakdowns(conn, f, qs),
-            "managed": lambda: page_managed(qs, level)}[name]()
+            "managed": lambda: page_managed(qs, level), "settings": lambda: page_settings(level)}[name]()
     if (qs.get("partial") or [""])[0]:
         return body
     scripts = (JS_CORE + (JS_SESSIONS if name == "sessions" else "") + JS_TREND + (JS_BENCH if name == "benchmarks" else "") + (JS_SUMMARY if name == "breakdowns" else "")
@@ -128,11 +118,14 @@ def render(conn, name, qs, stamp, level="full", token=""):
     # on the Library, ?skill= is a skill's id, not the filter bar's skill name: other pages must not get it
     navf = Filters({**qs, "skill": [""]}) if name == "library" else f
     counts = _nav_counts(conn, level)
-    nav = "".join(f'<a href="{navf.link(p, **({"skill": ""} if p == "library" else {}))}"{" class=on aria-current=page" if p == name else ""}>{t}'
-                  + (f'<span class="cnt" title="All time, not filtered">{counts[p]:,}</span>' if p in counts else "") + "</a>" for p, t in PAGES.items())
+    def link(p):
+        href = "/settings" if p == "settings" else navf.link(p, **({"skill": ""} if p == "library" else {}))
+        return (f'<a href="{href}"{" class=on aria-current=page" if p == name else ""}>{PAGES[p]}'
+                + (f'<span class="cnt" title="All time, not filtered">{counts[p]:,}</span>' if p in counts else "") + "</a>")
+    nav = "".join(f'<div class="grp">{group}</div>' + "".join(link(p) for p in pages) for group, pages in NAV_GROUPS)
     reset = f' <a href="/{name}">clear filters</a>' if (f.project if name == "library" else f.query()) else ""
     # a skill page or an optimize run has its own header; a ?skill= that matches no skill falls back to the list, with the bar
-    bar = ("" if name in ("projects", "managed") or (name == "library" and 'class="card libhead"' in body) else
+    bar = ("" if name in ("projects", "managed", "settings") or (name == "library" and 'class="card libhead"' in body) else
            f'<form class="filters" method="get" action="/{name}">{_options(conn, f, "project" if name == "library" else None)}'
            f'<button type="submit" class="chip">Apply</button>{reset}</form>')
     chip = "" if level == "full" else f'<span class="privacy" role="note" title="Names and text follow the {level} level"><b>{level}</b></span>'
@@ -150,7 +143,7 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 <aside class="side" aria-label="Pages"><div class="brand">{MARK}tokscope</div>
 <button type="button" class="chip menu-btn" id="menu-btn" aria-controls="sheet" aria-expanded="false"><span class="menu-i" aria-hidden="true"></span>Menu</button>
 <div class="sheet" id="sheet"><nav class="toc" aria-label="Pages">{nav}</nav>{sheet_filters}
-{SIDE_CONTROLS}<p class="sheet-priv note">Privacy level: <b>{level}</b>. Names and text follow it.</p></div></aside><main>
+<p class="sheet-priv note">Privacy level: <b>{level}</b>. Names and text follow it.</p></div></aside><main>
 <header class="dash-head"><h1>{PAGES[name]}</h1>{chip}<span class="fresh" id="fresh"><span class="dot"></span> live</span>
 {bar}{pill}{dates}</header>
 {body}

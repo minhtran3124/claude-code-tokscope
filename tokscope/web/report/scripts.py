@@ -77,11 +77,11 @@ tzSync();
 const keysDlg=document.getElementById('keys');
 addEventListener('keydown',e=>{const typing=/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   if(typing||e.metaKey||e.ctrlKey||e.altKey)return;
-  if(e.key==='t'){const b=(themeBtn||document.querySelector('[data-set-theme]')).getBoundingClientRect();toggleTheme(b.left+b.width/2,b.top+b.height/2)}
+  if(e.key==='t'){const el=themeBtn||document.querySelector('[data-set-theme]'),b=el?el.getBoundingClientRect():{left:innerWidth/2,top:innerHeight/2,width:0,height:0};toggleTheme(b.left+b.width/2,b.top+b.height/2)}
   else if(e.key==='s')toggleSkin()
   else if(e.key==='g')scrollTo({top:0})
   else if(e.key==='?'){keysDlg.open?keysDlg.close():keysDlg.showModal()}});
-document.getElementById('keys-btn').addEventListener('click',()=>keysDlg.showModal());
+const keysBtn=document.getElementById('keys-btn');if(keysBtn)keysBtn.addEventListener('click',()=>keysDlg.showModal());
 keysDlg.addEventListener('click',e=>{if(e.target===keysDlg)keysDlg.close()});
 """
 SORT_SEG = ('<span class="seg" id="s-sort" role="group" aria-label="Sort sessions">'

@@ -193,8 +193,22 @@ class ServerTest(unittest.TestCase):
         _, page = self.get("/overview")
         self.assertIn('<style id="skin-ink">', page)
         self.assertIn('<style id="skin-classic" media="not all">', page)
-        self.assertIn('data-set-skin="classic"', page)
-        self.assertIn('data-set-theme="auto"', page)
+        _, settings = self.get("/settings")
+        self.assertIn('data-set-skin="classic"', settings)       # the switch lives on the Settings page
+        self.assertIn('data-set-theme="auto"', settings)
+        self.assertIn('data-set-tz="utc"', settings)
+        self.assertIn('id="keys-btn"', settings)
+
+    def test_the_sidebar_groups_the_pages_and_holds_no_settings_controls(self):
+        _, page = self.get("/overview")
+        side = page.split('<aside class="side"', 1)[1].split("</aside>", 1)[0]
+        groups = re.findall(r'<div class="grp">(\w+)</div>', side)
+        self.assertEqual(groups, ["Usage", "Workspace", "Connect", "System"])
+        order = re.findall(r'<a href="/(\w+)[?"]', side.split('<nav class="toc"', 1)[1])
+        self.assertEqual(order, ["overview", "sessions", "breakdowns", "projects", "library", "benchmarks", "managed", "settings"])
+        self.assertNotIn("data-set-theme", side)
+        self.assertNotIn("data-set-skin", side)
+        self.assertNotIn("data-set-tz", side)
 
     def test_fonts_are_served_from_the_package_and_nothing_else_is(self):
         _, page = self.get("/overview")
@@ -670,7 +684,7 @@ class OverviewTest(unittest.TestCase):
         sheet = body.split('<div class="sheet" id="sheet">', 1)[1].split("</aside>", 1)[0]
         self.assertIn('<nav class="toc"', sheet)                                   # the pages
         self.assertIn('class="filters sheet-filters"', sheet)                      # the same filter form
-        self.assertIn("data-set-theme", sheet)                                      # the theme control
+        self.assertIn('href="/settings"', sheet)                                    # the settings moved to their own page
         self.assertIn("Privacy level:", sheet)
         self.assertIn("<span>Last 30 days · app</span>", body)                     # the filters as one pill
         self.assertIn('aria-controls="sheet" aria-expanded="false" aria-haspopup="dialog"', body)
