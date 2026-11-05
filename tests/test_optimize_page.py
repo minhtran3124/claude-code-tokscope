@@ -137,9 +137,16 @@ class DataTest(Fixture):
         (self.run_dir() / "verdict.json").unlink()
         lock = self.run_dir() / "run.lock"
         lock.write_text(str(os.getpid()))
-        os.utime(lock, (1, 1))  # written long before this process started
-        self.assertEqual(next(r for r in page.runs() if r["id"] == APPLY_RUN)["state"], "stopped")
-        self.assertIsNone(page.running_for("demo"))
+        os.utime(lock, (1, 1))  # written long before the pid's process started
+        with mock.patch.object(page, "_started_at", return_value=time.time()):  # no /proc needed (macOS)
+            self.assertEqual(next(r for r in page.runs() if r["id"] == APPLY_RUN)["state"], "stopped")
+            self.assertIsNone(page.running_for("demo"))
+
+    def test_a_lock_with_an_unreadable_start_time_counts_as_running(self):
+        (self.run_dir() / "verdict.json").unlink()
+        (self.run_dir() / "run.lock").write_text(str(os.getpid()))
+        with mock.patch.object(page, "_started_at", return_value=None):
+            self.assertEqual(next(r for r in page.runs() if r["id"] == APPLY_RUN)["state"], "running")
 
     def test_no_runs_dir_gives_an_empty_list(self):
         shutil.rmtree(store.runs_dir())
