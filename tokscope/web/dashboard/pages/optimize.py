@@ -179,3 +179,171 @@ def load(run_id):
             "summary": _summary(run), "draft": draft, "skipped": skipped, "versions": versions,
             "cases": case_rows(plan, recs, draft), "arms": arm_numbers(plan, recs, draft),
             "rounds": editor_rounds(run, recs, draft), "files": changed_files(run, draft)}
+
+
+# the page
+
+def _e(x):
+    return html.escape("" if x is None else str(x))
+
+
+def _time(iso):
+    return (f'<time data-ts="{_e(iso)}" data-fmt="dt">{_e(iso[:16].replace("T", " "))} UTC</time>' if iso else "–")
+
+
+def _state(s):
+    return f'<span class="state {_e(s)}">{_e(s)}</span>'
+
+
+def _runs_list(found, notice=""):
+    if not found:
+        body = ('<div class="empty"><b>No optimize runs yet</b>Start one from a skill in the Library (it shows a cost estimate '
+                'first), or run <code>tokscope optimize run &lt;skill&gt; --budget 2</code>.</div>')
+    else:
+        rows = "".join(
+            f'<tr><td><a href="/optimize?run={_e(r["id"])}">{_e(r["skill"])}</a></td><td>{_time(r["created"])}</td>'
+            f'<td>{_state(r["state"])}</td><td>{_e(r["verdict"] or "–")}</td>'
+            f'<td>{_usd(r["spent"])} of {_usd(r["budget"])}</td><td>{_e(r["decision"] or "–")}</td></tr>' for r in found)
+        body = ('<div class="scroll"><table><thead><tr><th>Skill</th><th>Started</th><th>State</th><th>Verdict</th>'
+                f'<th>Spent</th><th>Decision</th></tr></thead><tbody>{rows}</tbody></table></div>')
+    return (f'{notice}<section class="card"><h2 class="sec">Optimize runs</h2><p class="note">Each run measures a draft of a skill '
+            f'against the current one. Open a run to read its evidence, then approve or reject it.</p>{body}</section>')
+
+
+def _plan_section(d):
+    p, s = d["plan"], d["summary"]
+    cap = p.get("per_run_cap_usd")
+    facts = [("Skill", f"<code>{_e(p.get('skill'))}</code>"), ("State", _state(s["state"])), ("Started", _time(s["created"])),
+             ("Model", _e(p.get("model"))), ("Runs per case and arm", _e(p.get("runs"))),
+             ("Cases", f"{len(p.get('dev') or [])} dev · {len(p.get('holdout') or [])} holdout"),
+             ("Budget", f"{_usd(s['spent'])} spent of {_usd(p.get('budget_usd'))}" + (f" · {_usd(cap)} at most per call" if cap else "")),
+             ("Versions", ", ".join(f"<code>{_e(v)}</code>" for v in d["versions"]) or "–"),
+             ("Measured version", f"<code>{_e(p.get('base_fingerprint'))}</code>")]
+    return ('<section class="card" id="plan"><h2 class="sec">Plan</h2><dl class="ids">'
+            + "".join(f"<dt>{a}</dt><dd>{b}</dd>" for a, b in facts) + "</dl></section>")
+
+
+def _value(v):
+    return _e(json.dumps(v, sort_keys=True)) if isinstance(v, (dict, list)) else _e("–" if v is None else v)
+
+
+def _gates_section(d):
+    v = d["verdict"]
+    if not d["gates"] and not v.get("verdict"):
+        return ('<section class="card" id="gates"><h2 class="sec">Gates</h2><p class="note">No verdict yet: the run has not finished '
+                f'(resume it with <code>tokscope optimize resume {_e(d["id"])}</code>).</p></section>')
+    cls = {stats.APPLY: "ok", stats.REJECT: "bad"}.get(v.get("verdict"), "off")
+    head = (f'<div class="outcome {cls}"><b>Verdict: {_e(v.get("verdict") or "unknown")}</b><span>{_e(v.get("reason"))}</span></div>'
+            if v.get("verdict") else "")
+    rows = "".join(f'<tr><td>{_e(g.get("name"))}</td><td>{"not run" if g.get("passed") is None else "pass" if g.get("passed") else "FAIL"}</td>'
+                   f'<td>{_value(g.get("value"))}</td><td>{_value(g.get("threshold"))}</td><td>{_e(g.get("detail"))}</td></tr>'
+                   for g in d["gates"])
+    table = ('<div class="scroll"><table><thead><tr><th>Gate</th><th>Result</th><th>Value</th><th>Threshold</th><th>Detail</th></tr>'
+             f'</thead><tbody>{rows}</tbody></table></div>') if rows else ""
+    t = v.get("trigger")
+    trig = ""
+    if isinstance(t, dict) and t:
+        keys = ("status", "reason", "prompts", "current", "draft", "passed", "reverted")
+        trig = ('<h3 class="sub3">Trigger check</h3><dl class="ids">'
+                + "".join(f"<dt>{k}</dt><dd>{_value(t.get(k))}</dd>" for k in keys if k in t) + "</dl>")
+    return f'<section class="card" id="gates"><h2 class="sec">Gates</h2>{head}{table}{trig}</section>'
+
+
+def _expectations(r):
+    items = "".join(f'<li class="{"ok" if e.get("passed") else "bad"}">{"✓" if e.get("passed") else "✕"} {_e(e.get("text"))} '
+                    f'<span class="note">{_e(e.get("evidence"))}</span></li>' for e in r["expectations"])
+    why = "" if stats.counts(r) else f'<p class="note">Does not count: {_e(r.get("reason") or r.get("status") or "not loaded")}.</p>'
+    answer = (f'<details class="more"><summary><span class="ttl">Answer</span></summary><pre class="src">{_e(r["answer"])}</pre></details>'
+              if r.get("answer") else "")
+    return f'{why}<ul class="plain">{items}</ul>{answer}'
+
+
+def _cases_section(d):
+    if not d["cases"]:
+        return '<section class="card" id="cases"><h2 class="sec">Cases</h2><p class="note">No cases in the plan.</p></section>'
+    label = {"dev": "Dev cases", "holdout": "Holdout cases"}
+    out = ['<section class="card" id="cases"><h2 class="sec">Cases</h2><p class="note">Checks passed over checks run, per arm. '
+           'Open a case for each check and the evidence the grader found. Baseline: current and no skill. Confirm: current and the draft.</p>']
+    if d["skipped"]:
+        out.append(f'<p class="warn">{d["skipped"]} result{"s" * (d["skipped"] != 1)} could not be read and {"are" if d["skipped"] != 1 else "is"} left out.</p>')
+    for split in ("dev", "holdout"):
+        mine = [c for c in d["cases"] if c["split"] == split]
+        if not mine:
+            continue
+        out.append(f'<h3 class="sub3">{label[split]} ({len(mine)})</h3>')
+        for c in mine:
+            counts = []
+            blocks = []
+            for g in c["groups"]:
+                tot = [(r["passed"] or 0, r["total"] or 0) for r in g["runs"] if stats.counts(r)]
+                counts.append(f'{_e(g["stage"])} {_e(g["arm"])} {sum(p for p, _ in tot)}/{sum(t for _, t in tot)}')
+                for r in g["runs"]:
+                    blocks.append(f'<h4 class="sub3">{_e(g["stage"])} · {_e(g["arm"])} · run {r["i"] + 1} · '
+                                  f'{r["passed"] if r["passed"] is not None else "–"}/{r["total"] if r["total"] is not None else "–"}</h4>'
+                                  + _expectations(r))
+            out.append(f'<details class="more"><summary><span class="ttl">{_e(c["case"])}</span>'
+                       f'<span class="note">{" · ".join(counts) or "no results"}</span></summary>{"".join(blocks)}</details>')
+    out.append("</section>")
+    return "".join(out)
+
+
+def _rounds_section(d):
+    if not d["rounds"]:
+        return '<section class="card" id="editor"><h2 class="sec">Editor</h2><p class="note">The editor did not run.</p></section>'
+    items = []
+    for r in d["rounds"]:
+        word = "accepted" if r["accepted"] else "rejected" if r["accepted"] is False else "unknown"
+        score = (f' · dev score {r["score"][0]:.0f} points, {_usd(r["score"][1])} per case' if r["score"] else "")
+        items.append(f'<li><b>Round {r["round"]}</b> {_state("done" if r["accepted"] else "stopped")} {word}'
+                     f'{" · became the draft" if r["draft"] else ""}{score}<br>'
+                     f'<span>{_e(r["hypothesis"]) or "<i>no hypothesis</i>"}</span>'
+                     + (f'<br><span class="note">{_e(r["reason"])}</span>' if r["reason"] else "") + "</li>")
+    return ('<section class="card" id="editor"><h2 class="sec">Editor</h2><p class="note">An accepted round that lost on its dev '
+            f'score has no reason of its own: its score is the reason.</p><ul class="plain">{"".join(items)}</ul></section>')
+
+
+def _num(ci, fmt):
+    return "–" if not ci else f'{fmt(ci["mean"])} <span class="note">[{fmt(ci["ci_low"])}, {fmt(ci["ci_high"])}]</span>'
+
+
+def _compare_section(d):
+    if not d["draft"]:
+        return ('<section class="card" id="compare"><h2 class="sec">Compare</h2><p class="note">No draft was made, so there is '
+                'nothing to compare. The editor rounds above say why.</p></section>')
+    files = "".join(f'<section class="card"><h3 class="path">{_e(rel)} <span class="note">{kind}</span></h3>'
+                    f'<div class="scroll">{_side_by_side(before, after)}</div></section>' for rel, kind, before, after in d["files"])
+    rows = "".join(f'<tr><td>{_e(a["stage"])}</td><td>{_e(a["arm"])}</td><td>{a["counted"]} of {a["runs"]}</td>'
+                   f'<td>{_num(a["pass"], lambda x: f"{x:.1f}")}</td><td>{_num(a["cost"], _usd)}</td>'
+                   f'<td>{_num(a["tokens"], lambda x: _tok(round(x)))}</td></tr>' for a in d["arms"])
+    table = ('<h3 class="sub3">Per arm</h3><p class="note">Mean per run over cases, with a 95% interval (bootstrap by case, '
+             'the plan\'s seed). Pass rate is in points.</p><div class="scroll"><table><thead><tr><th>Stage</th><th>Arm</th><th>Counted runs</th>'
+             f'<th>Pass rate</th><th>Cost per run</th><th>Tokens per run</th></tr></thead><tbody>{rows}</tbody></table></div>') if rows else ""
+    return (f'<section class="card" id="compare"><h2 class="sec">Before and after</h2><p class="note">{len(d["files"])} file'
+            f'{"s" * (len(d["files"]) != 1)} changed between <code>v0</code> and <code>{_e(d["draft"])}</code>.</p>{table}</section>{files}')
+
+
+def _report(d, decide):
+    s = d["summary"]
+    head = (f'<p><a href="/optimize">← All runs</a></p><section class="card libhead"><h2 class="sec">{_e(d["plan"].get("skill") or d["id"])} · '
+            f'{_state(s["state"])}</h2><p class="note">Run <code>{_e(d["id"])}</code></p></section>')
+    return (head + _plan_section(d) + _gates_section(d) + _cases_section(d) + _rounds_section(d) + _compare_section(d) + decide)
+
+
+def page_optimize(conn, qs, level):
+    if level != "full":
+        return (f'<div class="empty"><b>Run text is hidden</b>The Optimize page shows skill text, answers and evidence at the full '
+                f'level only (now {level}).</div>')
+    pick = (qs.get("run") or [""])[0]
+    notice = ""
+    if pick:
+        try:
+            d = load(pick)
+        except ValueError:
+            notice = f'<p class="warn" role="note">There is no run <code>{_e(pick)}</code>.</p>'
+        else:
+            return _report(d, _decide_section(conn, d))
+    return _runs_list(runs(), notice)
+
+
+def _decide_section(conn, d):
+    return ""

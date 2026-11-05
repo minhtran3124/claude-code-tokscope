@@ -21,6 +21,7 @@ from .pages.benchmarks import page_benchmarks
 from .pages.breakdowns import page_breakdowns
 from .pages.library import page_library
 from .pages.managed import page_managed
+from .pages.optimize import page_optimize
 from .pages.overview import page_overview
 from .pages.projects import page_projects
 from .pages.sessions import page_sessions
@@ -120,11 +121,12 @@ def render(conn, name, qs, stamp, level="full", token=""):
             "projects": lambda: page_projects(conn, f, qs, level),
             "benchmarks": lambda: page_benchmarks(conn, f),
             "breakdowns": lambda: page_breakdowns(conn, f, qs),
-            "managed": lambda: page_managed(qs, level)}[name]()
+            "managed": lambda: page_managed(qs, level),
+            "optimize": lambda: page_optimize(conn, qs, level)}[name]()
     if (qs.get("partial") or [""])[0]:
         return body
     scripts = (JS_CORE + (JS_SESSIONS if name == "sessions" else "") + JS_TREND + (JS_BENCH if name == "benchmarks" else "") + (JS_SUMMARY if name == "breakdowns" else "")
-               + (LIB_JS if name in ("library", "projects", "managed") else "") + (MANAGED_JS if name == "managed" else "") + DASH_JS)
+               + (LIB_JS if name in ("library", "projects", "managed", "optimize") else "") + (MANAGED_JS if name == "managed" else "") + DASH_JS)
     # on the Library, ?skill= is a skill's id, not the filter bar's skill name: other pages must not get it
     navf = Filters({**qs, "skill": [""]}) if name == "library" else f
     counts = _nav_counts(conn, level)
@@ -132,7 +134,7 @@ def render(conn, name, qs, stamp, level="full", token=""):
                   + (f'<span class="cnt" title="All time, not filtered">{counts[p]:,}</span>' if p in counts else "") + "</a>" for p, t in PAGES.items())
     reset = f' <a href="/{name}">clear filters</a>' if (f.project if name == "library" else f.query()) else ""
     # a skill page or an optimize run has its own header; a ?skill= that matches no skill falls back to the list, with the bar
-    bar = ("" if name in ("projects", "managed") or (name == "library" and 'class="card libhead"' in body) else
+    bar = ("" if name in ("projects", "managed", "optimize") or (name == "library" and 'class="card libhead"' in body) else
            f'<form class="filters" method="get" action="/{name}">{_options(conn, f, "project" if name == "library" else None)}'
            f'<button type="submit" class="chip">Apply</button>{reset}</form>')
     chip = "" if level == "full" else f'<span class="privacy" role="note" title="Names and text follow the {level} level"><b>{level}</b></span>'

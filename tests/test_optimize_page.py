@@ -11,6 +11,7 @@ from unittest import mock
 from tokscope import paths
 from tokscope.core import ingest, skills
 from tokscope.experiments.skillopt import apply, stats, store
+from tokscope.web.dashboard import shell
 from tokscope.web.dashboard.pages import optimize as page
 
 APPLY_RUN, NOT_ENOUGH_RUN, REJECT_RUN = "demo-20260101T000000Z", "demo-20260102T000000Z", "demo-20260103T000000Z"
@@ -184,6 +185,87 @@ class DataTest(Fixture):
         for bad in ("nope", "../x", ""):
             with self.assertRaises(ValueError):
                 page.load(bad)
+
+
+class RenderTest(Fixture):
+    def render(self, qs="", level="full"):
+        conn = ingest.connect(self.db)
+        try:
+            return shell.render(conn, "optimize", {k: [v] for k, v in (p.split("=") for p in qs.split("&") if p)}, "stamp", level)
+        finally:
+            conn.close()
+
+    def test_the_list_names_each_run_with_its_verdict_and_spend(self):
+        body = self.render()
+        for run in (APPLY_RUN, NOT_ENOUGH_RUN, REJECT_RUN):
+            self.assertIn(f'href="/optimize?run={run}"', body)
+        for word in (stats.APPLY, stats.NOT_ENOUGH, stats.REJECT, "$1.36 of $2.00"):
+            self.assertIn(word, body)
+        self.assertIn('href="/optimize" class=on aria-current=page', body)
+        self.assertNotIn('class="filters"', body)
+
+    def test_an_empty_data_home_shows_the_empty_state(self):
+        shutil.rmtree(store.runs_dir())
+        self.assertIn("No optimize runs yet", self.render())
+
+    def test_an_unknown_run_gives_a_notice_and_the_list(self):
+        body = self.render("run=nope")
+        self.assertIn("There is no run <code>nope</code>", body)
+        self.assertIn(f'href="/optimize?run={APPLY_RUN}"', body)
+
+    def test_the_report_has_every_section_gate_case_and_check_evidence(self):
+        body = self.render(f"run={APPLY_RUN}")
+        for section in ("Plan", "Gates", "Cases", "Editor", "Before and after"):
+            self.assertIn(f">{section}</h2>", body)
+        for gate in GATES:
+            self.assertIn(f"<td>{gate}</td>", body)
+        for case in ("d1", "d2", "h1"):
+            self.assertIn(f'<span class="ttl">{case}</span>', body)
+        self.assertLess(body.index("Dev cases (2)"), body.index('<span class="ttl">d1</span>'))
+        self.assertLess(body.index('<span class="ttl">d2</span>'), body.index("Holdout cases (1)"))
+        self.assertIn("baseline current 2/4", body)
+        self.assertIn("confirm draft 4/4", body)
+        self.assertIn("evidence d1 v1 2", body)  # the draft arm is v1 in the files, shown as the draft
+        self.assertIn("answer of h1 none", body)
+        self.assertIn("because Apply", body)
+        self.assertIn("Trigger check", body)
+        self.assertIn("hypothesis 1", body)
+        self.assertIn("same files as v1", body)
+        self.assertIn("became the draft", body)
+        self.assertIn("dev score 100 points", body)
+
+    def test_the_compare_has_the_diff_and_a_ci_per_arm(self):
+        body = self.render(f"run={APPLY_RUN}")
+        self.assertIn('<table class="sbs">', body)
+        self.assertIn("<mark>old</mark>", body)
+        self.assertIn("<mark>new</mark>", body)
+        for path in ("SKILL.md", "refs/a.md", "refs/b.md"):
+            self.assertIn(f'<h3 class="path">{path} ', body)
+        self.assertEqual(body.count('class="note">[') , 12)  # pass, cost and tokens for four arms
+        self.assertIn("Per arm", body)
+
+    def test_a_run_without_a_draft_shows_only_the_editor(self):
+        v = json.loads((self.run_dir() / "verdict.json").read_text())
+        v.update(draft_version=None, draft_fingerprint=None)
+        (self.run_dir() / "verdict.json").write_text(json.dumps(v))
+        body = self.render(f"run={APPLY_RUN}")
+        self.assertIn("No draft was made", body)
+        self.assertNotIn('<table class="sbs">', body)
+        self.assertIn("hypothesis 1", body)
+
+    def test_a_broken_run_still_renders(self):
+        (self.run_dir() / "verdict.json").write_text("{")
+        store.result_dir(self.run_dir(), "baseline", "d1", "current", 0).joinpath("grading.json").write_text("x")
+        body = self.render(f"run={APPLY_RUN}")
+        self.assertIn("No verdict yet", body)
+        self.assertIn("1 result could not be read", body)
+
+    def test_a_level_below_full_hides_the_text(self):
+        for level in ("redacted", "minimal"):
+            body = self.render(f"run={APPLY_RUN}", level)
+            self.assertIn("Run text is hidden", body)
+            self.assertNotIn("evidence d1", body)
+            self.assertNotIn("old body", body)
 
 
 if __name__ == "__main__":

@@ -28,6 +28,12 @@ table.sbs th{font:500 11px/1.45 var(--mono)}
 .st .pill,.state{font-weight:500}
 .movers th{font-weight:500}
 .libtools input[type=search]{font-family:var(--mono);font-size:12px;font-weight:400}
+/* optimize page: tables scroll in their own wrapper, long evidence wraps, a failed check reads as one */
+ul.plain li.bad{color:var(--fail)}
+.card pre.src{max-height:240px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+.card li,.card dd{overflow-wrap:anywhere}
+.card textarea{width:100%;max-width:100%;box-sizing:border-box}
+#opt-est{margin:8px 0}
 """
 
 LIB_JS = """
