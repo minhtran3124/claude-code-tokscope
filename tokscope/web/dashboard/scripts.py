@@ -156,6 +156,23 @@ document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',(
   document.querySelectorAll('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==b.dataset.view)}));
 """
 
+SETTINGS_JS = """
+// settings: the Background service card; LIB_JS's send() carries this page's token. Stop may end this very page (when the
+// service serves it), so a stop that gets no answer counts as done.
+(()=>{const err=document.getElementById('svc-err');
+  const fail=m=>{if(err){err.textContent=m;err.hidden=false}};
+  const act=async(path,body,b)=>{if(err)err.hidden=true;if(b)busy(b,'Working…');
+    try{await send(path,body);location.reload()}
+    catch(e){if(b)idle(b);
+      if(path.endsWith('/stop')&&e instanceof TypeError){document.getElementById('svc-state').textContent='Stopped';
+        fail('The service stopped, and this page was served by it. Start it again with: tokscope service install');return}
+      fail(e.message);const box=document.getElementById('svc-auto-box');if(box&&path.endsWith('/autostart'))box.checked=!body.on}};
+  document.querySelectorAll('[data-svc]').forEach(b=>b.addEventListener('click',async()=>{const a=b.dataset.svc;
+    if(a==='stop'&&!await ask(b.closest('.setrow'),'Stop the background service? If this dashboard is served by it, this page stops answering until you start it again.','Stop'))return;
+    act('/api/service/'+a,{},b)}));
+  document.getElementById('svc-auto-box')?.addEventListener('change',e=>act('/api/service/autostart',{on:e.target.checked}))})();
+"""
+
 MANAGED_JS = """
 // managed: pause or unpause a deployment after a question on the page; LIB_JS's send() carries this page's token
 document.querySelectorAll('[data-dep-act]').forEach(b=>b.addEventListener('click',async()=>{const act=b.dataset.depAct,pause=act==='pause';

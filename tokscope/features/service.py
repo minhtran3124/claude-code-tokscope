@@ -3,6 +3,7 @@
 Opt-in only: nothing is enabled for other users. The runner (argv list in, exit code out) is replaceable for tests."""
 import os
 import plistlib
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -106,3 +107,50 @@ def status(runner=run, mac=None, home=None, config=None, uid=None):
         running = runner(["systemctl", "--user", "is-active", "--quiet", "tokscope.service"]) == 0
     state = "running" if running else "installed, not running" if installed else "not installed"
     return installed, running, f"{state} ({path})"
+
+
+def state(runner=run, mac=None, home=None, config=None, uid=None, which=shutil.which):
+    """What the Settings card shows: supported (the service manager exists), installed, running and autostart
+    (starts at login; None on macOS, where installed means it starts at login and the app's menu turns it on or off)."""
+    mac = is_mac() if mac is None else mac
+    if not which("launchctl" if mac else "systemctl"):
+        return {"supported": False, "installed": False, "running": False, "autostart": None, "mac": mac}
+    installed, running, _ = status(runner, mac, home, config, uid)
+    autostart = None if mac else installed and runner(["systemctl", "--user", "is-enabled", "--quiet", "tokscope.service"]) == 0
+    return {"supported": True, "installed": installed, "running": running, "autostart": autostart, "mac": mac}
+
+
+def _need_installed(mac, home, config):
+    if not (plist_path(home) if mac else unit_path(config)).exists():
+        raise RuntimeError("the service is not installed")
+
+
+def stop(runner=run, mac=None, home=None, config=None, uid=None):
+    """Stop it now; it stays installed, so it starts again at the next login when autostart is on."""
+    mac = is_mac() if mac is None else mac
+    _need_installed(mac, home, config)
+    argv = (["launchctl", "bootout", f"gui/{_uid(uid)}", str(plist_path(home))] if mac
+            else ["systemctl", "--user", "stop", "tokscope.service"])
+    if runner(argv) != 0:
+        raise RuntimeError("could not stop the service")
+    return "stopped"
+
+
+def start(runner=run, mac=None, home=None, config=None, uid=None):
+    mac = is_mac() if mac is None else mac
+    _need_installed(mac, home, config)
+    argv = (["launchctl", "bootstrap", f"gui/{_uid(uid)}", str(plist_path(home))] if mac
+            else ["systemctl", "--user", "start", "tokscope.service"])
+    if runner(argv) != 0:
+        raise RuntimeError("could not start the service")
+    return "started"
+
+
+def set_autostart(on, runner=run, mac=None, home=None, config=None):
+    """Linux: enable or disable the unit for the next login; it does not start or stop it now."""
+    if (is_mac() if mac is None else mac):
+        raise RuntimeError("on macOS use File > Start at login in the app")
+    _need_installed(False, home, config)
+    if runner(["systemctl", "--user", "enable" if on else "disable", "tokscope.service"]) != 0:
+        raise RuntimeError("could not change the service")
+    return "enabled" if on else "disabled"

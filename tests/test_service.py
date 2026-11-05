@@ -102,3 +102,63 @@ class ServiceTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ServiceControlTest(unittest.TestCase):
+    """state, stop, start and set_autostart: what the Settings card calls."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.config = Path(self.tmp.name)
+        self.unit = service.unit_path(self.config)
+
+    def write_unit(self):
+        self.unit.parent.mkdir(parents=True)
+        self.unit.write_text("[Unit]\n")
+
+    def test_state_without_a_service_manager(self):
+        s = service.state(Runner(), mac=False, config=self.config, which=lambda _: None)
+        self.assertFalse(s["supported"])
+
+    def test_state_not_installed_then_running_and_enabled(self):
+        which = lambda _: "/bin/x"
+        s = service.state(Runner(), mac=False, config=self.config, which=which)
+        self.assertEqual((s["supported"], s["installed"], s["running"], s["autostart"]), (True, False, True, False))
+        self.write_unit()
+        s = service.state(Runner(), mac=False, config=self.config, which=which)
+        self.assertEqual((s["installed"], s["running"], s["autostart"]), (True, True, True))
+        s = service.state(Runner(fail=("is-enabled",)), mac=False, config=self.config, which=which)
+        self.assertFalse(s["autostart"])
+
+    def test_state_on_mac_has_no_autostart_switch(self):
+        s = service.state(Runner(), mac=True, home=self.config, which=lambda _: "/bin/x")
+        self.assertIsNone(s["autostart"])
+
+    def test_stop_and_start_need_an_installed_service(self):
+        for fn in (service.stop, service.start):
+            with self.assertRaises(RuntimeError):
+                fn(Runner(), mac=False, config=self.config)
+
+    def test_stop_start_and_autostart_call_systemctl(self):
+        self.write_unit()
+        r = Runner()
+        service.stop(r, mac=False, config=self.config)
+        service.start(r, mac=False, config=self.config)
+        service.set_autostart(True, r, mac=False, config=self.config)
+        service.set_autostart(False, r, mac=False, config=self.config)
+        self.assertEqual(r.calls, [["systemctl", "--user", "stop", "tokscope.service"], ["systemctl", "--user", "start", "tokscope.service"],
+                                   ["systemctl", "--user", "enable", "tokscope.service"], ["systemctl", "--user", "disable", "tokscope.service"]])
+        with self.assertRaises(RuntimeError):
+            service.stop(Runner(fail=("stop",)), mac=False, config=self.config)
+
+    def test_mac_stop_start_use_launchctl_and_autostart_is_refused(self):
+        plist = service.plist_path(self.config)
+        plist.parent.mkdir(parents=True)
+        plist.write_bytes(b"x")
+        r = Runner()
+        service.stop(r, mac=True, home=self.config, uid=501)
+        service.start(r, mac=True, home=self.config, uid=501)
+        self.assertEqual([c[:3] for c in r.calls], [["launchctl", "bootout", "gui/501"], ["launchctl", "bootstrap", "gui/501"]])
+        with self.assertRaises(RuntimeError):
+            service.set_autostart(True, r, mac=True, home=self.config)
