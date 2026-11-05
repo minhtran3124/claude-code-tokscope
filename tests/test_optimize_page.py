@@ -154,6 +154,34 @@ class DataTest(Fixture):
         with mock.patch.object(page, "_started_at", return_value=now):
             self.assertEqual(next(r for r in page.runs() if r["id"] == APPLY_RUN)["state"], "stopped")
 
+    def test_a_wall_clock_step_after_the_lock_keeps_a_live_run_running(self):
+        (self.run_dir() / "verdict.json").unlink()
+        lock = self.run_dir() / "run.lock"
+        lock.write_text(f"{os.getpid()} 4242")  # pid and its boot-relative start ticks
+        stepped = time.time() + 60  # the clock jumped a minute after the lock was written: btime moves, mtime does not
+        with mock.patch.object(store, "start_ticks", return_value=4242), \
+                mock.patch.object(page, "_started_at", return_value=stepped):
+            self.assertEqual(next(r for r in page.runs() if r["id"] == APPLY_RUN)["state"], "running")
+            self.assertEqual(page.running_for("demo"), APPLY_RUN)
+
+    def test_a_pid_reused_after_the_lock_is_stopped_whatever_the_clock_says(self):
+        (self.run_dir() / "verdict.json").unlink()
+        lock = self.run_dir() / "run.lock"
+        lock.write_text(f"{os.getpid()} 4242")
+        # a new process got the pid (other start ticks) even though the mtime check alone would call it running
+        with mock.patch.object(store, "start_ticks", return_value=9999), \
+                mock.patch.object(page, "_started_at", return_value=time.time() - 3600):
+            self.assertEqual(next(r for r in page.runs() if r["id"] == APPLY_RUN)["state"], "stopped")
+            self.assertIsNone(page.running_for("demo"))
+
+    @unittest.skipUnless(os.path.exists("/proc/self/stat"), "needs Linux /proc")
+    def test_a_lock_taken_by_store_survives_a_clock_step_on_linux(self):
+        (self.run_dir() / "verdict.json").unlink()
+        store.acquire(self.run_dir())
+        self.addCleanup(store.release, self.run_dir())
+        with mock.patch.object(page, "_started_at", return_value=time.time() + 60):
+            self.assertEqual(next(r for r in page.runs() if r["id"] == APPLY_RUN)["state"], "running")
+
     def test_an_unreadable_start_time_falls_back_to_the_lock_age(self):
         (self.run_dir() / "verdict.json").unlink()
         lock = self.run_dir() / "run.lock"

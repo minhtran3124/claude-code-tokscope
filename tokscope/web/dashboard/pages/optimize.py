@@ -73,12 +73,14 @@ def _etime_seconds(text):
 
 
 def _started_at(pid):
-    """Epoch seconds the process `pid` started: Linux /proc, else `ps -o etime=` (macOS). None when neither works."""
+    """Epoch seconds the process `pid` started: Linux /proc, else `ps -o etime=` (macOS). None when neither works.
+    The /proc value moves with a wall-clock step (btime is recomputed from the wall clock on every read); _holder_alive
+    uses it only for a lock without start ticks."""
     try:
-        stat = Path(f"/proc/{pid}/stat").read_text()
-        ticks = int(stat.rsplit(")", 1)[1].split()[19])
+        ticks = store.start_ticks(pid)
         boot = next(int(ln.split()[1]) for ln in Path("/proc/stat").read_text().splitlines() if ln.startswith("btime"))
-        return boot + ticks / os.sysconf("SC_CLK_TCK")
+        if ticks is not None:
+            return boot + ticks / os.sysconf("SC_CLK_TCK")
     except (OSError, ValueError, IndexError, StopIteration):
         pass
     try:
@@ -94,13 +96,20 @@ RUN_MAX_AGE = 24 * 3600  # seconds; with no start time to compare, a lock older 
 
 
 def _holder_alive(run):
-    """True when run.lock names a live pid, unless the lock was written before that pid started: then the OS reused the
-    pid for an unrelated process. When the start time cannot be read, a lock younger than RUN_MAX_AGE counts as
-    running (a double click must not pay twice) and an older one as stopped (a reused pid must not block for ever)."""
+    """True when run.lock names a live pid that is still the process that wrote it. On Linux the lock carries the
+    writer's boot-relative start ticks: the same ticks now mean the same process, whatever the wall clock did since;
+    other ticks mean the OS reused the pid. A lock without ticks (macOS, older tokscope) falls back to comparing its
+    mtime with the pid's start time: written before that pid started means reused. When the start time cannot be read
+    either, a lock younger than RUN_MAX_AGE counts as running (a double click must not pay twice) and an older one as
+    stopped (a reused pid must not block for ever)."""
     lock = Path(run) / store.LOCK
-    pid = store._holder(lock)
+    pid, ticks = store._read_lock(lock)
     if not (pid and store._alive(pid)):
         return False
+    if ticks is not None:
+        now = store.start_ticks(pid)
+        if now is not None:
+            return now == ticks
     started = _started_at(pid)
     try:
         written = lock.stat().st_mtime
