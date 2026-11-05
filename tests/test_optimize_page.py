@@ -266,6 +266,13 @@ class RenderTest(Fixture):
         self.assertIn("No verdict yet", body)
         self.assertIn("1 result could not be read", body)
 
+    def test_a_plan_with_wrong_field_types_still_renders(self):
+        plan = {"skill": 5, "created": 20260101, "budget_usd": "2", "per_run_cap_usd": "x", "dev": 3, "holdout": "a",
+                "model": ["m"], "runs": {"a": 1}}
+        (self.run_dir() / "plan.json").write_text(json.dumps(plan))
+        self.assertIn("Plan", self.render(f"run={APPLY_RUN}"))
+        self.assertIn("Optimize runs", self.render())
+
     def test_a_level_below_full_hides_the_text(self):
         for level in ("redacted", "minimal"):
             body = self.render(f"run={APPLY_RUN}", level)

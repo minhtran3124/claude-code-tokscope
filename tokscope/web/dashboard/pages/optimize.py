@@ -40,6 +40,18 @@ def _dict(path):
     return v if isinstance(v, dict) else {}
 
 
+def _str(v, default=""):
+    return v if isinstance(v, str) and v else default
+
+
+def _usd_or_none(v):
+    return v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def _count(v):
+    return len(v) if isinstance(v, list) else 0
+
+
 def _text(path, limit=None):
     try:
         t = Path(path).read_text(errors="replace")
@@ -58,10 +70,10 @@ def _holder_alive(run):
 def _summary(run):
     plan, verdict, decision = _dict(run / store.PLAN), _dict(run / loop.VERDICT), _dict(run / apply.DECISION_JSON)
     done = (run / loop.VERDICT).is_file()
-    return {"id": run.name, "skill": plan.get("skill") or run.name, "created": plan.get("created") or "",
+    return {"id": run.name, "skill": _str(plan.get("skill"), run.name), "created": _str(plan.get("created")),
             "state": "done" if done else "running" if _holder_alive(run) else "stopped",
-            "verdict": verdict.get("verdict"), "spent": store.spent(run), "budget": plan.get("budget_usd"),
-            "decision": decision.get("decision")}
+            "verdict": verdict.get("verdict"), "spent": store.spent(run), "budget": _usd_or_none(plan.get("budget_usd")),
+            "decision": _str(decision.get("decision")) or None}
 
 
 def runs():
@@ -197,6 +209,7 @@ def _e(x):
 
 
 def _time(iso):
+    iso = iso if isinstance(iso, str) else ""
     return (f'<time data-ts="{_e(iso)}" data-fmt="dt">{_e(iso[:16].replace("T", " "))} UTC</time>' if iso else "–")
 
 
@@ -221,11 +234,11 @@ def _runs_list(found, notice=""):
 
 def _plan_section(d):
     p, s = d["plan"], d["summary"]
-    cap = p.get("per_run_cap_usd")
+    cap = _usd_or_none(p.get("per_run_cap_usd"))
     facts = [("Skill", f"<code>{_e(p.get('skill'))}</code>"), ("State", _state(s["state"])), ("Started", _time(s["created"])),
              ("Model", _e(p.get("model"))), ("Runs per case and arm", _e(p.get("runs"))),
-             ("Cases", f"{len(p.get('dev') or [])} dev · {len(p.get('holdout') or [])} holdout"),
-             ("Budget", f"{_usd(s['spent'])} spent of {_usd(p.get('budget_usd'))}" + (f" · {_usd(cap)} at most per call" if cap else "")),
+             ("Cases", f"{_count(p.get('dev'))} dev · {_count(p.get('holdout'))} holdout"),
+             ("Budget", f"{_usd(s['spent'])} spent of {_usd(_usd_or_none(p.get('budget_usd')))}" + (f" · {_usd(cap)} at most per call" if cap else "")),
              ("Versions", ", ".join(f"<code>{_e(v)}</code>" for v in d["versions"]) or "–"),
              ("Measured version", f"<code>{_e(p.get('base_fingerprint'))}</code>")]
     return ('<section class="card" id="plan"><h2 class="sec">Plan</h2><dl class="ids">'
