@@ -798,13 +798,13 @@ class LibraryTest(Fixture):
         self.assertIn('id="approvals"', body)
         self.assertIn(f'<a href="/optimize?run={APPLY_RUN}">{APPLY_RUN}</a> · installed now', body)
 
-    def test_the_start_form_and_the_old_optimize_panel_are_both_there(self):
+    def test_the_start_form_is_there(self):
         body = self.page()
         self.assertIn('id="optstart"', body)
         self.assertIn('name="budget" value="2"', body)
         self.assertIn('name="runs" value="3"', body)
         self.assertIn('name="model" value="sonnet"', body)
-        self.assertIn('id="optimize-panel"', body)
+        self.assertNotIn('id="optimize-panel"', body)
 
     def test_a_running_run_replaces_the_form_with_a_link(self):
         (self.run_dir() / "verdict.json").unlink()
