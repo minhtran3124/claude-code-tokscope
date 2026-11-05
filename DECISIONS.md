@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-11-05 · The guide-based Optimize is removed (issue #193)
+
+| Decision | Why | Rejected |
+| --- | --- | --- |
+| The Library's guide Optimize is deleted: the `optimize-skill`, `asd-ste100` and `unslop` guide rewrite of a copy, its job page, its benchmark add-on and the `api/optimize` routes. The evaluated loop (`/optimize`, `tokscope optimize run`) is the only way to change a skill. `tokscope bench` and the STE check tab stay. Old job folders under `bench/optimize/` stay on disk, hidden. | The guide rewrite changed a skill with no measure of whether it got better. The loop measures a draft against an approved eval suite, with gates and evidence, before anyone can approve it. | Keeping it beside the loop: two ways to change a skill, one of them unmeasured. Leaving the old job routes as dead code. |
+
 ## 2026-11-05 · Classic is retired; Ink is the only look
 
 | Decision | Why | Rejected |

@@ -86,11 +86,10 @@ file); **Show installed** shows them too. To fix a grouping, write `library.json
 
 - **STE check** lists STE100 findings per Markdown file (line, rule, text). It runs `scripts/ste-lint.py` from the
   `asd-ste100` skill; `TOKSCOPE_STE_LINT` points to another linter.
-- **Optimize** runs `claude -p` on a copy of the skill with one or more guide skills (`optimize-skill`, `asd-ste100`,
-  `unslop`), a model and a maximum cost. The run page shows each step and the changed files; when it ends, compare
-  each file (side by side, diff, before, after), optionally benchmark the draft, then **Approve and apply** or
-  **Reject**. The run writes only in `bench/optimize/<job>/`; the skill changes only when you apply, and not if the
-  skill changed after the run started. Only your own skills can be optimized.
+- **Optimize** on a skill starts the evaluated loop (below): the page shows the cost first, and a run needs the skill's
+  approved `evals/evals.json`. A run measures a draft against the skill with gates and evidence per case, then you
+  **Approve** or **Reject** it. Runs live in `bench/optimize/`; the skill changes only on Approve. Only your own skills
+  can be optimized. The old guide-based rewrite is gone ([DECISIONS.md](DECISIONS.md)).
 - **Optimize case** (`tokscope optimize case <skill> <case-id> [--version <hash>] [--max-budget-usd N]`) runs one case of
   `<skill>/evals/evals.json` in a temp sandbox with an isolated `claude -p` (project settings only, no user MCP,
   nothing saved, edits allowed in the sandbox with `acceptEdits`, cost capped at $2.0 unless `--max-budget-usd` says otherwise) and grades it by machine, with no LLM.
