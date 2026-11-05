@@ -616,5 +616,83 @@ class StartTest(unittest.TestCase):
         self.assertIsNotNone(self.procs[0].wait(timeout=10))
 
 
+class LibraryTest(Fixture):
+    """The Library side: the verified state beside a skill, the link to its run, the start form."""
+
+    def render(self, qs=None):
+        conn = ingest.connect(self.db)
+        try:
+            return shell.render(conn, "library", qs or {}, "stamp", "full")
+        finally:
+            conn.close()
+
+    def skill_id(self):
+        conn = ingest.connect(self.db)
+        try:
+            return next(k["id"] for k in page.library.discover(conn) if k["dir"] == "demo")
+        finally:
+            conn.close()
+
+    def page(self):
+        return self.render({"skill": [self.skill_id()]})
+
+    def test_the_badge_follows_approve_then_a_hand_edit(self):
+        self.assertIn('title="No optimize run was approved for this version of the skill.">Not verified', self.page())
+        self.assertIn(">Not verified</span>", self.render())  # on the skill list too
+        server.post(self.db, f"optimize/{REJECT_RUN}/reject", {}, "full")
+        self.assertIn(">Not verified</", self.page())  # a reject alone verifies nothing
+        server.post(self.db, f"optimize/{APPLY_RUN}/approve", {}, "full")
+        body = self.page()
+        self.assertIn(f'<a class="badge ver ok" href="/optimize?run={APPLY_RUN}"', body)
+        self.assertIn(">Verified</a>", body)
+        self.assertIn(">Verified</span>", self.render())
+        (self.folder / "SKILL.md").write_text("edited by hand\n")
+        body = self.page()
+        self.assertIn(f'<a class="badge ver warn" href="/optimize?run={APPLY_RUN}"', body)
+        self.assertIn(">Edited after run</a>", body)
+        self.assertNotIn(">Verified<", body)
+
+    def test_a_name_shared_with_another_folder_never_reads_as_edited(self):
+        server.post(self.db, f"optimize/{APPLY_RUN}/approve", {}, "full")
+        proj = self.tmp / "work" / "app"
+        write(proj / ".claude" / "skills" / "demo" / "SKILL.md", "---\nname: demo\n---\nsame name, other project\n")
+        conn = ingest.connect(self.db)
+        conn.execute("INSERT INTO sessions (session_id, project, cwd, title, prompts) VALUES ('s1', '-p', ?, 't', 1)", (str(proj),))
+        conn.commit()
+        conn.close()
+        body = self.render()
+        self.assertEqual(body.count(">Verified</span>"), 1)  # the personal one, which still has the approved version
+        self.assertEqual(body.count(">Not verified</span>"), 1)
+        self.assertNotIn("Edited after run", body)
+
+    def test_the_versions_link_names_the_approving_run(self):
+        self.assertNotIn("Approved by an optimize run", self.page())
+        server.post(self.db, f"optimize/{APPLY_RUN}/approve", {}, "full")
+        body = self.page()
+        self.assertIn('id="versions"', body)
+        self.assertIn('id="approvals"', body)
+        self.assertIn(f'<a href="/optimize?run={APPLY_RUN}">{APPLY_RUN}</a> · installed now', body)
+
+    def test_the_start_form_and_the_old_optimize_panel_are_both_there(self):
+        body = self.page()
+        self.assertIn('id="optstart"', body)
+        self.assertIn('name="budget" value="2"', body)
+        self.assertIn('name="runs" value="3"', body)
+        self.assertIn('name="model" value="sonnet"', body)
+        self.assertIn('id="optimize-panel"', body)
+
+    def test_a_running_run_replaces_the_form_with_a_link(self):
+        (self.run_dir() / "verdict.json").unlink()
+        (self.run_dir() / "run.lock").write_text(str(os.getpid()))
+        body = self.page()
+        self.assertNotIn('id="optstart"', body)
+        self.assertIn(f'href="/optimize?run={APPLY_RUN}"', body)
+        self.assertIn("An optimize run of this skill is going", body)
+
+    def test_an_installed_skill_has_no_start_form(self):
+        write(self.folder / ".tool-install.json", "{}")
+        self.assertNotIn('id="optstart"', self.page())
+
+
 if __name__ == "__main__":
     unittest.main()

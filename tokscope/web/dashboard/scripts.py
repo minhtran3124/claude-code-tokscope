@@ -30,6 +30,9 @@ table.sbs th{font:500 11px/1.45 var(--mono)}
 .libtools input[type=search]{font-family:var(--mono);font-size:12px;font-weight:400}
 /* optimize page: tables scroll in their own wrapper, long evidence wraps, a failed check reads as one */
 ul.plain li.bad{color:var(--fail)}
+.badge.ver.ok{color:var(--pass)}
+.badge.ver.warn{color:var(--agent-ink)}
+a.badge.ver{text-decoration:none}
 .card pre.src{max-height:240px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
 .card li,.card dd{overflow-wrap:anywhere}
 .card textarea{width:100%;max-width:100%;box-sizing:border-box}
@@ -173,6 +176,18 @@ if(decideEl){const reason=document.getElementById('opt-reason'),ok=decideEl.quer
     busy(b,act==='approve'?'Approving…':'Rejecting…');all.forEach(x=>x.disabled=true);
     try{await send(`/optimize/${decideEl.dataset.run}/${act}`,{reason:reason.value});location.reload()}
     catch(err){showErr(err);all.forEach(x=>{x.disabled=!!x.dataset.block});idle(b);syncOk()}}))}
+// library: ask for the estimate of an optimize run, then for a confirm; the server starts the worker only after the confirm
+const startEl=document.getElementById('optstart');
+if(startEl){const est=document.getElementById('opt-est'),err=document.getElementById('optstart-err'),go=startEl.querySelector('button[type=submit]'),
+    fail=e=>{err.textContent=e.message;err.hidden=false};
+  const body=()=>({skill:startEl.dataset.skill,budget:+startEl.budget.value,runs:+startEl.runs.value,model:startEl.model.value.trim()});
+  startEl.addEventListener('input',()=>{est.hidden=true;est.replaceChildren();go.hidden=false});
+  startEl.addEventListener('submit',async e=>{e.preventDefault();err.hidden=true;busy(go,'Counting…');
+    try{const j=await send('/optimize/start',body());est.replaceChildren(...j.estimate.lines.map(t=>el('p','note',t)));
+      const ok=el('button','primary','Start the run');ok.type='button';est.append(ok);est.hidden=false;go.hidden=true;
+      ok.addEventListener('click',async()=>{busy(ok,'Starting…');
+        try{const r=await send('/optimize/start',{...body(),confirm:true});location.href=r.url}catch(x){fail(x);idle(ok)}})}
+    catch(x){fail(x)}finally{idle(go)}})}
 """
 
 MANAGED_JS = """
