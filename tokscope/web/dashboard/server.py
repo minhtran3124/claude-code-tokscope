@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, quote, urlparse
 
 from ...core import privacy, summary
 from ...experiments import optimize
-from ...features import library, projects
+from ...features import library, projects, service
 from ...features import live as livemod
 from ...integrations import managed, registry
 from ..theme import fonts
@@ -139,6 +139,18 @@ def post(db, path, body, level):
             return 200, {"status": managed.act(m.group(1), body.get("id"))}
         except ValueError as e:
             return 400, {"error": str(e)}
+        except RuntimeError as e:
+            return 502, {"error": str(e)}
+    if m := re.match(r"^api/service/(install|start|stop|autostart)$", path):
+        try:
+            act = m.group(1)
+            if act == "autostart":
+                return 200, {"status": service.set_autostart(bool(body.get("on")))}
+            if act == "install":
+                if service.is_mac():
+                    return 400, {"error": "on macOS use File > Start at login in the app"}
+                return 200, {"status": service.install(exe=service.CHECKOUT / "bin" / "tokscope", quote=True)}
+            return 200, {"status": getattr(service, act)()}
         except RuntimeError as e:
             return 502, {"error": str(e)}
     if path == "api/optimize":

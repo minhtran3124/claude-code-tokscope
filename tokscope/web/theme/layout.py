@@ -366,6 +366,7 @@ svg .vmark{cursor:default}
 .setrow:first-child{border-top:0}
 .setrow .note{margin:2px 0 0}
 .setrow .segctl{min-width:240px}
+.setrow .svcctl{display:flex;gap:8px;align-items:center}
 .keyrows>div{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--row-c)}
 .keyrows>div:first-child{border-top:0}
 .pill-static{font:500 12px var(--mono);padding:2px 10px;border:var(--line-w) solid var(--line-c);border-radius:var(--r-btn)}
