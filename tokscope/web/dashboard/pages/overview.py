@@ -433,14 +433,14 @@ def _daily_stacked(rows, changes, versions):
               '<span class="key"><i class="ln"></i>7-day average</span>'
               + ('<span class="key"><i class="dash"></i>Skill version changed</span>' if versions else "") + "</div>")
     return (legend + _daily_svg(days, changes, versions, 1100, 240, 56, 8, "wide")
-            + _daily_svg(days[-14:], changes, versions, 340, 200, 44, 4, "narrow"))
+            + _daily_svg(days[-14:], changes, versions, 340, 200, 56, 4, "narrow"))
 
 
 def _daily_svg(days, changes, versions, w, h, pad_l, labels, cls):
     pad_b, pad_t = 22, 34  # the top pad holds the two staggered rows of change labels
     top = max(t for _, t, _, _ in days) or 1
     step = (w - pad_l) / len(days)
-    bw = max(2, step - 2)
+    bw = min(max(2, step - 2), 36)  # a range of one or two days must not draw a bar as wide as the chart
     index = {d: i for i, (d, _t, _m, _u) in enumerate(days)}
     ph = h - pad_t - pad_b
     out = [f'<svg class="{cls}" viewBox="0 0 {w} {h}" width="100%" role="img" aria-label="Tokens per day, main thread and subagents">'
