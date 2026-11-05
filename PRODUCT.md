@@ -38,6 +38,8 @@ The dashboard answers only on `127.0.0.1` and refuses requests from other hosts 
   and Copy. The group-by is `?by=` in the URL. `GET /api/summary?by=&format=json|csv` gives the same rows with the same filters
   (without `by` and `format` it keeps returning the totals). The HTML report has the same section; its downloads are built in the browser.
 - **Managed** (full level only): your Claude Managed Agents, read through the `ant` CLI (below).
+- **Optimize**: the runs of `tokscope optimize run`, each with its evidence, before and after, and Approve or Reject
+  (below).
 
 ### Always-on baseline
 
@@ -100,6 +102,25 @@ file); **Show installed** shows them too. To fix a grouping, write `library.json
   `bench/skillopt/runs/<skill>/<case>/<time>/` holds `stream.jsonl`, `final.md`, `files/`, `plugins.json` (plugins
   that still load), `run.json` and `grading.json`. A run with no result (timeout, no binary) is INVALID: neither
   passed nor failed. Exit code: 0 all passed, 1 a check failed or INVALID, 2 load error.
+
+### Optimize: measured runs
+
+`/optimize` lists the runs of `tokscope optimize run` (skill, start, state, verdict, cost spent of the budget, decision).
+A run page shows:
+
+- **Plan, gates and verdict**: each gate with its value and threshold.
+- **Evidence**: each dev and holdout case with checks passed per arm (baseline current and no skill, confirm current
+  and draft). Open a case to see each check with the grader's evidence and the answer.
+- **Editor**: each round's hypothesis, and why a draft was rejected.
+- **Before and after**: pass rate, cost and tokens per run for each arm, with a 95% interval, and each changed file
+  side by side.
+- **Approve or Reject**: Approve installs the measured draft through the same code as `tokscope optimize approve`; it is
+  off for a Reject verdict and needs a reason for Not enough evidence. Reject records the decision and never changes
+  the skill.
+
+In the Library, each skill shows **Verified**, **Edited after run** or **Not verified**, and links to the run that
+approved it. **Start an optimize run** shows the number of paid runs and the cost estimate first; nothing starts or is
+spent until you confirm, and a second start of the same skill while a run is going is refused.
 
 ### Managed: Claude Managed Agents
 
