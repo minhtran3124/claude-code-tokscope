@@ -12,6 +12,7 @@ PAGES = {"overview": "Overview", "projects": "Projects", "sessions": "Sessions",
 NAV_GROUPS = (("Usage", ("overview", "sessions", "breakdowns")), ("Workspace", ("projects", "library", "benchmarks")),
               ("Connect", ("managed",)), ("System", ("settings",)))
 RANGES = {"7": "Last 7 days", "30": "Last 30 days", "90": "Last 90 days", "all": "All time"}
+RANGE_TABS = {"7": "7 days", "30": "30 days", "90": "90 days", "all": "All time"}  # the tabs in the header
 
 
 def _iso(dt):

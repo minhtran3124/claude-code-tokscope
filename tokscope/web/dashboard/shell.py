@@ -16,7 +16,7 @@ from ..theme.brand import MARK, favicon_link
 from ...features.changes import BENCH_PROJECT
 from ..report.scripts import JS_BENCH, JS_CORE, JS_SESSIONS, JS_SUMMARY, JS_TREND
 from ..report.styles import CSS
-from .common import Filters, NAV_GROUPS, PAGES, RANGES, _q
+from .common import Filters, NAV_GROUPS, PAGES, RANGE_TABS, RANGES, _q
 from .pages.benchmarks import page_benchmarks
 from .pages.breakdowns import page_breakdowns
 from .pages.library import page_library
@@ -37,7 +37,7 @@ def _options(conn, f, only=None):
     def select(name, current, options, blank):
         opts = [f'<option value="">{blank}</option>'] + [
             f'<option value="{html.escape(v)}"{" selected" if v == current else ""}>{html.escape(t)}</option>' for v, t in options]
-        return f'<label class="fl"><span>{name.capitalize()}</span><select name="{name}">{"".join(opts)}</select></label>'
+        return f'<label class="fl fl-{name}"><span>{name.capitalize()}</span><select name="{name}">{"".join(opts)}</select></label>'
 
     if only == "project":
         return select("project", f.project, [(p, Path(cwd or p).name or p) for p, cwd, _ in projects], "All projects")
@@ -128,6 +128,9 @@ def render(conn, name, qs, stamp, level="full", token=""):
     bar = ("" if name in ("projects", "managed", "settings") or (name == "library" and 'class="card libhead"' in body) else
            f'<form class="filters" method="get" action="/{name}">{_options(conn, f, "project" if name == "library" else None)}'
            f'<button type="submit" class="chip">Apply</button>{reset}</form>')
+    # the range is tabs on a wide screen (links, so a click applies at once); the form keeps its Range select for the phone sheet
+    tabs = ("" if not bar or name == "library" else '<nav class="range-tabs" aria-label="Range">' + "".join(
+        f'<a href="{f.link(name, range=k)}"{" class=on aria-current=true" if k == f.range else ""}>{t}</a>' for k, t in RANGE_TABS.items()) + "</nav>")
     chip = "" if level == "full" else f'<span class="privacy" role="note" title="Names and text follow the {level} level"><b>{level}</b></span>'
     dates = _range_dates(f) if bar and name != "library" else ""
     pill = sheet_filters = ""
@@ -145,7 +148,7 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 <div class="sheet" id="sheet"><nav class="toc" aria-label="Pages">{nav}</nav>{sheet_filters}
 <p class="sheet-priv note">Privacy level: <b>{level}</b>. Names and text follow it.</p></div></aside><main>
 <header class="dash-head"><h1>{PAGES[name]}</h1>{chip}<span class="fresh" id="fresh"><span class="dot"></span> live</span>
-{bar}{pill}{dates}</header>
+{tabs}{bar}{pill}{dates}</header>
 {body}
 </main></div><div id="tip"></div><div id="toast" role="status" aria-live="polite"></div>
 <dialog class="keys" id="keys"><h3 style="margin:0">Keyboard shortcuts</h3><dl>
