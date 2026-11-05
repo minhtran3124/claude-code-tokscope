@@ -7,7 +7,7 @@ import html
 from .... import __version__
 
 
-def _seg(label_id, label, buttons):
+def _seg(label_id, buttons):
     chips = "".join(f'<button type="button" class="chip" data-set-{attr}="{value}" aria-pressed="false">{text}</button>'
                     for attr, value, text in buttons)
     return f'<div class="segctl" role="group" aria-labelledby="{label_id}">{chips}</div>'
@@ -19,11 +19,11 @@ def _row(label_id, label, note, control):
 
 def page_settings(level):
     look = (_row("set-theme", "Theme", "Auto follows your system.",
-                 _seg("set-theme", "Theme", [("theme", m, m.capitalize()) for m in ("light", "dark", "auto")]))
+                 _seg("set-theme", [("theme", m, m.capitalize()) for m in ("light", "dark", "auto")]))
             + _row("set-skin", "Design", "Ink is the current look. Classic is the older one.",
-                   _seg("set-skin", "Design", [("skin", m, m.capitalize()) for m in ("ink", "classic")]))
+                   _seg("set-skin", [("skin", m, m.capitalize()) for m in ("ink", "classic")]))
             + _row("set-tz", "Time zone", "Times are stored in UTC.",
-                   _seg("set-tz", "Time zone", [("tz", "local", "Local"), ("tz", "utc", "UTC")])))
+                   _seg("set-tz", [("tz", "local", "Local"), ("tz", "utc", "UTC")])))
     data = (_row("set-privacy", "Privacy level", "Names and text follow it. It is set when the server starts: "
                  "<code>tokscope serve --privacy</code>.", f'<span class="pill-static">{html.escape(level)}</span>')
             + _row("set-version", "Version", "Python standard library only. Works offline.",
