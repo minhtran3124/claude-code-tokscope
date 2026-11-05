@@ -360,47 +360,56 @@ def _trigger_runs(ctx, arm, split):
 
 
 def _trigger_reason(acc, passed):
-    """Why the gate kept or reverted the description; says 'not measured' when a test accuracy is None."""
+    """Why the gate kept or reverted the description. A test accuracy that is None was not measured: that is not a
+    drop, and the old description is kept."""
     if acc["current"]["test"] is None or acc["draft"]["test"] is None:
-        why = "test accuracy was not measured"
-    else:
-        why = "test accuracy " + ("kept" if passed else "dropped")
-    return why + "; " + ("new description kept" if passed else "old description put back")
+        return "test accuracy was not measured; no trigger evidence, old description kept"
+    return "test accuracy " + ("kept; new description kept" if passed else "dropped; old description put back")
+
+
+def _trigger_save(ctx, arm, status, acc, passed, reason=None, reverted=False):
+    _write_json(ctx.run / TRIGGER, {
+        "status": status, "reason": reason or _trigger_reason(acc, passed), "prompts": trigger.counts(ctx.triggers),
+        "current": acc["current"], "draft": acc["draft"], "passed": passed, "reverted": reverted,
+        "draft_version": arm})
+
+
+def _trigger_acc(ctx, arm, acc, split):
+    recs = ctx.records(trigger.STAGE)
+    acc["current"][split] = trigger.accuracy(recs, ctx.triggers, "current", split)
+    acc["draft"][split] = trigger.accuracy(recs, ctx.triggers, arm, split)
 
 
 def trigger_gate(ctx, arm):
     """A draft that changes the description must not lower test-split trigger accuracy; else the old description is
-    put back and the rest of the draft is kept. Runs nothing when the description is the same (whitespace aside) or
-    there is no usable trigger set. The result is saved to trigger.json before the rewrite, so a stop between the
-    two is finished on resume."""
+    put back and the rest of the draft is kept. Runs nothing when the description is the same (whitespace aside).
+    Two saves: after the test split trigger.json is 'partial' (the verdict is decided, train is still None, nothing
+    is put back yet because the train runs must see the draft); after the train split it is 'ran' and the old
+    description goes back when the draft failed. A budget stop in between leaves 'partial' and resume finishes the
+    train split. A file that is not finished is never shown as finished."""
     run, path = ctx.run, ctx.run / TRIGGER
     draft_dir = run / "versions" / arm
     if not path.is_file():
-        if not ctx.triggers or not trigger.description_changed(
-                ctx.plan["description"], _front_description(draft_dir / "SKILL.md")):
+        if not trigger.description_changed(ctx.plan["description"], _front_description(draft_dir / "SKILL.md")):
             return
         acc = {a: {s: None for s in trigger.SPLITS} for a in ("current", "draft")}
-        stop = None
-        for split in ("test", "train"):  # test first: its verdict is kept even when the budget ends the train split
-            try:
-                _trigger_runs(ctx, arm, split)
-            except Stop as e:
-                if split == "test":
-                    raise
-                stop = e  # train accuracy stays None (runs are kept); the test verdict below is still saved
-                break
-            recs = ctx.records(trigger.STAGE)
-            acc["current"][split] = trigger.accuracy(recs, ctx.triggers, "current", split)
-            acc["draft"][split] = trigger.accuracy(recs, ctx.triggers, arm, split)
-        passed = trigger.decide(acc["current"]["test"], acc["draft"]["test"])
-        _write_json(path, {"status": "ran", "reason": _trigger_reason(acc, passed),
-                           "prompts": trigger.counts(ctx.triggers), "current": acc["current"], "draft": acc["draft"],
-                           "passed": passed, "reverted": not passed, "draft_version": arm})
-        if stop:
-            if not passed and draft_dir.is_dir():
-                trigger.revert_description(draft_dir, run / "versions" / "v0")
-            raise stop
+        if not ctx.triggers:
+            if not ctx.plan.get("triggers_usable"):
+                return  # no trigger set was frozen: the editor was told to leave the description alone
+            _trigger_save(ctx, arm, "no trigger evidence", acc, False,
+                          "the frozen trigger set has no usable test split; no trigger evidence, old description kept",
+                          reverted=True)
+        else:
+            _trigger_runs(ctx, arm, "test")
+            _trigger_acc(ctx, arm, acc, "test")
+            _trigger_save(ctx, arm, "partial", acc, trigger.decide(acc["current"]["test"], acc["draft"]["test"]))
     res = json.loads(path.read_text())
+    if res.get("status") == "partial":
+        acc = {a: dict(res[a]) for a in ("current", "draft")}
+        _trigger_runs(ctx, arm, "train")  # a Stop leaves 'partial'; resume runs only what is missing
+        _trigger_acc(ctx, arm, acc, "train")
+        _trigger_save(ctx, arm, "ran", acc, res["passed"], res["reason"], reverted=not res["passed"])
+        res = json.loads(path.read_text())
     if res.get("reverted") and draft_dir.is_dir():
         trigger.revert_description(draft_dir, run / "versions" / "v0")
 

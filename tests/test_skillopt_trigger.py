@@ -90,7 +90,9 @@ class ReasonTest(unittest.TestCase):
         r = loop._trigger_reason(self.acc(0.5, None), False)
         self.assertIn("not measured", r)
         self.assertNotIn("dropped", r)
-        self.assertIn("old description put back", r)
+        self.assertIn("no trigger evidence", r)
+        self.assertIn("old description kept", r)
+        self.assertNotIn("put back", r)
 
     def test_measured_reasons_are_unchanged(self):
         self.assertEqual(loop._trigger_reason(self.acc(0.6, 0.5), False),
@@ -243,12 +245,18 @@ class GateTest(TriggerBase):
         self.set_cfg(editor={"default": "baddesc"})
         run, _ = self.go()
         (run / "trigger.json").unlink()
+        v1 = run / "versions" / "v1" / "SKILL.md"
+        v1.write_text(v1.read_text().replace("Summarize notes", "BAD words", 1))  # a changed description again
         train = [r for r in ROWS if trigger.split_of(r["prompt"]) == "train"]
         write(run / "suite", train)  # plan still says usable, but only train items are left
         ctx = loop.Ctx(run)
         self.assertEqual(ctx.triggers, [])
         loop.trigger_gate(ctx, "v1")
-        self.assertFalse((run / "trigger.json").exists())
+        t = json.loads((run / "trigger.json").read_text())
+        self.assertEqual((t["status"], t["passed"], t["reverted"]), ("no trigger evidence", False, True))
+        self.assertIn("no trigger evidence, old description kept", t["reason"])
+        self.assertNotIn("dropped", t["reason"])
+        self.assertEqual(self.desc_of(run, "v1"), "Summarize notes")  # the old description comes back
         self.assertEqual(loop.trigger_block(ctx)["status"], "no trigger evidence")
 
     def test_lock_refuses_a_changed_frozen_trigger_file(self):
@@ -301,7 +309,7 @@ class GateTest(TriggerBase):
         loop._trigger_runs(ctx, "v1", "test")  # a second call runs nothing
         self.assertEqual(len(self.calls()), before)
 
-    def test_budget_stop_in_the_train_split_keeps_the_test_verdict_and_reverts(self):
+    def test_budget_stop_in_the_train_split_is_partial_and_resume_finishes_it(self):
         self.set_cfg(editor={"default": "baddesc"})
         real = store.can_spend
 
@@ -314,10 +322,21 @@ class GateTest(TriggerBase):
             run, v = self.go()
         self.assertEqual(v["stopped"], "trigger")
         t = json.loads((run / "trigger.json").read_text())
-        self.assertEqual((v["trigger"]["status"], t["passed"], t["reverted"]), ("ran", False, True))
+        self.assertEqual((v["trigger"]["status"], t["passed"], t["reverted"]), ("partial", False, False))
         self.assertIsNotNone(t["draft"]["test"])
-        self.assertIsNone(t["draft"]["train"])
-        self.assertEqual(self.desc_of(run, "v1"), "Summarize notes")  # reverted despite the stop
+        self.assertIsNone(t["draft"]["train"])  # not finished, and shown as not finished
+        (run / "verdict.json").unlink()
+        loop.resume(run.name, log=lambda *_: None)
+        t2 = json.loads((run / "trigger.json").read_text())
+        self.assertEqual(t2["status"], "ran")
+        for side in ("current", "draft"):
+            self.assertIsNotNone(t2[side]["train"])
+        self.assertEqual((t2["draft"]["test"], t2["passed"], t2["reason"]), (t["draft"]["test"], False, t["reason"]))
+        ran = [(l["stage"], l["case"], l["arm"], l["i"]) for l in store.lines(run) if l.get("kind") == "run"]
+        self.assertEqual(len(ran), len(set(ran)))
+        v2 = json.loads((run / "verdict.json").read_text())
+        self.assertEqual((v2["trigger"]["status"], v2["stopped"]), ("ran", None))
+        self.assertEqual(self.desc_of(run, "v1"), "Summarize notes")
 
 
 class WorkspaceTest(unittest.TestCase):
