@@ -380,6 +380,8 @@ def approve(run_id, reason=None, cwd=None, now=None):
                 raise Refused(f"{run_id}: unknown verdict {v.get('verdict')!r}")
             if not (v.get("draft_version") and v.get("draft_fingerprint")):
                 raise Refused(f"{run_id}: no draft to apply")
+            if v["draft_fingerprint"] == v.get("base_fingerprint"):
+                raise Refused(f"{run_id}: the draft is the same version as the skill; nothing to apply")
             folder = suite._folder(store.read_plan(run)["skill"], cwd)
             live = skills.fingerprint(folder)
             last = _latest_applied(run)

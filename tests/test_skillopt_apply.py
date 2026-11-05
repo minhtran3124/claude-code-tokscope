@@ -119,6 +119,17 @@ class TestApprove(Base):
         self.assertEqual(rec["reason"], "owner reviewed the diff")
         self.assertEqual(self.fp(), self.new)
 
+    def test_draft_same_as_skill_is_refused(self):  # ported from PR #220
+        draft = self.run_dir / "versions" / "v1"
+        shutil.rmtree(draft)
+        shutil.copytree(self.folder, draft, ignore=shutil.ignore_patterns("evals"))
+        self.set_verdict(draft_fingerprint=skills.fingerprint(draft))
+        with self.assertRaisesRegex(apply.Refused, "same version as the skill"):
+            self.approve()
+        self.assertEqual(self.fp(), self.old)
+        self.assertFalse((self.run_dir / apply.APPLY_JSON).exists())
+        self.assertFalse((self.run_dir / apply.DECISION_JSON).exists())
+
     def test_post_write_mismatch_restores(self):
         real = apply._replace
 
