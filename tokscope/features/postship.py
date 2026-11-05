@@ -21,7 +21,8 @@ def approved(conn, run_id):
 
 
 def _turns(conn, keys):
-    """{(session_id, prompt_idx): (tokens, cost)} of the requests of those turns, bench sessions left out."""
+    """{(session_id, prompt_idx): (tokens, cost)} per load: the requests of each turn split evenly over the turn's ok
+    skill loads (of any skill), so a turn with several loads is not counted in full for each. Bench sessions left out."""
     sessions = {k[0] for k in keys}
     out = {}
     for sid in sessions:
@@ -30,6 +31,11 @@ def _turns(conn, keys):
                 "JOIN sessions s USING (session_id) WHERE r.session_id = ? AND s.project NOT LIKE ? GROUP BY r.prompt_idx",
                 (sid, BENCH)):
             out[(sid, i)] = (tokens or 0, cost or 0.0)
+        for i, n in conn.execute("SELECT prompt_idx, count(*) FROM skill_calls WHERE session_id = ? AND COALESCE(failed, 0) = 0 "
+                                 "GROUP BY prompt_idx", (sid,)):
+            if (sid, i) in out and n > 1:
+                t, c = out[(sid, i)]
+                out[(sid, i)] = (t / n, c / n)
     return out
 
 

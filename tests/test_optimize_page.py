@@ -894,6 +894,17 @@ class PostShipTest(Fixture):
         finally:
             conn.close()
 
+    def test_turn_cost_is_split_over_the_turn_loads(self):
+        self.approve()
+        self.loads(self.new, 1, 15, tokens=1000, cost=1.0)
+        conn = ingest.connect(self.db)
+        conn.execute("INSERT INTO skill_calls(session_id, ts, skill, source, prompt_idx, tool_use_id, failed) "
+                     "VALUES ('s1', '2026-03-15T01:00:00+00:00', 'other', 'tool', ?, 'tx', 0)", (self.n,))
+        conn.commit()
+        conn.close()
+        got = self.numbers()["new"]
+        self.assertEqual((got["tokens_median"], got["cost_median"]), (500, 0.5))
+
     def test_post_ship_function(self):
         self.approve()
         self.loads(self.old, 6, 5, failed=2, tokens=1000, cost=1.0)
