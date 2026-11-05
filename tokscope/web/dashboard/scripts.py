@@ -22,7 +22,7 @@ table.sbs th{font:500 11px/1.45 var(--mono)}
 .answer{box-shadow:10px 12px 0 var(--shadow);margin:0 10px 14px 0}
 .tband{fill:color-mix(in oklch,var(--mark) 24%,transparent)}
 .privacy b{font:600 11px var(--mono);letter-spacing:.08em}
-.segctl{border-radius:999px}
+.segctl{border-radius:var(--r-btn)}
 /* end overview */
 .state{font-size:11px}
 .st .pill,.state{font-weight:500}

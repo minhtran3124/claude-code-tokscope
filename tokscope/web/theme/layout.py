@@ -354,9 +354,18 @@ svg .vmark{cursor:default}
 .filters{align-items:flex-end}
 .dash-head .privacy{display:inline-flex;align-items:center;margin:0;padding:2px 10px;border-radius:999px;font-size:12px}
 .range-dates{flex:1 0 100%;margin:0;text-align:right}
-/* sidebar: counts beside the pages; Theme and Design as segmented controls */
-.side-foot.ctls{display:flex;flex-direction:column;align-items:stretch;gap:12px;margin:18px 0 0 4px}
+/* sidebar: counts beside the pages, a small label over each group; the Settings page holds Theme, Design and Time zone as segmented controls */
+.toc .grp{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:16px 12px 4px}
+.toc .grp:first-child{padding-top:4px}
 .ctl{display:flex;flex-direction:column;gap:4px}
+.setrows{display:flex;flex-direction:column}
+.setrow{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--row-c)}
+.setrow:first-child{border-top:0}
+.setrow .note{margin:2px 0 0}
+.setrow .segctl{min-width:240px}
+.keyrows>div{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--row-c)}
+.keyrows>div:first-child{border-top:0}
+.pill-static{font:500 12px var(--mono);padding:2px 10px;border:var(--line-w) solid var(--line-c);border-radius:var(--r-btn)}
 .segctl{display:flex}
 .segctl .chip{flex:1;justify-content:center;border-radius:0;padding:5px 8px}
 .segctl .chip+.chip{margin-left:calc(-1*var(--line-w,1px))}
@@ -391,6 +400,7 @@ transition:opacity var(--t-layout) var(--ease),transform var(--t-layout) var(--e
 .sheet .toc{flex-direction:column;white-space:normal;gap:2px}
 .sheet .toc a{min-height:48px;padding:0 12px;font-size:16px}
 .sheet .toc a .cnt{display:inline}
+.sheet .toc .grp{display:block}
 .sheet .sub-toc{display:none}
 .sheet .sheet-filters{display:flex;flex-direction:column;align-items:stretch;gap:12px;margin:20px 0 0}
 .sheet-filters .ctl-l{margin:0}
@@ -398,7 +408,6 @@ transition:opacity var(--t-layout) var(--ease),transform var(--t-layout) var(--e
 .layout .sheet-filters select{width:100%;max-width:none;min-height:44px;font-size:16px}
 .sheet-filters .chip{align-self:flex-start;justify-content:center;min-height:44px;min-width:44px;padding:0 20px;font-size:14px}
 .sheet-filters a{display:inline-flex;align-items:center;min-height:44px}
-.sheet .side-foot.ctls{margin:20px 0 0}
 .sheet .segctl .chip{min-height:44px;font-size:14px}
 .sheet #keys-btn{display:none}
 .sheet .sheet-priv{display:block;margin:20px 0 0}
@@ -581,7 +590,7 @@ body.picking .totop{bottom:92px}
 .layout{display:block}
 .side{height:auto;padding:8px 16px;border-right:0;border-bottom:1px solid var(--edge);overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 .side::-webkit-scrollbar{display:none}
-.brand,.sub-toc,.cnt{display:none}
+.brand,.sub-toc,.cnt,.toc .grp{display:none}
 .toc{flex-direction:row;white-space:nowrap}
 .toc a:hover{transform:none}
 }
