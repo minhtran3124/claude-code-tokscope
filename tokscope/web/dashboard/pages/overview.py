@@ -298,7 +298,7 @@ def _today(conn, f):
         tag = f' <code class="ver">{html.escape(versions[skill][:6])}</code>' if skill in versions else ""
         body += (f'<div class="latest"><span class="note">Latest session · <time data-ts="{html.escape(ts)}" data-fmt="hm">{html.escape(ts[11:16])} UTC</time></span>'
                  f'<a href="{f.link("sessions", q=sid[:8])}"><b>{html.escape(title or sid[:8])}</b></a>'
-                 f'<span>{_tok(tk)} tokens · {prompts} prompts</span>'
+                 f'<span>{_tok(tk)} tokens · {prompts} prompt{"s" if prompts != 1 else ""}</span>'
                  + (f'<span class="note">#{turn[0]} {html.escape((turn[1] or "")[:110])}{" · " + html.escape(skill) + tag if skill else ""}'
                     f' · {_tok(turn[3])}</span>' if turn else "") + "</div>")
     else:
@@ -540,23 +540,76 @@ def _cache_finding(conn, f):
             f'<a href="{f.link("breakdowns")}#cache">Prompt cache</a> has the hints.</p></section>')
 
 
+def _attention(conn, f, cmp):
+    """Up to three things worth a look: tokens per day well above the window before, a budget near or over its limit, and
+    prompt re-caching in the last 7 days. Each is one line with a link to where the detail is."""
+    items = []
+    if cmp:
+        cond, params = f.cond()
+        pcond, pparams = f.cond(1)
+        now, before = _totals(conn, cond, params)[0] or 0, _totals(conn, pcond, pparams)[0] or 0
+        if before and (now / cmp["now"]) / (before / cmp["before"]) >= 1.5:
+            rise = (now / cmp["now"]) / (before / cmp["before"]) - 1
+            items.append(("Token use jumped", f"+{rise:.0%} per day against the window before", "#changed"))
+    try:
+        found = budgets.load()
+        result = budgets.check(conn, found) if found is not None else {"items": []}
+    except budgets.BudgetError:
+        result = {"items": []}
+    for i in result["items"]:
+        if i["state"] in ("near", "over"):
+            items.append((f'{i["label"]} {"is over" if i["state"] == "over" else "is near"} its limit', i["text"], "#budgets"))
+    cond, params = f.cond()
+    since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    reqs, misses = cache.scan(conn, f"{cond} AND r.ts >= ?" if cond else "WHERE r.ts >= ?", (*params, since))
+    if misses:
+        t = cache.totals(reqs, misses)
+        items.append(("Prompt cache missed", f'{_usd(t["recache_usd"])} re-cached in 7 days, top cause: {t["top_cause"]}',
+                      f.link("breakdowns") + "#cache"))
+    if not items:
+        return '<section class="card attention"><h2>Needs a look</h2><p class="note">Nothing needs a look.</p></section>'
+    rows = "".join(f'<li><span class="k">{n:02d}</span><div><a href="{html.escape(href)}">{html.escape(title)}</a>'
+                   f'<div class="note">{html.escape(text)}</div></div></li>' for n, (title, text, href) in enumerate(items[:3], 1))
+    return f'<section class="card attention"><h2>Needs a look ({len(items[:3])})</h2><ol class="plain attn">{rows}</ol></section>'
+
+
+def _cache_reuse(conn, f):
+    """From-cache share of all tokens as one number and one bar, with the model that reuses the least."""
+    cond, params = f.cond()
+    t = _totals(conn, cond, params)
+    if not t[0]:
+        return ""
+    pct = round(100 * (t[5] or 0) / t[0])
+    low = _q(conn, f"SELECT r.model, sum(r.cache_read) * 1.0 / sum({TOKENS}) FROM requests r JOIN sessions s USING (session_id) {cond} "
+                   f"AND r.model IS NOT NULL GROUP BY 1 HAVING sum({TOKENS}) > 0 ORDER BY 2 LIMIT 1", params)
+    tail = f" Lowest: {html.escape(low[0][0])} {low[0][1]:.0%}." if low and len(_q(conn, f"SELECT DISTINCT r.model FROM requests r JOIN sessions s USING (session_id) {cond} AND r.model IS NOT NULL", params)) > 1 else ""
+    return (f'<section class="card cache-reuse"><h2>Cache reuse</h2><div class="reuse-n">{pct}%</div>'
+            f'<div class="bar-track" role="img" aria-label="{pct}% of tokens from cache"><u style="width:{pct}%"></u></div>'
+            f'<p class="note">Share of tokens read from cache, {f.label()}.{tail}</p></section>')
+
+
 def page_overview(conn, f):
     cmp = _window(conn, f)
     rows = _day_rows(conn, f)
     versions = _version_marks(conn, f, rows[0][0], rows[-1][0]) if rows else []
-    return "".join([
-        f'<section class="card answer live-card"><div class="live-head"><h2><span class="dot"></span>Today</h2><div data-region="running">{_running()}</div></div><div data-region="today">{_today(conn, f)}</div></section>',
-        f'<div data-region="budgets">{_budgets(conn)}</div>',
+    today = (f'<section class="card answer live-card"><div class="live-head"><h2>Today</h2><div data-region="running">{_running()}</div></div>'
+             f'<div data-region="today">{_today(conn, f)}</div></section>')
+    rest = "".join([
         f'<div data-region="kpis">{_kpis(conn, f)}</div>',
-        f'<div data-region="cache">{_cache_finding(conn, f)}</div>',
         '<div data-region="cost-check">'
         + cost_check(conn, *f.cond(), since=_iso(f.now - timedelta(days=f.days)) if f.days else None,
                      scoped=bool(f.project or f.model or f.skill)) + '</div>',
         _session_start(conn, f),
-        f'<section class="card"><h2>Biggest movers</h2><p class="note">{f.label()}, tokens per day against the window before</p>'
+        f'<section class="card" id="changed"><h2>Biggest movers</h2><p class="note">{f.label()}, tokens per day against the window before</p>'
         f'<div data-region="changed">{_movers(conn, f, cmp)}<h3>New skill versions</h3>{_new_versions(conn, f)}</div></section>',
         f'<section class="card" id="trend"><h2>Daily tokens</h2><p class="note">{f.label()}, days in {tz.label()}</p>'
         f'<div data-region="trend">{_daily_stacked(rows, list_changes(conn), versions)}</div></section>',
         f'<div data-region="models">{_models(conn, f)}</div>',
         f'<div data-region="top">{_top(conn, f)}</div>',
     ])
+    rail = "".join([
+        f'<div data-region="attention">{_attention(conn, f, cmp)}</div>',
+        f'<div data-region="budgets" id="budgets">{_budgets(conn)}</div>',
+        f'<div data-region="cache">{_cache_reuse(conn, f)}</div>',
+    ])
+    return f'<div class="ovgrid"><div class="ov-today">{today}</div><aside class="ov-rail" aria-label="What needs attention">{rail}</aside><div class="ov-rest">{rest}</div></div>'

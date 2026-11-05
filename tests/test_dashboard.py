@@ -137,10 +137,19 @@ class ServerTest(unittest.TestCase):
         self.assertNotIn("dead", over)
         self.assertNotEqual(json.loads(self.get("/api/version")[1])["live"], "")
 
+    def test_overview_has_a_right_rail_with_attention_budgets_and_cache_reuse(self):
+        body = self.get("/overview")[1]
+        rail = re.search(r'<aside class="ov-rail".*?</aside>', body, re.S).group(0)
+        self.assertIn('data-region="attention"', rail)
+        self.assertIn('data-region="budgets"', rail)
+        self.assertIn('data-region="cache"', rail)
+        self.assertLess(body.index('class="ov-today"'), body.index('class="ov-rail"'))  # rail follows Today on a narrow screen
+        self.assertLess(body.index('class="ov-rail"'), body.index('class="ov-rest"'))
+
     def test_the_today_heading_and_the_running_line_share_one_row(self):
         from tokscope.web.theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS
         self.open_session(os.getpid(), "now1-aaaa", "busy")
-        self.assertRegex(self.get("/overview")[1], r'<div class="live-head">\s*<h2><span class="dot"></span>Today</h2>\s*<div data-region="running">\s*<p class="runnow">.*?</p>\s*</div>\s*</div>\s*<div data-region="today">', re.S)
+        self.assertRegex(self.get("/overview")[1], r'<div class="live-head">\s*<h2>Today</h2>\s*<div data-region="running">\s*<p class="runnow">.*?</p>\s*</div>\s*</div>\s*<div data-region="today">', re.S)
         self.assertRegex(self.get("/overview")[1], r'</b> <span class="lbl">sessions? running</span><span class="note">')
         (self.claude / "sessions" / f"{os.getpid()}.json").unlink()
         self.assertRegex(self.get("/overview")[1], r'<div class="live-head">\s*<h2>.*?Today</h2>\s*<div data-region="running">\s*<p class="runnow none">', re.S)

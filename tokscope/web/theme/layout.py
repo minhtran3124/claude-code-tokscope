@@ -917,4 +917,13 @@ table.mcp td.st{font-family:var(--num-font)}
 .movers th{font-size:var(--lab-size);text-transform:var(--lab-case);letter-spacing:var(--lab-track);color:var(--lab-c)}
 .spark polyline,.tline{stroke:var(--trace-c)}
 .tdot{fill:var(--trace-c);stroke:var(--dot-edge)}
+/* Overview: the page is a main column and a right rail (Needs a look, budgets, cache reuse); one column under 1100 px, rail after Today */
+.ovgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;grid-template-areas:"today rail" "rest rail";gap:0 20px;align-items:start}
+.ov-today{grid-area:today;min-width:0}.ov-rest{grid-area:rest;min-width:0}.ov-rail{grid-area:rail;min-width:0}
+@media (max-width:1100px){.ovgrid{grid-template-columns:minmax(0,1fr);grid-template-areas:"today" "rail" "rest"}}
+ol.attn{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
+ol.attn li{display:flex;gap:10px;align-items:flex-start}ol.attn .k{font:500 11px var(--mono);color:var(--muted);padding-top:3px}
+ol.attn .note{margin:2px 0 0}
+.reuse-n{font:600 28px var(--mono);color:var(--pass)}
+.bar-track{height:var(--bar-h);background:var(--track);border-radius:var(--r-bar);overflow:hidden}.bar-track u{display:block;height:100%;background:var(--pass);text-decoration:none}
 """
