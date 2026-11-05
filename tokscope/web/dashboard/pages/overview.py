@@ -298,7 +298,7 @@ def _today(conn, f):
         tag = f' <code class="ver">{html.escape(versions[skill][:6])}</code>' if skill in versions else ""
         body += (f'<div class="latest"><span class="note">Latest session · <time data-ts="{html.escape(ts)}" data-fmt="hm">{html.escape(ts[11:16])} UTC</time></span>'
                  f'<a href="{f.link("sessions", q=sid[:8])}"><b>{html.escape(title or sid[:8])}</b></a>'
-                 f'<span>{_tok(tk)} tokens · {prompts} prompt{'s' * (prompts != 1)}</span>'
+                 f'<span>{_tok(tk)} tokens · {prompts} prompt{"s" if prompts != 1 else ""}</span>'
                  + (f'<span class="note">#{turn[0]} {html.escape((turn[1] or "")[:110])}{" · " + html.escape(skill) + tag if skill else ""}'
                     f' · {_tok(turn[3])}</span>' if turn else "") + "</div>")
     else:
@@ -550,7 +550,7 @@ def _attention(conn, f, cmp):
         now, before = _totals(conn, cond, params)[0] or 0, _totals(conn, pcond, pparams)[0] or 0
         if before and (now / cmp["now"]) / (before / cmp["before"]) >= 1.5:
             rise = (now / cmp["now"]) / (before / cmp["before"]) - 1
-            items.append(("Token use jumped", f"+{rise:.0%} per day against the window before", "#changed", "Biggest movers"))
+            items.append(("Token use jumped", f"+{rise:.0%} per day against the window before", "#changed"))
     try:
         found = budgets.load()
         result = budgets.check(conn, found) if found is not None else {"items": []}
@@ -558,18 +558,18 @@ def _attention(conn, f, cmp):
         result = {"items": []}
     for i in result["items"]:
         if i["state"] in ("near", "over"):
-            items.append((f'{i["label"]} {"is over" if i["state"] == "over" else "is near"} its limit', i["text"], "#budgets", "Budgets"))
+            items.append((f'{i["label"]} {"is over" if i["state"] == "over" else "is near"} its limit', i["text"], "#budgets"))
     cond, params = f.cond()
     since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     reqs, misses = cache.scan(conn, f"{cond} AND r.ts >= ?" if cond else "WHERE r.ts >= ?", (*params, since))
     if misses:
         t = cache.totals(reqs, misses)
         items.append(("Prompt cache missed", f'{_usd(t["recache_usd"])} re-cached in 7 days, top cause: {t["top_cause"]}',
-                      f.link("breakdowns") + "#cache", "Prompt cache"))
+                      f.link("breakdowns") + "#cache"))
     if not items:
         return '<section class="card attention"><h2>Needs a look</h2><p class="note">Nothing needs a look.</p></section>'
     rows = "".join(f'<li><span class="k">{n:02d}</span><div><a href="{html.escape(href)}">{html.escape(title)}</a>'
-                   f'<div class="note">{html.escape(text)}</div></div></li>' for n, (title, text, href, _w) in enumerate(items[:3], 1))
+                   f'<div class="note">{html.escape(text)}</div></div></li>' for n, (title, text, href) in enumerate(items[:3], 1))
     return f'<section class="card attention"><h2>Needs a look ({len(items[:3])})</h2><ol class="plain attn">{rows}</ol></section>'
 
 
