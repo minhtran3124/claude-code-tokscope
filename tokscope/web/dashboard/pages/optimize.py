@@ -484,6 +484,7 @@ def _decide_section(conn, d):
 # starting a run
 
 MODEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:\[\]-]{0,63}$")
+MAX_START_BUDGET_USD, MAX_START_RUNS = 100.0, 20  # a start from the browser cannot ask for more than this
 START_WAIT_S = 20  # the worker prints `run <folder>` right after it locks the plan, before any paid call
 _START_LOCK = threading.Lock()
 
@@ -511,8 +512,12 @@ def plan_start(conn, body):
     budget, runs_, model = _number(body, "budget", 2.0), _number(body, "runs", 3, whole=True), body.get("model") or "sonnet"
     if not budget > 0:
         raise ValueError("budget must be above 0")
+    if budget > MAX_START_BUDGET_USD:
+        raise ValueError(f"budget must be at most {MAX_START_BUDGET_USD:g}")
     if runs_ < 1:
         raise ValueError("runs must be at least 1")
+    if runs_ > MAX_START_RUNS:
+        raise ValueError(f"runs must be at most {MAX_START_RUNS}")
     if not isinstance(model, str) or not MODEL.match(model):
         raise ValueError("model must be a model name such as sonnet")
     root = project_root(k)
@@ -560,8 +565,8 @@ def estimate(p):
 
 
 def _command(p):
-    return [sys.executable, "-u", "-m", "tokscope.cli", "optimize", "run", p["name"], "--budget", str(p["budget"]),
-            "--runs", str(p["runs"]), "--model", p["model"]]
+    return [sys.executable, "-u", "-m", "tokscope.cli", "optimize", "run", "--budget", str(p["budget"]),
+            "--runs", str(p["runs"]), "--model", p["model"], "--", p["name"]]  # "--": a folder name cannot act as a flag
 
 
 def _stop(proc):

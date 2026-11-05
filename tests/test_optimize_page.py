@@ -562,7 +562,7 @@ class StartTest(unittest.TestCase):
         write(self.tmp / "h" / ".claude" / "skills" / "ext" / "SKILL.md", "---\nname: ext\n---\nx\n")
         write(self.tmp / "h" / ".claude" / "skills" / "ext" / ".tool-install.json", "{}")
         found = {k["dir"]: k["id"] for k in page.library.discover(ingest.connect(self.db))}
-        bad = [{"budget": 0}, {"budget": -1}, {"budget": "5"}, {"budget": True}, {"runs": 0}, {"runs": 1.5}, {"model": "-x"},
+        bad = [{"budget": 0}, {"budget": -1}, {"budget": "5"}, {"budget": True}, {"runs": 0}, {"runs": 1.5}, {"budget": 1e9}, {"runs": 10**6}, {"model": "-x"},
                {"model": "a b"}, {"skill": "nope"}, {"skill": found["bare"]}, {"skill": found["ext"]}]
         with mock.patch.object(page.subprocess, "Popen") as popen:
             for kw in bad:
@@ -571,6 +571,10 @@ class StartTest(unittest.TestCase):
                 self.assertIn("error", out)
         popen.assert_not_called()
         self.assertEqual(self.post(runs=2)[1]["estimate"]["calls"], 48)
+
+    def test_the_command_ends_with_a_separator_before_the_skill_name(self):
+        cmd = page._command({"name": "--budget", "budget": 2.0, "runs": 1, "model": "sonnet"})
+        self.assertEqual(cmd[-2:], ["--", "--budget"])
 
     def test_with_confirm_it_starts_the_cli_and_names_the_run(self):
         with self.watch():
