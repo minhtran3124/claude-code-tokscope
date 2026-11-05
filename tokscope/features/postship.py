@@ -46,12 +46,13 @@ def _side(loads, failed, turns):
 def post_ship(conn, skill, old, new, at):
     """{"old": side, "new": side}: loads, median tokens and cost per load, errors and error rate from real sessions. A
     load counts by its version: the old version before `at`, the new one from `at` on; any other version (a later hand
-    edit) is left out. A side is `few` under MIN_LOADS loads."""
+    edit) and any load in a bench session is left out. A side is `few` under MIN_LOADS loads."""
     boundary = skills._dt(at)
+    bench = {r[0] for r in conn.execute("SELECT session_id FROM sessions WHERE project LIKE ?", (BENCH,))}
     pick = {"old": ([], []), "new": ([], [])}
     for failed in (False, True):
         for sid, i, sk, ts, version, _ in skills.load_versions(conn, failed=failed):
-            if sk != skill or not ts or version is None:
+            if sk != skill or not ts or version is None or sid in bench:
                 continue
             if version == old and skills._dt(ts) < boundary:
                 pick["old"][failed].append((sid, i))

@@ -941,16 +941,16 @@ class PostShipTest(Fixture):
         got = self.numbers()
         self.assertEqual((got["old"]["loads"], got["new"]["loads"]), (5, 5))
 
-    def test_bench_sessions_and_loads_without_requests_stay_out_of_the_medians(self):
+    def test_bench_sessions_stay_out_of_loads_and_errors_and_loads_without_requests_out_of_the_medians(self):
         self.approve()
-        self.loads(self.old, 2, 5, session="sb")
+        self.loads(self.old, 2, 5, session="sb", failed=2)
         self.loads(self.old, 5, 6)
         conn = ingest.connect(self.db)
         conn.execute("DELETE FROM requests WHERE session_id = 's1' AND prompt_idx = 3")
         conn.commit()
         conn.close()
         got = self.numbers()["old"]
-        self.assertEqual(got["loads"], 7)
+        self.assertEqual((got["loads"], got["errors"], got["few"]), (5, 0, False))
         self.assertIsNotNone(got["tokens_median"])
 
     def test_an_unapproved_run_has_no_section_and_keeps_decide(self):
