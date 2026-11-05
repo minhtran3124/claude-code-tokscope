@@ -230,3 +230,37 @@ def ste_lint(linter, files):
 
 def hard(findings):
     return sum(v.get("level") == "advisory-free" for v in findings)
+
+
+def _has_table(conn, name):
+    return conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)).fetchone() is not None
+
+
+def verified(conn, skill, folder, unique=True):
+    """("verified" | "edited" | "none", run id or None) for the skill folder `folder` named `skill`, from the latest
+    approve or revert of `opt_applied` (written by `tokscope optimize approve|revert`). Verified: the latest is an
+    approve and the folder still has its measured version. Edited: it is an approve and the folder moved on. None: no
+    row, rejects only, or a revert. The table has no folder column, so when other skills share the name (`unique` is
+    False) an approve of one cannot say the folder was edited; that case reads none."""
+    if not _has_table(conn, "opt_applied"):
+        return "none", None
+    row = conn.execute("SELECT run_id, action, new_version FROM opt_applied WHERE skill = ? AND action IN ('approve', 'revert') "
+                       "ORDER BY at DESC LIMIT 1", (skill,)).fetchone()
+    if not row or row[1] != "approve":
+        return "none", None
+    if skills.fingerprint(folder) == row[2]:
+        return "verified", row[0]
+    return ("edited", row[0]) if unique else ("none", None)
+
+
+def approved_versions(conn, skill):
+    """{version: run id} of every approve in `opt_applied` for the skill, oldest approve first: a version approved again
+    (after a revert) moves to the end, and the newest run wins for it."""
+    if not _has_table(conn, "opt_applied"):
+        return {}
+    out = {}
+    for r, v in conn.execute("SELECT run_id, new_version FROM opt_applied WHERE skill = ? AND action = 'approve' "
+                             "ORDER BY at", (skill,)):
+        out.pop(v, None)
+        out[v] = r
+    return out

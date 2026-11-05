@@ -292,11 +292,27 @@ def _publish(path, tmp):
         return False
 
 
-def _holder(path):
+def start_ticks(pid):
+    """Clock ticks after boot at which `pid` started (Linux /proc), else None. The kernel keeps it boot-relative, so a
+    wall-clock step never changes it, and a reused pid gets a new value."""
     try:
-        return int(path.read_text().strip())
-    except (OSError, ValueError):
-        return 0
+        return int(Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[19])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def _read_lock(path):
+    """(pid, start ticks or None) in run.lock; (0, None) when missing or broken. A lock without ticks is a plain pid
+    (an older tokscope, or no /proc)."""
+    try:
+        parts = path.read_text().split()
+        return int(parts[0]), int(parts[1]) if len(parts) > 1 else None
+    except (OSError, ValueError, IndexError):
+        return 0, None
+
+
+def _holder(path):
+    return _read_lock(path)[0]
 
 
 def acquire(run):
@@ -305,7 +321,8 @@ def acquire(run):
     run = Path(run)
     path = run / LOCK
     tmp = run / f".{LOCK}.{os.getpid()}.{threading.get_ident()}"
-    tmp.write_text(str(os.getpid()))
+    ticks = start_ticks(os.getpid())  # lets a reader tell this process from a later one that reuses its pid
+    tmp.write_text(f"{os.getpid()} {ticks}" if ticks is not None else str(os.getpid()))
     try:
         for _ in range(3):
             if _publish(path, tmp):
@@ -328,7 +345,7 @@ def acquire(run):
 def release(run):
     path = Path(run) / LOCK
     try:
-        if path.read_text().strip() == str(os.getpid()):
+        if _holder(path) == os.getpid():
             path.unlink()
     except OSError:
         pass

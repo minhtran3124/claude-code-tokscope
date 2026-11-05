@@ -28,6 +28,15 @@ table.sbs th{font:500 11px/1.45 var(--mono)}
 .st .pill,.state{font-weight:500}
 .movers th{font-weight:500}
 .libtools input[type=search]{font-family:var(--mono);font-size:12px;font-weight:400}
+/* optimize page: tables scroll in their own wrapper, long evidence wraps, a failed check reads as one */
+ul.plain li.bad{color:var(--fail)}
+.badge.ver.ok{color:var(--pass)}
+.badge.ver.warn{color:var(--agent-ink)}
+a.badge.ver{text-decoration:none}
+.card pre.src{max-height:240px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+.card li,.card dd{overflow-wrap:anywhere}
+.card textarea{width:100%;max-width:100%;box-sizing:border-box}
+#opt-est{margin:8px 0}
 """
 
 LIB_JS = """
@@ -154,6 +163,31 @@ if(benchEl&&benchEl.dataset.bench==='running')setInterval(async()=>{try{const j=
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('on',x===b));
   document.querySelectorAll('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==b.dataset.view)}));
+"""
+
+OPT_JS = """
+// optimize page: approve or reject a run (LIB_JS's send, ask, busy and idle carry this page's token)
+const decideEl=document.getElementById('decide');
+if(decideEl){const reason=document.getElementById('opt-reason'),ok=decideEl.querySelector('[data-opt-act=approve]'),
+    syncOk=()=>{if(ok&&!ok.dataset.block)ok.disabled=decideEl.dataset.need==='1'&&!reason.value.trim()};
+  reason.addEventListener('input',syncOk);
+  decideEl.querySelectorAll('[data-opt-act]').forEach(b=>b.addEventListener('click',async()=>{const act=b.dataset.optAct,all=decideEl.querySelectorAll('[data-opt-act]');
+    if(act==='approve'&&!await ask(b.parentElement,'Write the draft into the skill folder? tokscope keeps the old version and commits only the skill\\'s files when it is in git.','Approve'))return;
+    busy(b,act==='approve'?'Approving…':'Rejecting…');all.forEach(x=>x.disabled=true);
+    try{await send(`/optimize/${decideEl.dataset.run}/${act}`,{reason:reason.value});location.reload()}
+    catch(err){showErr(err);all.forEach(x=>{x.disabled=!!x.dataset.block});idle(b);syncOk()}}))}
+// library: ask for the estimate of an optimize run, then for a confirm; the server starts the worker only after the confirm
+const startEl=document.getElementById('optstart');
+if(startEl){const est=document.getElementById('opt-est'),err=document.getElementById('optstart-err'),go=startEl.querySelector('button[type=submit]'),
+    fail=e=>{err.textContent=e.message;err.hidden=false};
+  const body=()=>({skill:startEl.dataset.skill,budget:+startEl.budget.value,runs:+startEl.runs.value,model:startEl.model.value.trim()});
+  startEl.addEventListener('input',()=>{est.hidden=true;est.replaceChildren();go.hidden=false});
+  startEl.addEventListener('submit',async e=>{e.preventDefault();err.hidden=true;busy(go,'Counting…');
+    try{const j=await send('/optimize/start',body());est.replaceChildren(...j.estimate.lines.map(t=>el('p','note',t)));
+      const ok=el('button','primary','Start the run');ok.type='button';est.append(ok);est.hidden=false;go.hidden=true;
+      ok.addEventListener('click',async()=>{busy(ok,'Starting…');
+        try{const r=await send('/optimize/start',{...body(),confirm:true});location.href=r.url}catch(x){fail(x);idle(ok)}})}
+    catch(x){fail(x)}finally{idle(go)}})}
 """
 
 MANAGED_JS = """

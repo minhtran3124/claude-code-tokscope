@@ -22,6 +22,7 @@ from ..theme.brand import FAVICON
 from ...core.ingest import connect, ingest
 from ..report.sections.sessions import _sessions_json
 from .common import Filters, PAGES
+from .pages import optimize as optpage
 from .pages.library import JOB_ID
 from .pages.overview import _days, _totals
 from .shell import render, skills_moved
@@ -141,6 +142,10 @@ def post(db, path, body, level):
             return 400, {"error": str(e)}
         except RuntimeError as e:
             return 502, {"error": str(e)}
+    if path == "optimize/start":
+        return optpage.start(db, body)
+    if m := re.match(r"^optimize/([A-Za-z0-9._-]+)/(approve|reject)$", path):  # the run-file flow; not the old api/optimize jobs
+        return optpage.decide(db, m.group(1), m.group(2), body)
     if path == "api/optimize":
         conn = connect(db)
         try:

@@ -5,6 +5,7 @@ import html
 import re
 import subprocess
 import time
+from collections import Counter
 from datetime import datetime
 from urllib.parse import urlencode
 
@@ -21,7 +22,26 @@ def _ste_counts(findings):
     return f'<span class="ste-n" title="STE check: {h} hard findings, {len(findings) - h} hints">STE {h} · {len(findings) - h} hints</span>'
 
 
-def _skill_card(k, used, lint=None, rng="", state=None):
+VERIFIED = {"verified": ("Verified", "ver ok", "The latest optimize approve of this skill is the version installed now."),
+            "edited": ("Edited after run", "ver warn", "An optimize run was approved, and the skill has changed since."),
+            "none": ("Not verified", "ver", "No optimize run was approved for this version of the skill.")}
+
+
+def _ver_badge(state, run=None, link=False):
+    label, cls, tip = VERIFIED[state]
+    if link and run:
+        return f'<a class="badge {cls}" href="/optimize?run={html.escape(run)}" title="{tip}">{label}</a>'
+    return f'<span class="badge {cls}" title="{tip}">{label}</span>'
+
+
+def _verified_map(conn, found):
+    """{skill id: (state, run id)}. Skills that share a folder name cannot be told apart in opt_applied, so an approve
+    reads as edited only for a name that one folder has."""
+    names = Counter(k["dir"] for k in library.discover(conn))   # every project, not the filtered list: opt_applied has no scope
+    return {k["id"]: library.verified(conn, k["dir"], k["folder"], names[k["dir"]] == 1) for k in found}
+
+
+def _skill_card(k, used, lint=None, rng="", state=None, ver=None):
     loads, last = used.get(k["id"], (0, None))
     findings = (lint or {}).get(k["folder"] / "SKILL.md")
     meta = (f"{loads:,} load{'s' * (loads != 1)}{rng}" + (f" · last {last[:10]}" if last else "")
@@ -35,6 +55,7 @@ def _skill_card(k, used, lint=None, rng="", state=None):
             "unused": (f"unused {library.IDLE_DAYS}+ days", f"Last load more than {library.IDLE_DAYS} days ago, whatever the range.")}.get(st)
     badge = f'<span class="badge flag" title="{idle[1]}">{idle[0]}</span>' if idle else ""
     badge += f'<span class="badge inst" title="{html.escape(k["reason"])}">installed</span>' if k["origin"] == "installed" else ""
+    badge += _ver_badge(*(ver or {}).get(k["id"], ("none", None)))
     hide = " hidden" if k["origin"] == "installed" else ""
     return (f'<a class="sk" href="/library?skill={k["id"]}" data-dir="{html.escape(k["dir"])}" data-origin="{k["origin"]}"{keys} '
             f'data-find="{html.escape((k["name"] + " " + k["description"]).lower())}"{hide}>'
@@ -42,7 +63,7 @@ def _skill_card(k, used, lint=None, rng="", state=None):
             f'<span class="meta">{meta}</span></a>')
 
 
-def _library_list(found, used, lint=None, lint_note="", project="", rng="", state=None):
+def _library_list(found, used, lint=None, lint_note="", project="", rng="", state=None, ver=None):
     if project and all(k["scope"] == "personal" for k in found):
         lint_note += " This project has no .claude/skills folder; your personal skills load in it."
     if not found:
@@ -65,7 +86,7 @@ def _library_list(found, used, lint=None, lint_note="", project="", rng="", stat
         title = "Personal · ~/.claude/skills" if scope == "personal" else f"Project · {scope}"
         groups.append(f'<section class="libgroup"><h2 class="sec">{html.escape(title)} <span class="note">{mine} yours'
                       f'{f", {len(ks) - mine} installed" if len(ks) > mine else ""}</span></h2>'
-                      f'<div class="libgrid">{"".join(_skill_card(k, used, lint, rng, state) for k in ks)}</div></section>')
+                      f'<div class="libgrid">{"".join(_skill_card(k, used, lint, rng, state, ver) for k in ks)}</div></section>')
     return (f'<p class="note">Skills you wrote, to read. Installed ones (npx skills, a lock file, an installer) are hidden; '
             f'<code>library.json</code> in the data folder corrects a wrong guess.{lint_note}</p>{finding}{tools}{"".join(groups)}'
             '<div class="empty" id="lib-none" hidden><b>No skill matches</b>Try another word.</div>')
@@ -364,6 +385,39 @@ def _job_view(k, job, linter, conn=None):
     return head + outcome + table + acts + '<p class="err" id="opt-err" hidden></p></section>' + diffs + bench_html + report + log + decide
 
 
+def _start_form(k):
+    """Start an evaluated optimize run (the Optimize page): the form asks for the estimate, then for a confirm. While a run of
+    the skill is going, a link to it replaces the form."""
+    from . import optimize as optpage  # not at the top: the Optimize page imports this module
+    if k["origin"] != "mine" or ":" in k["dir"]:
+        return ""
+    going = optpage.running_for(k["dir"])
+    if going:
+        return (f'<a class="outcome run" href="/optimize?run={html.escape(going)}"><b><span class="spin"></span>An optimize run of '
+                'this skill is going</b><span>See its progress on the Optimize page</span></a>')
+    return ('<section class="card" id="optstart-card"><h2 class="sec">Start an optimize run</h2>'
+            '<p class="note">Measures a draft against this skill on its approved eval suite (<code>tokscope optimize suite</code>). '
+            'You see the size and the cost first; nothing is spent until you confirm.</p>'
+            f'<form class="optform" id="optstart" data-skill="{k["id"]}"><div class="optrow">'
+            '<label>Spend at most $<input type="number" name="budget" value="2" min="0.1" step="0.1"></label>'
+            '<label>Runs per case <input type="number" name="runs" value="3" min="1" max="10" step="1"></label>'
+            '<label>Model <input name="model" value="sonnet" maxlength="64"></label>'
+            '<button type="submit" class="primary">Show the cost</button></div>'
+            '<div id="opt-est" hidden></div><p class="err" id="optstart-err" hidden></p></form></section>')
+
+
+def _approvals(conn, k):
+    """The versions of this skill an optimize run approved, each linked to its run (below the Versions card, which the
+    static report shares and must not link into the dashboard)."""
+    approved = library.approved_versions(conn, k["dir"])
+    if not approved:
+        return ""
+    live = skills.fingerprint(k["folder"])
+    items = "".join(f'<li><code>{html.escape(v)}</code> · <a href="/optimize?run={html.escape(r)}">{html.escape(r)}</a>'
+                    f'{" · installed now" if v == live else ""}</li>' for v, r in reversed(approved.items()))
+    return f'<section class="card" id="approvals"><h2 class="sec">Approved by an optimize run</h2><ul class="plain">{items}</ul></section>'
+
+
 def _library_skill(k, qs, used, conn, linter=None, found=(), back="/library", rng=""):
     listed = library.files(k["folder"])
     names = {rel for rel, _ in listed}
@@ -419,6 +473,9 @@ def _library_skill(k, qs, used, conn, linter=None, found=(), back="/library", rn
              ("Loads", f"{loads:,}{rng}" + (f", last {last[:10]}" if last else "")
               + (f' · <a href="#v-{html.escape(k["dir"])}">{tracked} tracked versions</a>' if tracked > 1  # only a changed skill has a card
                  else " · 1 tracked version" if tracked else ""))]
+    same = [x for x in library.discover(conn) if x["dir"] == k["dir"]]
+    state, run = library.verified(conn, k["dir"], k["folder"], len(same) == 1)
+    facts.append(("Optimize", _ver_badge(state, run, link=True)))
     desc = f'<p>{markdown.inline(k["description"])}</p>' if k["description"] else ""
     head = (f'<p><a href="{html.escape(back)}">← All skills</a></p>'
             f'<section class="card libhead"><h2 class="sec">{html.escape(k["name"])}</h2>{desc}'
@@ -435,8 +492,9 @@ def _library_skill(k, qs, used, conn, linter=None, found=(), back="/library", rn
     # a skill with one version and every load tracked has nothing to compare
     versions = (f'<section class="card" id="versions"><h2 class="sec">Versions</h2>{_skill_versions(conn, "full", skill=k["dir"])[1]}</section>'
                 if len(skills.versions(conn, k["dir"])) > 1 or skills.source_split(conn, k["dir"]) else "")
-    return (f'{head}{opt}<div class="libview"><nav class="card files" aria-label="Files">{tree}</nav>'
-            f'<article class="card viewer"><h3 class="path">{html.escape(rel)}</h3>{view}</article></div>{versions}')
+    return (f'{head}{_start_form(k)}{opt}<div class="libview"><nav class="card files" aria-label="Files">{tree}</nav>'
+            f'<article class="card viewer"><h3 class="path">{html.escape(rel)}</h3>{view}</article></div>{versions}'
+            f'{_approvals(conn, k)}')
 
 
 def page_library(conn, f, qs, level):
@@ -456,4 +514,5 @@ def page_library(conn, f, qs, level):
             lint = library.ste_lint(linter, [k["folder"] / "SKILL.md" for k in found])
         except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as e:
             note = f" The STE check failed: {html.escape(str(e))}"
-    return _library_list(found, used, lint, note, f.project, rng, library.idle(conn, found, f.project or None, f.now))
+    return _library_list(found, used, lint, note, f.project, rng, library.idle(conn, found, f.project or None, f.now),
+                         _verified_map(conn, found))

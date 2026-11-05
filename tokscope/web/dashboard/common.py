@@ -7,7 +7,7 @@ from ...features.changes import BENCH_PROJECT
 
 
 PAGES = {"overview": "Overview", "projects": "Projects", "sessions": "Sessions", "library": "Library",
-         "benchmarks": "Benchmarks", "breakdowns": "Breakdowns", "managed": "Managed"}
+         "benchmarks": "Benchmarks", "breakdowns": "Breakdowns", "managed": "Managed", "optimize": "Optimize"}
 RANGES = {"7": "Last 7 days", "30": "Last 30 days", "90": "Last 90 days", "all": "All time"}
 
 
