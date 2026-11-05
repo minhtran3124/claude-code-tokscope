@@ -1,6 +1,7 @@
 #!/bin/sh
 # One-step setup from a clone: link the CLI into ~/.local/bin and register the mod in Claude Code.
-# Safe to run again. Undo with: ./setup.sh --uninstall
+# It also keeps the dashboard server running in the background from login (systemd or launchd). Skip that with
+# --no-service or TOKSCOPE_NO_SERVICE=1. Safe to run again. Undo with: ./setup.sh --uninstall
 set -eu
 
 ROOT=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
@@ -44,7 +45,13 @@ print("mod: %s %s (backup: %s.bak)" % ("added to" if action == "add" else "remov
 PY
 }
 
+# the background service (tokscope service install|uninstall); best effort, never stops the setup
+service() {
+  "$ROOT/bin/tokscope" service "$1" --exe "$ROOT/bin/tokscope" --quote-exe
+}
+
 if [ "${1:-}" = "--uninstall" ]; then
+  service uninstall >/dev/null 2>&1 || true
   [ "$(readlink -f "$BIN_DIR/tokscope" 2>/dev/null)" = "$ROOT/bin/tokscope" ] && rm "$BIN_DIR/tokscope" && echo "cli: removed $BIN_DIR/tokscope"
   edit_settings remove
   echo "Your data stays in $ROOT/data. Delete it yourself if you want it gone."
@@ -55,6 +62,13 @@ mkdir -p "$BIN_DIR"
 ln -sfn "$ROOT/bin/tokscope" "$BIN_DIR/tokscope"
 echo "cli: linked $BIN_DIR/tokscope -> $ROOT/bin/tokscope"
 edit_settings add
+if [ "${1:-}" = "--no-service" ] || [ -n "${TOKSCOPE_NO_SERVICE:-}" ]; then
+  echo "service: skipped (turn it on with: tokscope service install)"
+elif service install >/dev/null 2>&1; then
+  echo "service: tokscope serve runs in the background from login (http://127.0.0.1:8770, stop it with: tokscope service uninstall)"
+else
+  echo "service: not started (needs systemd --user or launchd); run 'tokscope serve' by hand"
+fi
 
 "$BIN_DIR/tokscope" --version
 case ":$PATH:" in

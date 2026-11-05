@@ -53,8 +53,9 @@ tokscope --version
 
 `setup.sh` links `bin/tokscope` to `~/.local/bin/tokscope` and adds the clone's `mod/` folder to
 `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json` (it keeps `settings.json.bak`). It is safe to run again. Start a
-new Claude Code session to load the mod. `./setup.sh --uninstall` removes both. If you move the clone, run
-`./setup.sh` again.
+new Claude Code session to load the mod. It also starts the dashboard server in the background from every login
+(systemd on Linux, launchd on macOS) on `http://127.0.0.1:8770`; use `./setup.sh --no-service` to skip that.
+`./setup.sh --uninstall` removes all three. If you move the clone, run `./setup.sh` again.
 
 Without the script: `pipx install .` (or `uv tool install .`), then add the full path of `mod/` to
 `CLAUDE_CODE_PLUGIN_DIRS` yourself.
@@ -111,14 +112,11 @@ when they are missing.
    sudo apt install ./tokscope_0.2.0_amd64.deb
    ```
 
-3. Turn on the server once, as each user who uses the app:
-
-   ```sh
-   systemctl --user enable --now tokscope
-   ```
-
-   It is not turned on for every user, because then another user of a shared machine could reach your dashboard on
-   that port. Without the service, the window starts its own server on a free port and stops it on close.
+3. Open the app. The first time it runs, it turns the background server on for your user (no question), so the
+   server starts at every login. To turn it off: `systemctl --user disable --now tokscope`; the app does not turn
+   it on again. It is not turned on for every user of the machine, because then another user of a shared machine
+   could reach your dashboard on that port. Without the service, the window starts its own server on a free port and
+   stops it on close.
 4. Open **tokscope** from the app menu. To pin it, right-click its icon and choose **Add to Favorites**.
 5. Optional, the CLI in a terminal: `ln -s /opt/tokscope/resources/bin/tokscope ~/.local/bin/tokscope`.
 6. Optional, the Managed page: install the `ant` CLI on that machine and run `ant auth login`. The service finds
