@@ -463,7 +463,8 @@ def _decision_box(d):
 def _decide_section(conn, d):
     code, why, need = approve_check(d["run"])
     verdict = d["verdict"].get("verdict")
-    want = {f for f in (d["verdict"].get("base_fingerprint"), d["verdict"].get("draft_fingerprint")) if f}
+    want = {f for f in (d["verdict"].get("base_fingerprint"), d["verdict"].get("draft_fingerprint"),
+                        d["plan"].get("base_fingerprint")) if f}  # the same set decide() uses, so a run without a verdict still matches
     _, k, _ = owner_root(conn, d["plan"].get("skill"), want)
     approve = ""
     if verdict:

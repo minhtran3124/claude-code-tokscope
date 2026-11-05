@@ -460,6 +460,10 @@ class DecideMarkupTest(Fixture):
         path.write_text(json.dumps({**json.loads(path.read_text()), "draft_version": None, "draft_fingerprint": None}))
         self.assertIn("Approve is off: no draft to apply", self.body(APPLY_RUN))
 
+    def test_no_verdict_still_finds_the_installed_skill_by_the_plan_fingerprint(self):
+        (self.run_dir(REJECT_RUN) / "verdict.json").unlink()
+        self.assertNotIn("Approve will refuse", self.body(REJECT_RUN))
+
     def test_an_approved_run_shows_the_decision_and_approve_off(self):
         server.post(self.db, f"optimize/{APPLY_RUN}/approve", {"reason": "ok"}, "full")
         body = self.body(APPLY_RUN)
