@@ -254,8 +254,13 @@ def verified(conn, skill, folder, unique=True):
 
 
 def approved_versions(conn, skill):
-    """{version: run id} of every approve in `opt_applied` for the skill (the newest run wins for a version)."""
+    """{version: run id} of every approve in `opt_applied` for the skill, oldest approve first: a version approved again
+    (after a revert) moves to the end, and the newest run wins for it."""
     if not _has_table(conn, "opt_applied"):
         return {}
-    return {v: r for r, v in conn.execute("SELECT run_id, new_version FROM opt_applied WHERE skill = ? AND action = 'approve' "
-                                           "ORDER BY at", (skill,))}
+    out = {}
+    for r, v in conn.execute("SELECT run_id, new_version FROM opt_applied WHERE skill = ? AND action = 'approve' "
+                             "ORDER BY at", (skill,)):
+        out.pop(v, None)
+        out[v] = r
+    return out

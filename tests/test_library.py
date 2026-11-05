@@ -337,6 +337,15 @@ class VerifiedTest(unittest.TestCase):
         self.row("r3", "reject", "v-c", "2026-01-03T00:00:00+00:00")
         self.assertEqual(library.approved_versions(self.conn, "demo"), {"v-a": "r1", "v-b": "r2"})
 
+    def test_approved_versions_order_by_latest_approve(self):
+        self.table()
+        self.row("r1", "approve", "v-a", "2026-01-01T00:00:00+00:00")
+        self.row("r2", "approve", "v-b", "2026-01-02T00:00:00+00:00")
+        self.row("r3", "revert", "v-a", "2026-01-03T00:00:00+00:00")
+        self.row("r4", "approve", "v-a", "2026-01-04T00:00:00+00:00")
+        got = library.approved_versions(self.conn, "demo")
+        self.assertEqual(list(got.items()), [("v-b", "r2"), ("v-a", "r4")])
+
 
 if __name__ == "__main__":
     unittest.main()
