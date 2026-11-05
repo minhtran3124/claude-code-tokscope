@@ -9,15 +9,16 @@ updated_by: claude   # claude | manual
 # claude-code-tokscope — Status
 
 ## Summary
-Milestone 1 is closed. Milestone 2 "Skill Optimize v2" (#187-#195, epic #196): #187-#189 and #191 are in `main` and closed (4 of 9); #190 (approve, reject, revert), #194 (trigger gate) and #192 (`/optimize` page, Library Start and badges) are merged into the integration branch `feat/skill-optimize-v2-b` (PRs #206, #207, #210), which now also has `main`'s dashboard redesign; #193 and #195 are not started.
+Milestone 1 is closed. Milestone 2 "Skill Optimize v2" (#187-#195, epic #196): #187-#189 and #191 are in `main` and closed (4 of 9); #190 (approve, reject, revert), #194 (trigger gate) and #192 (`/optimize` page, Library Start and badges) are merged into the integration branch `feat/skill-optimize-v2-b` (PRs #206, #207, #210), which now also has `main`'s dashboard redesign; #195 (real-session numbers on an approved run) is implemented on `feat/skill-optimize-v2-b-195`; #193 is not started.
 
 ## Next step
-Implement #193 and #195 on `feat/skill-optimize-v2-b`, then open the final PR into `main`.
+Merge #195, implement #193 on `feat/skill-optimize-v2-b`, then open the final PR into `main`.
 
 ## Blockers
 - macOS app (#144-#148) cannot be verified without a Mac.
 
 ## Recent
+- 2026-11-05: #195: `features/postship.py` and a Real sessions card on an approved run page (old and new version: loads, median tokens and cost per load, error rate; note under 5 loads); UAT in `docs/uat/195-*`. PR #218 review fixes: bench sessions left out of loads, errors and medians again; a turn with several loads counts once per side; card note and UAT screenshots updated.
 - 2026-11-05: Dashboard redesign (direction B) in steps; #209, #211-#215 merged. Step 8: Classic skin retired (Design button, Settings row, `s` key, classic.py removed; DECISIONS.md updated). The static report still renders without errors. Owner asked for auto merge: each PR is merged after green CI and review. Follow-up: light theme checked on all 8 pages (no fixes needed); unused `_cache_finding` removed, its 7-day test now covers the Needs a look item. #192 merged into `feat/skill-optimize-v2-b` (PR #210): Optimize dashboard page (`/optimize`: runs, gates, cases with evidence, editor rounds, before/after, per-arm CI), Approve and Reject routes over `skillopt/apply.py`, start-from-Library with a no-spend estimate then the CLI worker, Verified / Edited after run / Not verified in Library; PR #210 review fixes: pid-reuse check uses a 10 s clock slack and, without /proc, ps etime then a 24 h lock-age bound; UAT found and fixed a page-script syntax error and a hidden Before and after card; AC5 screenshots in `docs/uat/210-*`; PRODUCT.md and README.md describe `/optimize`. Merged `main` (the redesign) into `feat/skill-optimize-v2-b`: Optimize sits in the sidebar's Workspace group, screenshots in `docs/uat/merge-main-*`.
 - 2026-11-04: #190 merged into the feat branch (PR #206): `tokscope optimize approve|reject|revert` (`skillopt/apply.py`) installs the measured draft per file, commits only the skill's files in git, keeps a snapshot, records `opt_applied`, a `changes` row and `decision.json`, and rolls back or finishes an interrupted apply from `apply.json`.
 - 2026-11-04: #194 merged into the feat branch (PR #207): description changes are gated by a trigger eval with a frozen trigger set; a budget stop saves a partial state that resumes.
