@@ -7,6 +7,7 @@ import re
 import secrets
 import sqlite3
 import subprocess
+import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -268,10 +269,20 @@ def handler(db, live, port, level, token=None):
     return Handler
 
 
+class QuietServer(ThreadingHTTPServer):
+    """A browser that reloads or closes a tab while a page is being written drops the connection: that is not an error
+    of the dashboard, so it prints nothing. Every other error in a request is printed as usual."""
+
+    def handle_error(self, request, client_address):
+        if isinstance(sys.exc_info()[1], (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)):
+            return
+        super().handle_error(request, client_address)
+
+
 def serve(db, phases, port=8765, interval=10.0, open_browser=True, level="full", log=print, projects_dir=None):
     live = Live(db, phases, interval, projects_dir)
     live.tick()  # start from fresh data
-    server = ThreadingHTTPServer(("127.0.0.1", port), BaseHTTPRequestHandler)
+    server = QuietServer(("127.0.0.1", port), BaseHTTPRequestHandler)
     port = server.server_address[1]  # the real one when asked for port 0
     server.RequestHandlerClass = handler(db, live, port, level)
     threading.Thread(target=live.run, daemon=True).start()
