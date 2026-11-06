@@ -147,6 +147,8 @@ html.settled [data-region] :is(.hero,.kpi,.empty,.bar i u){animation:none}
 #session-list .srow.picked[open],#session-list .srow.picked[open]:hover{background:color-mix(in oklch,var(--mark) 12%,var(--tint));box-shadow:inset 6px 0 0 var(--mark),inset 0 1px 0 var(--edge),inset 0 -1px 0 var(--edge)}
 #session-list .btn.kids-more{margin:6px 10px 6px calc(34px + var(--depth)*20px)}
 #sessions .tools .seg{flex:none}
+#sessions .tools input[type=search]{min-width:min(340px,100%)}
+#sessions .tools select{flex:none;max-width:12rem}
 #sessions .seg .chip{transition:color var(--t-state) var(--ease),background var(--t-state) var(--ease),border-color var(--t-state) var(--ease)}
 /* the compare tray rises when a second session is ticked (travel is dropped under reduced motion, the fade stays) */
 #sessions .pickbar{position:fixed;left:0;right:0;bottom:20px;z-index:30;width:min(520px,calc(100vw - 24px));margin:0 auto;animation:none;
