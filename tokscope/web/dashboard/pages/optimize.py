@@ -382,7 +382,7 @@ def _state(s):
 
 
 RELATIVE_DAYS = 7  # a run older than this shows its date, not "N d ago"
-FILTERS = (("needs", "Needs decision"), ("noaction", "No action"), ("decided", "Decided"))
+FILTERS = (("needs", "Needs decision"), ("running", "Running"), ("noaction", "No action"), ("decided", "Decided"))
 _BUCKETS = (("needs", "Needs your decision"), ("running", "Running"), ("noaction", "No action needed"), ("decided", "Decided"))
 
 
@@ -466,7 +466,8 @@ def _filter(qs, found):
 
 
 def _chips_row(found, flt, skill):
-    counts = {k: sum(1 for r in found if r["bucket"] == k) for k, _ in FILTERS}
+    scoped = [r for r in found if not skill or r["skill"] == skill]  # a count is what the chip shows with the skill chosen
+    counts = {k: sum(1 for r in scoped if r["bucket"] == k) for k, _ in FILTERS}
     out = []
     for key, name in FILTERS:
         on = flt == key

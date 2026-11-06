@@ -372,6 +372,19 @@ class RenderTest(Fixture):
         self.assertEqual(self.render("filter=bogus&skill=nope").count('class="ol-row"'), 3)
         self.assertEqual(self.render("skill=demo").count('class="ol-row"'), 3)
 
+    def test_running_has_a_chip_and_chip_counts_follow_the_skill_filter(self):
+        row = {"decided": None, "decided_at": None, "label": "", "result": "", "spent": 0, "budget": 2,
+               "created": "2026-01-04T00:00:00+00:00"}
+        found = [dict(row, id="a-1", skill="a", state="running", bucket="running"),
+                 dict(row, id="b-1", skill="b", state="done", bucket="needs"),
+                 dict(row, id="b-2", skill="b", state="done", bucket="needs")]
+        self.assertIn("filter=running", page._runs_list(found))
+        only_a = page._runs_list(found, qs={"skill": ["a"]})
+        self.assertIn("Needs decision <b>0</b>", only_a)
+        self.assertIn("Running <b>1</b>", only_a)
+        self.assertIn("Needs decision <b>2</b>", page._runs_list(found))
+        self.assertIn('class="ol-row"', page._runs_list(found, qs={"filter": ["running"]}))
+
     def test_skill_chip_limits_the_groups(self):
         self.make_run("other-20260104T000000Z", stats.APPLY, "2026-01-04T00:00:00+00:00", skill="other")
         both = self.render()
