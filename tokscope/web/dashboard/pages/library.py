@@ -198,6 +198,32 @@ def _can_run(k):
     return k["origin"] == "mine" and ":" not in k["dir"]
 
 
+def _suite_card(k):
+    """"" when the skill has a suite that passes its checks; else a card that says in plain words what is missing and offers
+    to draft it in the background (one paid call, capped). The draft is only copied to evals.json after the owner approves."""
+    from ....experiments.skillopt import suite, suite_gen
+    from . import optimize as optpage
+    root = optpage.project_root(k)
+    try:
+        problems = suite.load(k["dir"], str(root)).problems
+        raw = "; ".join(problems)
+    except ValueError as e:
+        problems, raw = [str(e)], str(e)
+    if not problems:
+        return ""
+    what, todo = suite_gen.friendly(raw)
+    state = optpage.suitegen_status(k["dir"])["state"]
+    return ('<section class="card" id="optstart-card"><h2 class="sec">Eval suite needed</h2>'
+            f'<p class="note"><b>{html.escape(what)}</b> {html.escape(todo)}</p>'
+            f'<details class="sgraw"><summary>Technical details</summary><code>{html.escape(raw)}</code></details>'
+            f'<form class="optform" id="suitegen" data-skill="{k["id"]}" data-state="{state}"><div class="optrow">'
+            '<label>Spend at most $<input type="number" name="budget" value="1" min="0.1" max="10" step="0.1"></label>'
+            '<label>Model <input name="model" value="sonnet" maxlength="64"></label>'
+            '<button type="submit" class="primary">Generate eval suite</button></div>'
+            '<div id="sg-state" class="note" role="status" hidden></div>'
+            '<p class="err" id="sg-err" hidden></p></form></section>')
+
+
 def _start_form(k):
     """Start an evaluated optimize run (the Optimize page): the form asks for the estimate, then for a confirm. While a run of
     the skill is going, a link to it replaces the form."""
@@ -208,6 +234,8 @@ def _start_form(k):
     if going:
         return (f'<a class="outcome run" href="/optimize?run={html.escape(going)}"><b><span class="spin"></span>An optimize run of '
                 'this skill is going</b><span>See its progress on the Optimize page</span></a>')
+    if gate := _suite_card(k):
+        return gate
     return ('<section class="card" id="optstart-card"><h2 class="sec">Run optimize</h2>'
             '<p class="note">Measures a draft against this skill on its approved eval suite (<code>tokscope optimize suite</code>). '
             'You see the size and the cost first; nothing is spent until you confirm.</p>'

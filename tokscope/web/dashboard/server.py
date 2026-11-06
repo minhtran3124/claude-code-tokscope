@@ -155,6 +155,12 @@ def post(db, path, body, level):
             return 502, {"error": str(e)}
     if path == "optimize/start":
         return optpage.start(db, body)
+    if path == "optimize/suite/generate":
+        return optpage.suitegen_start(db, body)
+    if path == "optimize/suite/status":
+        return optpage.suitegen_state(db, body)
+    if path == "optimize/suite/approve":
+        return optpage.suitegen_approve(db, body)
     if m := re.match(r"^optimize/([A-Za-z0-9._-]+)/(approve|reject)$", path):
         return optpage.decide(db, m.group(1), m.group(2), body)
     return 404, {"error": "unknown endpoint"}

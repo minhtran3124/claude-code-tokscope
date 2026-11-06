@@ -806,6 +806,35 @@ class LibraryTest(Fixture):
         self.assertIn('name="model" value="sonnet"', body)
         self.assertNotIn('id="optimize-panel"', body)
 
+    def test_a_missing_suite_shows_plain_words_and_the_generate_button(self):
+        (self.folder / "evals" / "evals.json").unlink(missing_ok=True)
+        body = self.page()
+        self.assertIn('id="optstart-card"', body)
+        self.assertIn("This skill has no eval suite yet.", body)
+        self.assertIn("Technical details", body)
+        self.assertIn('id="suitegen"', body)
+        self.assertNotIn('id="optstart"', body)
+
+    def test_a_suite_without_machine_checks_says_so(self):
+        write(self.folder / "evals" / "evals.json", json.dumps({"evals": [{"id": "a", "prompt": "p"}]}))
+        body = self.page()
+        self.assertIn("no machine checks, so a run cannot be graded", body)
+        self.assertNotIn('id="optstart"', body)
+
+    def test_generate_needs_a_skill_of_yours_and_a_sane_budget(self):
+        self.assertEqual(server.post(self.db, "optimize/suite/generate", {"skill": "nope"}, "full")[0], 400)
+        code, out = server.post(self.db, "optimize/suite/generate", {"skill": self.skill_id(), "budget": 99}, "full")
+        self.assertEqual(code, 400)
+        self.assertIn("budget", out["error"])
+        self.assertEqual(server.post(self.db, "optimize/suite/generate", {}, "read")[0], 403)
+
+    def test_status_is_none_before_any_draft_and_approve_refuses_without_one(self):
+        self.assertEqual(server.post(self.db, "optimize/suite/status", {"skill": self.skill_id()}, "full")[1]["state"], "none")
+        (self.folder / "evals" / "evals.json").unlink(missing_ok=True)
+        code, out = server.post(self.db, "optimize/suite/approve", {"skill": self.skill_id()}, "full")
+        self.assertEqual(code, 400)
+        self.assertIn("error", out)
+
     def test_a_running_run_replaces_the_form_with_a_link(self):
         (self.run_dir() / "verdict.json").unlink()
         (self.run_dir() / "run.lock").write_text(str(os.getpid()))
