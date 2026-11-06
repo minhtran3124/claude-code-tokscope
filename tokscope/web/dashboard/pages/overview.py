@@ -11,7 +11,7 @@ from ....features.changes import list_changes
 from ....core.pricing import API_EQ_NOTE, unpriced, unpriced_text
 from ...report.common import TOKENS
 from ...report.sections.cost_check import cost_check
-from ...report.widgets import _start_line, _table, _tok, _usd
+from ...report.widgets import _start_line, _table, _tok, _usd, _usd_tile
 from ..common import Filters, _iso, _q
 
 
@@ -131,7 +131,7 @@ def _kpis(conn, f):
     before_rows = _day_rows(conn, f, 1) if cmp else []
     per_day = lambda rs, i, n: sum(r[i] or 0 for r in rs) / n  # noqa: E731
     tiles = [("tokens", "Tokens", now[0] or 0, _tok(now[0]), "tok", 1, col(1)),
-             ("usd", "API-eq", round(now[1] or 0, 2), _usd(now[1]), "usd", 2, col(2)),
+             ("usd", "API-eq", round(now[1] or 0, 2), _usd_tile(now[1]), "usd", 2, col(2)),
              ("sessions", "Sessions", now[2] or 0, f"{now[2] or 0:,}", "int", 3, col(3)),
              ("output", "Output tokens", now[3] or 0, _tok(now[3]), "tok", 4, col(4)),
              ("runs", "Subagent runs", now[4] or 0, f"{now[4] or 0:,}", "int", 5, col(5)),
@@ -254,7 +254,7 @@ def _today(conn, f):
         f"GROUP BY session_id ORDER BY 3 DESC LIMIT 1", params).fetchone()
     nums = (f'<div class="today-nums"><div><span>Tokens today</span><b data-count="{tokens or 0}" data-kind="tok" data-key="today-tokens">'
             f'{_tok(tokens)}</b></div><div><span>API-eq today</span><b data-count="{round(usd or 0, 2)}" data-kind="usd" '
-            f'data-key="today-usd">{_usd(usd)}</b></div><div><span>Sessions today</span><b data-count="{n or 0}" data-kind="int" '
+            f'data-key="today-usd">{_usd_tile(usd)}</b></div><div><span>Sessions today</span><b data-count="{n or 0}" data-kind="int" '
             f'data-key="today-sessions">{n or 0}</b></div></div>')
     # is today normal? today's running total against the typical day at the same local time
     hours, clock = _hours(conn, f), tz.now()

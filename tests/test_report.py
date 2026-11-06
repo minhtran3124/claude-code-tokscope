@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from tokscope.web import charts
+from tokscope.web.report.widgets import _usd_tile
 from tokscope.core.ingest import connect
 from tokscope.core.ingest import CARRIED
 from tokscope.web.report.sections.breakdowns import _breakdowns, _week_skills, _weekly_phases
@@ -211,3 +212,9 @@ class TimeZoneSettingTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UsdTileTest(unittest.TestCase):
+    def test_a_tile_drops_cents_from_1000_and_uses_k_from_10000(self):
+        self.assertEqual([_usd_tile(v) for v in (None, 0, 999.5, 1000, 2631.01, 9999.9, 12631)],
+                         ["–", "$0.00", "$999.50", "$1,000", "$2,631", "$10,000", "$12.6K"])

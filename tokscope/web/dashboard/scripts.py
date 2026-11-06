@@ -221,7 +221,7 @@ function fresh(ok){freshEl.classList.toggle('stale',!ok||!!ingestErr);document.b
 const CHIP_MS=2000,CHIP_OUT_MS=140;
 function deltaChip(el,from){const to=+el.dataset.count,d=to-from;if(!d)return;
   const f={int:v=>Math.round(v).toLocaleString('en-US'),tok:fmt,pct:v=>Math.round(v)+'%',
-    usd:v=>'$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}[el.dataset.kind]||fmt;
+    usd:v=>v>=1e4?'$'+(v/1e3).toFixed(1)+'K':'$'+v.toLocaleString('en-US',v>=1e3?{maximumFractionDigits:0}:{minimumFractionDigits:2,maximumFractionDigits:2})}[el.dataset.kind]||fmt;
   const host=el.closest('.kpi,.today-nums>div');if(!host)return;host.querySelectorAll('.dchip').forEach(c=>c.remove());
   const c=document.createElement('small');c.className='dchip';c.textContent=(d>0?'+':'\u2212')+f(Math.abs(d));
   c.setAttribute('aria-hidden','true');(el.closest('.today-nums')?el.after(c):host.append(c));

@@ -17,7 +17,7 @@ function toast(msg){toastEl.textContent=msg;toastEl.classList.add('on');clearTim
 // a restart keeps the first exact text and stops the older run, so reopening a session mid-count is safe
 function countUp(el,delay,dur=1200){const end=el.dataset.end??(el.dataset.end=el.textContent),raw=+el.dataset.count;if(!raw||!smoothOk())return;
   const f={int:v=>Math.round(v).toLocaleString('en-US'),tok:fmt,pct:v=>Math.round(v)+'%',
-    usd:v=>'$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}[el.dataset.kind]||fmt;
+    usd:v=>v>=1e4?'$'+(v/1e3).toFixed(1)+'K':'$'+v.toLocaleString('en-US',v>=1e3?{maximumFractionDigits:0}:{minimumFractionDigits:2,maximumFractionDigits:2})}[el.dataset.kind]||fmt;
   const run=el._run=(el._run||0)+1;
   el.textContent=f(0);setTimeout(()=>{const t0=performance.now();const step=now=>{if(el._run!==run)return;const p=Math.min(1,Math.max(0,(now-t0)/dur));
     el.textContent=p<1?f(raw*(1-Math.pow(1-p,4))):end;if(p<1)requestAnimationFrame(step)};requestAnimationFrame(step)},delay)}
