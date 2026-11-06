@@ -11,25 +11,55 @@ from ...report.widgets import _start_line, _tok, _usd
 from .overview import start_detail
 
 
-def _project_card(g):
-    mcp = projects.servers(g, (projects.last_health(g["root"]) or (0, None))[1]) if g["root"] else []
-    unused = sum(e["flag"] == "never used here" for e in mcp)
-    meta = (f"{g['sessions']:,} sessions · last {(g['last'] or '')[:10]}"
-            + (f" · {len(g['folders'])} folders" if len(g["folders"]) > 1 else "")
-            + (f" · starts ~{_tok(g['base']['median'])}" if g.get("base") else "")
-            + (f" · MCP {len(mcp)}" + (f", {unused} never used" if unused else "") if mcp else ""))
-    return (f'<a class="sk" href="/projects?p={g["id"]}"><b>{html.escape(g["name"])}</b><p>{html.escape(g["path"])}</p>'
-            f'<span class="pnums"><span><b>{_tok(g["recent"])}</b> last 30 days</span><span><b>{_tok(g["tokens"])}</b> all time</span>'
-            f'<span><b>{_usd(g["usd"])}</b> API-eq</span></span><span class="meta">{meta}</span></a>')
+def _mcp_of(g):
+    return projects.servers(g, (projects.last_health(g["root"]) or (0, None))[1]) if g["root"] else []
+
+
+def _project_row(g, mcp, idle):
+    href = f"/projects?p={g['id']}"
+    where = f'<div class="note mono">{html.escape(g["path"])}</div>' if g["path"] else ""
+    pills = "".join(f'<span class="pill">{html.escape(e["name"])}</span> ' for e in mcp[:3])
+    pills += f'<span class="note">+{len(mcp) - 3}</span>' if len(mcp) > 3 else ""
+    base = g.get("base")
+    start = f'<span class="{"up" if idle else ""}">{_tok(base["median"])}</span>' if base else '<span class="note">–</span>'
+    return (f'<tr><td data-label="Project"><a href="{href}"><b>{html.escape(g["name"])}</b></a>{where}</td>'
+            f'<td data-label="Sessions">{g["sessions"]:,}</td><td data-label="Tokens">{_tok(g["tokens"])}</td>'
+            f'<td data-label="API-eq">{_usd(g["usd"])}</td><td data-label="Session start">{start}</td>'
+            f'<td class="l" data-label="MCP servers">{pills or "<span class=note>none</span>"}</td>'
+            f'<td class="go"><a href="{href}" aria-label="Open {html.escape(g["name"])}">›</a></td></tr>')
+
+
+def _projects_rail(found, mcp, idle):
+    looks = [(g, idle[g["id"]]) for g in found if g["id"] in idle and g.get("base")]
+    attn = "".join(f'<li><span class="k">{n:02d}</span><div><a href="/projects?p={g["id"]}">{html.escape(g["name"])} starts at '
+                   f'{_tok(g["base"]["median"])}</a><div class="note">{i[0]} unused MCP server{"s" * (i[0] != 1)} add ~{_tok(i[1])} '
+                   f'before the first prompt</div></div></li>' for n, (g, i) in enumerate(looks[:3], 1))
+    card = (f'<section class="card attention"><h2>Needs a look ({len(looks[:3])})</h2><ol class="plain attn">{attn}</ol></section>' if looks else
+            '<section class="card attention"><h2>Needs a look</h2><p class="note">Nothing needs a look.</p></section>')
+    starts = sorted((g for g in found if g.get("base")), key=lambda g: -g["base"]["median"])
+    if not starts:
+        return card
+    top = starts[0]["base"]["median"] or 1
+    bars = "".join(f'<div class="lim"><div class="l"><span>{html.escape(g["name"])}</span><span>{_tok(g["base"]["median"])}</span></div>'
+                   f'<div class="bar"><u style="width:{max(2, round(100 * g["base"]["median"] / top))}%;background:'
+                   f'{"var(--fail)" if g["id"] in idle else "var(--mark)"}"></u></div></div>' for g in starts[:6])
+    return card + f'<section class="card"><h2>Session start, by project</h2>{bars}</section>'
 
 
 def _projects_list(found):
     if not found:
         return '<div class="empty"><b>No projects yet</b>Run <code>tokscope ingest</code> after a Claude Code session.</div>'
     real = [g for g in found if g["root"]]
-    return (f'<p class="note">{len(real)} projects from your sessions. Worktrees, eval copies and subfolders count with the repository '
+    mcp = {g["id"]: _mcp_of(g) for g in found}
+    idle = {g["id"]: x for g in found if (x := projects.idle_cost(g, mcp[g["id"]]))}
+    rows = "".join(_project_row(g, mcp[g["id"]], g["id"] in idle) for g in found)
+    table = ('<section class="card flat"><div class="scroll"><table class="t plist"><thead><tr><th>Project</th><th>Sessions</th>'
+             '<th title="All time">Tokens</th><th>API-eq</th><th>Session start</th><th>MCP servers</th><th></th></tr></thead>'
+             f'<tbody>{rows}</tbody></table></div></section>')
+    return (f'<p class="sub">{len(real)} projects from your sessions. Worktrees, eval copies and subfolders count with the repository '
             'they belong to; benchmark runs are left out.</p>'
-            f'<div class="libgrid">{"".join(_project_card(g) for g in found)}</div>')
+            f'<div class="pgrid"><div class="pmain">{table}</div><aside class="prail" aria-label="Project start sizes">'
+            f'{_projects_rail(found, mcp, idle)}</aside></div>')
 
 
 def _project_view(g):

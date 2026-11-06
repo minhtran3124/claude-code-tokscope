@@ -285,7 +285,7 @@ class BaselineProjectTest(ProjectsTest):
         page = dashboard.page_projects(self.conn, f, {"p": [self.app_group()["id"]]}, "full")
         self.assertIn("Every new session starts at ~1.0K tokens", page)
         self.assertIn("median of 4 sessions", page)
-        self.assertIn("starts ~1.0K", dashboard.page_projects(self.conn, f, {}, "full"))
+        self.assertIn("<span class=\"\">1.0K</span>", dashboard.page_projects(self.conn, f, {}, "full"))
 
 
 if __name__ == "__main__":
