@@ -276,7 +276,12 @@ class SentenceTest(unittest.TestCase):
         self.assertEqual(page.page_verdict(stats.REJECT, ok), "Do not apply")
         self.assertEqual(page.page_verdict(stats.REJECT, bad), "Do not apply")
         self.assertEqual(page.page_verdict(stats.APPLY, bad), "Do not apply")
+        self.assertEqual(page.page_verdict(stats.NOT_ENOUGH, bad), stats.NOT_ENOUGH)  # Benefit failed stores Not enough evidence
         self.assertIsNone(page.page_verdict(None, bad))
+
+    def test_chips_survive_a_stored_passed_that_is_not_a_bool(self):
+        html = page._chips([{"name": "Valid", "passed": []}, {"name": "Safety", "passed": False}, {"name": "x", "passed": {}}])
+        self.assertLess(html.index("Safety"), html.index("Valid"))
 
     def test_headline_numbers_take_the_confirm_arms(self):
         n = page.headline_numbers(self.ARMS)

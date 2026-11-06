@@ -263,11 +263,14 @@ DO_NOT_APPLY = "Do not apply"
 
 
 def page_verdict(verdict, gates):
-    """The label the page shows for a stored verdict: a Reject or any failed gate reads "Do not apply" (the stored value
-    stays Reject); Apply and Not enough evidence read as stored. None when there is no verdict."""
+    """The label the page shows for a stored verdict: a Reject, or an Apply with a failed gate, reads "Do not apply" (the
+    stored value stays as it is); Not enough evidence reads as stored even with a failed gate, because the verdict code
+    stores it for a failed Valid, Meaningful suite or Benefit gate and Approve stays possible with a reason. None when
+    there is no verdict."""
     if not verdict:
         return None
-    if verdict == stats.REJECT or any(isinstance(g, dict) and g.get("passed") is False for g in gates or []):
+    failed = any(isinstance(g, dict) and g.get("passed") is False for g in gates or [])
+    if verdict == stats.REJECT or (failed and verdict == stats.APPLY):
         return DO_NOT_APPLY
     return str(verdict)
 
@@ -707,8 +710,7 @@ def _tiles(numbers):
 
 def _chips(gates):
     """One chip per gate, failed first, then not run, then passed."""
-    order = {False: 0, None: 1, True: 2}
-    ranked = sorted(gates, key=lambda g: order.get(g.get("passed"), 1))
+    ranked = sorted(gates, key=lambda g: {False: 0, True: 2}.get(g.get("passed"), 1) if isinstance(g.get("passed"), bool) else 1)
     return ('<ul class="gchips" aria-label="Gates">' + "".join(
         f'<li class="gchip {"bad" if g.get("passed") is False else "ok" if g.get("passed") else "off"}">'
         f'{"✕" if g.get("passed") is False else "✓" if g.get("passed") else "–"} {_e(g.get("name"))}</li>' for g in ranked)
