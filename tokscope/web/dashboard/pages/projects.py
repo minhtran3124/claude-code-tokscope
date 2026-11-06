@@ -29,7 +29,7 @@ def _project_row(g, mcp, idle):
             f'<td class="go"><a href="{href}" aria-label="Open {html.escape(g["name"])}">›</a></td></tr>')
 
 
-def _projects_rail(found, mcp, idle):
+def _projects_rail(found, idle):
     looks = [(g, idle[g["id"]]) for g in found if g["id"] in idle and g.get("base")]
     attn = "".join(f'<li><span class="k">{n:02d}</span><div><a href="/projects?p={g["id"]}">{html.escape(g["name"])} starts at '
                    f'{_tok(g["base"]["median"])}</a><div class="note">{i[0]} unused MCP server{"s" * (i[0] != 1)} add ~{_tok(i[1])} '
@@ -59,7 +59,7 @@ def _projects_list(found):
     return (f'<p class="sub">{len(real)} projects from your sessions. Worktrees, eval copies and subfolders count with the repository '
             'they belong to; benchmark runs are left out.</p>'
             f'<div class="pgrid"><div class="pmain">{table}</div><aside class="prail" aria-label="Project start sizes">'
-            f'{_projects_rail(found, mcp, idle)}</aside></div>')
+            f'{_projects_rail(found, idle)}</aside></div>')
 
 
 def _project_view(g):
