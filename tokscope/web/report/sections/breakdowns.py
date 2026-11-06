@@ -65,7 +65,8 @@ def _errors_section(conn, cond, params):
         "interrupts = the person pressed Esc; API errors and retries are the model call failing. Calls are counted where "
         "the skill or subagent made them",
         (charts.share_bar([(k.replace("_", " "), n) for k, n in kinds], "failed calls") if kinds else "") + "".join(tables),
-        "errors", total["errors"] / total["calls"])
+        "errors", None if not total["errors"] else total["errors"] / total["calls"],
+        pill=("ok", "ok") if not total["errors"] else None)
 
 
 HINTS = {
@@ -118,7 +119,7 @@ def _cache_section(conn, cond, params):
         "price (1.25x input for 5 minutes, 2x for 1 hour). A likely miss is a request whose cache_read fell below half of the "
         "request before it in the same thread while it wrote at least 2K tokens, with no /compact between; the cause comes from "
         "the idle gap, so it is a heuristic, not what Claude Code reported",
-        why + official + "".join(tables), "cache", t["hit_ratio"])
+        why + official + "".join(tables), "cache", pill=("warn", f"{t['misses']:,} miss{'es' * (t['misses'] != 1)} likely") if misses else ("ok", "ok"))
 
 
 def _est(text):
@@ -165,7 +166,23 @@ def _context_section(conn, cond, params):
         "Context", finding,
         html.escape(context.METHOD) + ". Peak input = input + cache read + cache write of the fullest request; "
         "the window is 200K, or 1M once a request passed 200K. Filtered like the rest of the page",
-        ("".join(f"<p class='finding'>{html.escape(n)}</p>" for n in notes)) + "".join(tables), "context")
+        ("".join(f"<p class='finding'>{html.escape(n)}</p>" for n in notes)) + "".join(tables), "context",
+        pill=("ok", "ok") if not compacts else ("warn", f"{compacts:,} compaction{'s' * (compacts != 1)}"))
+
+
+def token_split(conn, cond, params):
+    """Dashboard rail card: the main thread's and the subagents' share of all tokens, as one two-colour bar."""
+    main, agents = conn.execute(
+        f"SELECT sum(CASE WHEN agent_id IS NULL THEN {TOKENS} ELSE 0 END), sum(CASE WHEN agent_id IS NOT NULL THEN {TOKENS} ELSE 0 END) "
+        f"FROM requests r JOIN sessions s USING (session_id) {cond}", params).fetchone()
+    main, agents = main or 0, agents or 0
+    if not main + agents:
+        return ""
+    pm, pa = main / (main + agents), agents / (main + agents)
+    return (f'<section class="card"><h2>Share of all tokens</h2><div class="split" role="img" '
+            f'aria-label="Main thread {_pc(pm, True)}, subagents {_pc(pa, True)}"><u style="width:{pm * 100:.1f}%"></u>'
+            f'<u class="a" style="width:{pa * 100:.1f}%"></u></div><div class="legend"><span class="key"><i></i>Main thread {_pc(pm)}</span>'
+            f'<span class="key"><i class="a"></i>Subagents {_pc(pa)}</span></div></section>')
 
 
 def _breakdowns(conn, cond, params, now=None):
@@ -256,12 +273,25 @@ def _breakdowns(conn, cond, params, now=None):
                   f"{html.escape(str(k))} uses {pc(p_type)} of subagent tokens")
     ingest = "Run <code>tokscope ingest</code> after a Claude Code session to fill it."
     return "".join([
-        _section("Week over week", f_week if week else "No skill loaded in the last 7 days",
-                 "the last 7 days against the 7 before, per skill; ranked by this week",
-                 (charts.dumbbell([(sk, last, this) for sk, _, this, last in week], "tokens")
-                  + _table(["skill", "phase", "this week", "last week", "change"], week_rows, 2)) if week else "", "by-week",
-                 empty=None if week else ("Nothing to compare yet",
-                                          "A skill that loads in the last 7 days shows here against the 7 before. " + ingest)),
+        _cache_section(conn, cond, params),
+        _section("By skill", f_skill if skills else "No skill loaded",
+                 "requests while a skill was loaded in that prompt. tokens = main thread + the subagents the skill "
+                 "started; the subagents column is also counted under By owner, so do not add the two tables. "
+                 "Top right = loaded often and heavy each time",
+                 charts.scatter([(sk, loads.get(sk, 0), (t or 0) / loads[sk], t or 0) for sk, _, t, *_ in skills if loads.get(sk)],
+                                "loads", "tokens per load")
+                 + _table(["skill", "loads", "sessions", "tokens", "main thread", "subagents", "per load", "API-eq"],
+                          [(sk, loads.get(sk, 0), s, t, _tok(m), _tok(a) if a else "–", _tok((t or 0) / max(loads.get(sk, 0), 1)),
+                            (_usd(c), "u")) for sk, s, t, c, m, a in skills], 3), "by-skill", p_skill if skills else None,
+                 empty=None if skills else ("No skill has loaded yet", "Load a skill in Claude Code (a slash command or the Skill tool) "
+                                            "and its tokens show here. " + ingest)),
+        _section("Subagent types", f_type if by_type else "No subagent ran",
+                 "one run = one subagent transcript; the line spans p10 to p90 of a run, the dot is the median",
+                 charts.ranges(spread[:12], "tokens")
+                 + _table(["agent type", "runs", "tokens", "median", "p90", "median API-eq", "models"], agent_rows, 2), "agent-types",
+                 p_type if by_type else None,
+                 empty=None if by_type else ("No subagent runs yet", "Each subagent type shows here once Claude Code starts one "
+                                             "(the Agent tool). " + ingest)),
         _section("By MCP server", f_srv or "No MCP server called",
                  call_note + "; the bar is each server's share of all MCP result tokens",
                  charts.share_bar([(k, est_tokens(c)) for k, (_, _, c) in servers.items()], "~result tokens")
@@ -290,25 +320,12 @@ def _breakdowns(conn, cond, params, now=None):
                           [(o, t, _tok(x), (_usd(c), "u"), share(t)) for o, t, x, c in owner[:20]], 1), "by-owner",
                  p_owner if has_tokens else None,
                  empty=None if has_tokens else ("No tokens yet", "The main thread and each subagent type show here. " + ingest)),
-        _section("By skill", f_skill if skills else "No skill loaded",
-                 "requests while a skill was loaded in that prompt. tokens = main thread + the subagents the skill "
-                 "started; the subagents column is also counted under By owner, so do not add the two tables. "
-                 "Top right = loaded often and heavy each time",
-                 charts.scatter([(sk, loads.get(sk, 0), (t or 0) / loads[sk], t or 0) for sk, _, t, *_ in skills if loads.get(sk)],
-                                "loads", "tokens per load")
-                 + _table(["skill", "loads", "sessions", "tokens", "main thread", "subagents", "per load", "API-eq"],
-                          [(sk, loads.get(sk, 0), s, t, _tok(m), _tok(a) if a else "–", _tok((t or 0) / max(loads.get(sk, 0), 1)),
-                            (_usd(c), "u")) for sk, s, t, c, m, a in skills], 3), "by-skill", p_skill if skills else None,
-                 empty=None if skills else ("No skill has loaded yet", "Load a skill in Claude Code (a slash command or the Skill tool) "
-                                            "and its tokens show here. " + ingest)),
-        _section("Subagent types", f_type if by_type else "No subagent ran",
-                 "one run = one subagent transcript; the line spans p10 to p90 of a run, the dot is the median",
-                 charts.ranges(spread[:12], "tokens")
-                 + _table(["agent type", "runs", "tokens", "median", "p90", "median API-eq", "models"], agent_rows, 2), "agent-types",
-                 p_type if by_type else None,
-                 empty=None if by_type else ("No subagent runs yet", "Each subagent type shows here once Claude Code starts one "
-                                             "(the Agent tool). " + ingest)),
+        _section("Week over week", f_week if week else "No skill loaded in the last 7 days",
+                 "the last 7 days against the 7 before, per skill; ranked by this week",
+                 (charts.dumbbell([(sk, last, this) for sk, _, this, last in week], "tokens")
+                  + _table(["skill", "phase", "this week", "last week", "change"], week_rows, 2)) if week else "", "by-week",
+                 empty=None if week else ("Nothing to compare yet",
+                                          "A skill that loads in the last 7 days shows here against the 7 before. " + ingest)),
         _context_section(conn, cond, params),
         _errors_section(conn, cond, params),
-        _cache_section(conn, cond, params),
     ])

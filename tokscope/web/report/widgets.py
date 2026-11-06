@@ -28,7 +28,7 @@ def _bar(value, top, fmt=_tok):
 
 def _table(headers, rows, bar_col, fmt=_tok):
     """Cells: plain values, or (text, css class) tuples; class "raw" is pre-escaped HTML. The bar column holds tokens."""
-    top = max((r[bar_col] or 0 for r in rows), default=0)
+    top = 0 if bar_col is None else max((r[bar_col] or 0 for r in rows), default=0)  # bar_col None: no bar column
     head = "".join(f"<th>{html.escape(h)}</th>" for h in headers)
     body = []
     for r in rows:
@@ -62,10 +62,12 @@ def _pc(x, plain=False):
     return "99%" if 0.995 <= x < 1 else f"{x:.0%}"  # 100% only when it is exactly 100
 
 
-def _section(title, finding, how, inner, anchor="", pct=None, empty=None):
+def _section(title, finding, how, inner, anchor="", pct=None, empty=None, pill=None):
     """A Breakdowns section: the summary line holds the finding (with a share bar when `pct` is given), and the long
-    'how this is counted' text sits inside, above the content. `empty` = (headline, hint) replaces the content."""
-    bar = (f'<span class="mini" role="img" aria-label="{_pc(pct, True)}"><i style="width:{min(max(pct, 0), 1) * 100:.1f}%"></i></span>'
+    'how this is counted' text sits inside, above the content. `empty` = (headline, hint) replaces the content.
+    `pill` = ("ok" | "warn" | "bad", text) shows a status pill instead of the bar."""
+    bar = (f'<span class="pill {pill[0]}">{pill[1]}</span>' if pill else
+           f'<span class="mini" role="img" aria-label="{_pc(pct, True)}"><i style="width:{min(max(pct, 0), 1) * 100:.1f}%"></i></span>'
            if pct is not None else "")
     body = (f'<div class="empty"><b>{empty[0]}</b>{empty[1]}</div>' if empty else inner)
     return (f'<details class="more finding-sec" id="{anchor}"><summary><span class="ttl">{title}</span>'
