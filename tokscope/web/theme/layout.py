@@ -889,7 +889,9 @@ p.warn{color:var(--agent-ink);font-size:13px}
 .runrows>details.more>summary{align-items:baseline;gap:2px 12px}
 table.gtable td.nw{white-space:nowrap}
 .vreason{overflow-wrap:anywhere}
-.decide .optform{margin-top:8px}
+.decideblock .optform{margin-top:8px}
+.decideblock .acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+table.gtable td,table.gtable th{text-align:left}
 @media (max-width:640px){.nums{grid-template-columns:1fr;gap:6px}.num{flex-direction:row;justify-content:space-between;align-items:baseline;padding:6px 10px}.num b{font-size:15px;text-align:right}}
 a.outcome.run{color:var(--ink);text-decoration:none;background:color-mix(in oklch,var(--mark) 9%,var(--surface));margin:-4px 0 14px}
 a.outcome.run:hover{background:color-mix(in oklch,var(--mark) 15%,var(--surface))}

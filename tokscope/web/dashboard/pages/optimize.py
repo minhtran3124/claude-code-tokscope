@@ -723,7 +723,7 @@ def _decide_block(conn, d):
     label = page_verdict(stored, d["gates"])
     cases = _count(d["plan"].get("dev")) + _count(d["plan"].get("holdout"))
     if not stored:
-        return ('<section class="card decide" id="decide-card"><h2 class="sec">Decide</h2>' + _decision_box(d)
+        return ('<section class="card decideblock" id="decide-card"><h2 class="sec">Decide</h2>' + _decision_box(d)
                 + '<div class="outcome off"><b>No verdict yet</b><span>The run has not finished. Resume it with '
                 f'<code>tokscope optimize resume {_e(d["id"])}</code>.</span></div>' + _tiles(None) + "</section>")
     cls = {"Apply": "ok", DO_NOT_APPLY: "bad"}.get(label, "off")
@@ -740,7 +740,7 @@ def _decide_block(conn, d):
            if cases < FEW_CASES else "")
     block = f'<p class="note">Approve is off: {_e(why)}.</p>' if why else ""
     word = "Reason (required to approve)" if need else "Reason (optional)"
-    return (f'<section class="card decide" id="decide-card"><h2 class="sec">Decide</h2><div class="vhead"><span class="vbadge {cls}">'
+    return (f'<section class="card decideblock" id="decide-card"><h2 class="sec">Decide</h2><div class="vhead"><span class="vbadge {cls}">'
             f'{_e(label)}</span></div><p class="vsum">{_e(sentence)}</p>' + _tiles(headline_numbers(d["arms"])) + _chips(d["gates"])
             + few + why_line + _decision_box(d) + block
             + f'<div class="optform" id="decide" data-run="{_e(d["id"])}" data-need="{int(need)}">'
