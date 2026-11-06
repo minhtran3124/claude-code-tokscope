@@ -10,6 +10,7 @@ import tempfile
 import threading
 import time
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -323,14 +324,158 @@ class RenderTest(Fixture):
         body = self.render()
         for run in (APPLY_RUN, NOT_ENOUGH_RUN, REJECT_RUN):
             self.assertIn(f'href="/optimize?run={run}"', body)
-        for word in (stats.APPLY, stats.NOT_ENOUGH, stats.REJECT, "$1.36 of $2.00"):
+        for word in (stats.APPLY, stats.NOT_ENOUGH, "$1.36 of $2.00"):
             self.assertIn(word, body)
+        self.assertIn(">Do not apply</span>", body)  # the Reject run reads as on the run page
         self.assertIn('href="/optimize" class=on aria-current=page', body)
         self.assertNotIn('class="filters"', body)
 
-    def test_an_empty_data_home_shows_the_empty_state(self):
+    def test_the_list_is_decision_first_with_no_decision_column(self):
+        body = self.render()
+        self.assertIn("1 run needs your decision", body)
+        self.assertIn(f'<a class="primary" href="/optimize?run={APPLY_RUN}">Review newest</a>', body)
+        self.assertIn("3 runs · $4.08 spent · 1 skill", body)
+        self.assertEqual(body.count('<h3 class="ol-skill">demo</h3>'), 1)
+        self.assertNotIn("<th>Decision</th>", body)
+        self.assertNotIn("<table", body.split('class="card ol-top"')[1])
+        self.assertNotIn("<script", page._runs_list(page.runs()))  # server-side links, no page script
+
+    def test_grouping_puts_apply_in_needs_and_the_rest_in_no_action(self):
+        by = {r["id"]: r["bucket"] for r in page.runs()}
+        self.assertEqual(by, {APPLY_RUN: "needs", NOT_ENOUGH_RUN: "noaction", REJECT_RUN: "noaction"})
+        body = self.render()
+        self.assertLess(body.index("Needs your decision"), body.index("No action needed"))
+        self.assertNotIn("Decided <span", body)
+        self.assertIn(f'<a class="primary" href="/optimize?run={APPLY_RUN}">Review</a>', body)
+        self.assertIn(f'<a class="btn" href="/optimize?run={REJECT_RUN}">Open</a>', body)
+
+    def test_an_apply_with_a_failed_gate_is_no_action(self):
+        v = json.loads((self.run_dir() / "verdict.json").read_text())
+        v["gates"][0]["passed"] = False
+        write(self.run_dir() / "verdict.json", v)
+        self.assertEqual({r["id"]: r["bucket"] for r in page.runs()}[APPLY_RUN], "noaction")
+        self.assertIn("No runs need your decision", self.render())
+        self.assertNotIn("Review newest", self.render())
+
+    def test_each_filter_chip_is_a_plain_link_and_unknown_values_are_ignored(self):
+        body = self.render()
+        for q in ("filter=needs", "filter=noaction", "filter=decided", "skill=demo"):
+            self.assertIn(f'href="/optimize?{q}"', body)
+        needs = self.render("filter=needs")
+        self.assertIn(APPLY_RUN, needs)
+        self.assertNotIn(f"run={REJECT_RUN}", needs)
+        self.assertIn('href="/optimize" aria-current=true', needs)  # the active chip clears itself
+        noaction = self.render("filter=noaction")
+        self.assertIn(f"run={REJECT_RUN}", noaction)
+        self.assertNotIn(f"run={APPLY_RUN}", noaction.split('<nav class="ol-chips"')[1].split("</nav>")[1])
+        self.assertIn("No runs match", self.render("filter=decided"))
+        self.assertEqual(self.render("filter=bogus&skill=nope").count('class="ol-row"'), 3)
+        self.assertEqual(self.render("skill=demo").count('class="ol-row"'), 3)
+
+    def test_skill_chip_limits_the_groups(self):
+        self.make_run("other-20260104T000000Z", stats.APPLY, "2026-01-04T00:00:00+00:00", skill="other")
+        both = self.render()
+        self.assertEqual((both.count('<h3 class="ol-skill">'), both.count("2 skills")), (2, 1))
+        one = self.render("skill=other")
+        self.assertEqual(one.count('<h3 class="ol-skill">'), 1)
+        self.assertNotIn(f"run={APPLY_RUN}", one.split("</nav>")[1])
+        self.assertIn('href="/optimize?filter=needs&skill=other"', one)
+
+    def test_the_result_line_uses_the_run_page_numbers_and_falls_back_to_the_reason(self):
+        found = {r["id"]: r for r in page.runs()}
+        self.assertEqual(found[APPLY_RUN]["result"],
+                         "pass rate 50% to 100%, cost per run $0.10 to $0.08, tokens per run 150 to 150.")
+        self.assertIn("pass rate 50% to 100%", self.render())
+        for case in ("d1", "d2", "h1"):  # no confirm draft arm in this run: a number is missing
+            shutil.rmtree(store.result_dir(self.run_dir(NOT_ENOUGH_RUN), "confirm", case, "v1", 0))
+        page._RESULTS.clear()
+        self.assertEqual({r["id"]: r for r in page.runs()}[NOT_ENOUGH_RUN]["result"], f"because {stats.NOT_ENOUGH}")
+
+    def test_a_stopped_run_reads_stopped_before_confirm_in_a_grey_pill(self):
+        (self.run_dir() / "verdict.json").unlink()
+        r = next(r for r in page.runs() if r["id"] == APPLY_RUN)
+        self.assertEqual((r["result"], r["bucket"]), ("Stopped before confirm", "noaction"))
+        body = self.render()
+        self.assertIn('<span class="ol-pill off">Stopped</span>', body)
+        self.assertIn("Stopped before confirm", body)
+        self.assertIn("No runs need your decision", body)
+
+    def test_a_running_run_has_a_running_pill_and_an_open_button(self):
+        (self.run_dir() / "verdict.json").unlink()
+        with mock.patch.object(page, "_holder_alive", return_value=True):
+            body = self.render()
+            self.assertEqual(next(r for r in page.runs() if r["id"] == APPLY_RUN)["bucket"], "running")
+        self.assertIn('<span class="ol-pill run">Running</span>', body)
+        self.assertIn(f'<a class="btn" href="/optimize?run={APPLY_RUN}">Open</a>', body)
+
+    def test_the_result_is_cached_by_the_verdict_mtime_and_verdict_json_is_never_written(self):
+        verdict = self.run_dir() / "verdict.json"
+        before = (verdict.read_bytes(), verdict.stat().st_mtime_ns)
+        page._RESULTS.clear()
+        page.runs()
+        with mock.patch.object(page, "_records", side_effect=AssertionError("recomputed")):
+            page.runs()  # same mtime: served from the cache
+        self.assertEqual((verdict.read_bytes(), verdict.stat().st_mtime_ns), before)
+        os.utime(verdict, (time.time() + 5, time.time() + 5))
+        with mock.patch.object(page, "_records", return_value=([], 0)) as m:
+            r = next(r for r in page.runs() if r["id"] == APPLY_RUN)
+        self.assertTrue(m.called)
+        self.assertEqual(r["result"], f"because {stats.APPLY}")
+
+    def test_a_decided_run_shows_approved_or_rejected_with_the_time(self):
+        now = time.time()
+        for run, act in ((APPLY_RUN, "approve"), (NOT_ENOUGH_RUN, "reject")):
+            at = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(now - 36 * 60))
+            write(self.run_dir(run) / "decision.json", {"decision": act, "run_id": run, "at": at, "history": []})
+        found = {r["id"]: r for r in page.runs()}
+        self.assertEqual((found[APPLY_RUN]["bucket"], found[APPLY_RUN]["decided"]), ("decided", "approve"))
+        body = self.render()
+        self.assertIn("Approved 36 min ago", body)
+        self.assertIn("Rejected 36 min ago", body)
+        self.assertIn("Decided <span>2</span>", body)
+        self.assertIn("No runs need your decision", body)
+        self.assertNotIn(">Review</a>", body)
+
+    def test_a_decision_without_a_time_uses_the_file_mtime(self):
+        write(self.run_dir() / "decision.json", {"decision": "approve"})
+        r = next(r for r in page.runs() if r["id"] == APPLY_RUN)
+        self.assertTrue(r["decided_at"])
+        self.assertIn("Approved just now", self.render())
+
+    def test_relative_time_minutes_hours_days_then_the_date(self):
+        now = datetime(2026, 11, 6, 12, 0, tzinfo=timezone.utc)
+
+        def at(**kw):
+            return page._ago((now - timedelta(**kw)).isoformat(), now)[0]
+        self.assertEqual(at(seconds=20), "just now")
+        self.assertEqual(at(minutes=36), "36 min ago")
+        self.assertEqual(at(hours=5), "5 h ago")
+        self.assertEqual(at(days=7), "7 d ago")
+        self.assertEqual(at(days=7, seconds=1), "2026-10-30")
+        self.assertEqual(page._ago("2026-11-06T11:24:00+00:00", now), ("36 min ago", "2026-11-06 11:24 UTC"))
+        self.assertEqual(page._ago("junk", now), ("–", ""))
+        self.assertIn('title="2026-11-06 11:24 UTC"', page._stamp("2026-11-06T11:24:00+00:00", now))
+        self.assertIn('data-fmt="hm"', page._stamp("2026-11-06T11:24:00+00:00", now))
+
+    def test_an_empty_data_home_links_to_the_library(self):
         shutil.rmtree(store.runs_dir())
-        self.assertIn("No optimize runs yet", self.render())
+        body = self.render()
+        self.assertIn("No runs yet", body)
+        self.assertIn('<a href="/library">Library</a>', body)
+        self.assertIn("tokscope optimize run", body)
+        self.assertNotIn("Review newest", body)
+
+    def test_one_to_four_runs_all_render_a_full_page(self):
+        shutil.rmtree(self.run_dir(REJECT_RUN))
+        shutil.rmtree(self.run_dir(NOT_ENOUGH_RUN))
+        one = self.render()
+        self.assertIn("1 run needs your decision", one)
+        self.assertIn("1 run · ", one)
+        self.make_run("demo-20260105T000000Z", stats.APPLY, "2026-01-05T00:00:00+00:00")
+        two = self.render()
+        self.assertIn("2 runs need your decision", two)
+        self.assertIn('href="/optimize?run=demo-20260105T000000Z">Review newest', two)  # the newest, not the first
+        self.assertEqual(two.count('class="ol-row"'), 2)
 
     def test_an_unknown_run_gives_a_notice_and_the_list(self):
         body = self.render("run=nope")
@@ -434,7 +579,7 @@ class RenderTest(Fixture):
                 "model": ["m"], "runs": {"a": 1}}
         (self.run_dir() / "plan.json").write_text(json.dumps(plan))
         self.assertIn("Run settings", self.render(f"run={APPLY_RUN}"))
-        self.assertIn("Optimize runs", self.render())
+        self.assertIn("your decision", self.render())
 
     def test_a_level_below_full_hides_the_text(self):
         for level in ("redacted", "minimal"):
