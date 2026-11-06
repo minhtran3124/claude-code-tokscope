@@ -952,7 +952,8 @@ ol.attn a{color:var(--ink);text-decoration:none;font-weight:500}ol.attn a:hover{
 .dash-tools .filters{flex-wrap:nowrap;gap:6px}
 .dash-tools .filters select{max-width:150px}
 .dash-tools>.filters{margin-left:0;align-items:center}
-.dash-head .range-dates{order:3;margin-left:auto}
+.pghead .subrow{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:2px 20px}
+.pghead .range-dates{margin:0;white-space:nowrap}
 .dash-tools .fl>span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .pghead{margin:0 0 18px}
 .pghead h1{margin:0 0 4px;font-size:28px;line-height:1.2}
