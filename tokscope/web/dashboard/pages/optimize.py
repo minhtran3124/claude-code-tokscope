@@ -470,7 +470,7 @@ def _report(d, decide, post=""):
     s = d["summary"]
     head = (f'<p><a href="/optimize">← All runs</a></p><section class="card libhead"><h2 class="sec">{_e(d["plan"].get("skill") or d["id"])} · '
             f'{_state(s["state"])}</h2><p class="note">Run <code>{_e(d["id"])}</code></p></section>')
-    return (head + _plan_section(d) + _gates_section(d) + _cases_section(d) + _rounds_section(d) + _compare_section(d) + post + decide)
+    return head + decide + _plan_section(d) + _gates_section(d) + _cases_section(d) + _rounds_section(d) + _compare_section(d) + post
 
 
 def page_optimize(conn, qs, level):
@@ -485,7 +485,7 @@ def page_optimize(conn, qs, level):
         except ValueError:
             notice = f'<p class="warn" role="note">There is no run <code>{_e(pick)}</code>.</p>'
         else:
-            return _report(d, _decide_section(conn, d), _post_ship_section(conn, d))
+            return _report(d, _decide_block(conn, d), _post_ship_section(conn, d))
     return _runs_list(runs(), notice)
 
 
@@ -595,22 +595,60 @@ def _decision_box(d):
     return f'<div class="outcome {cls}"><b>{word}</b><span>{" · ".join(detail)}</span>{note}</div>'
 
 
-def _decide_section(conn, d):
+FEW_CASES = 5  # fewer cases than this is thin evidence
+
+
+def _tiles(numbers):
+    """The three headline numbers as "A to B" tiles; "-" for a number that is not there."""
+    fmt = {"pass": lambda x: f"{x:.0f}%", "cost": _usd, "tokens": lambda x: _tok(round(x))}
+    out = []
+    for key, name in (("pass", "Pass rate"), ("cost", "Cost per run"), ("tokens", "Tokens per run")):
+        v = (numbers or {}).get(key)
+        text = "-" if v is None else f"{fmt[key](v[0])} to {fmt[key](v[1])}"
+        out.append(f'<div class="num"><span class="k">{name}</span><b>{_e(text)}</b></div>')
+    return f'<div class="nums">{"".join(out)}</div>'
+
+
+def _chips(gates):
+    """One chip per gate, failed first, then not run, then passed."""
+    order = {False: 0, None: 1, True: 2}
+    ranked = sorted(gates, key=lambda g: order.get(g.get("passed"), 1))
+    return ('<ul class="gchips" aria-label="Gates">' + "".join(
+        f'<li class="gchip {"bad" if g.get("passed") is False else "ok" if g.get("passed") else "off"}">'
+        f'{"✕" if g.get("passed") is False else "✓" if g.get("passed") else "–"} {_e(g.get("name"))}</li>' for g in ranked)
+        + "</ul>") if ranked else ""
+
+
+def _decide_block(conn, d):
+    """The first block of a run: verdict, one sentence, three numbers, gate chips, a caution for few cases, then the
+    reason field with Approve and Reject. A run with no verdict gets a neutral block and no Approve or Reject."""
+    v = d["verdict"]
+    stored = v.get("verdict")
+    label = page_verdict(stored, d["gates"])
+    cases = _count(d["plan"].get("dev")) + _count(d["plan"].get("holdout"))
+    if not stored:
+        return ('<section class="card decide" id="decide-card"><h2 class="sec">Decide</h2>' + _decision_box(d)
+                + '<div class="outcome off"><b>No verdict yet</b><span>The run has not finished. Resume it with '
+                f'<code>tokscope optimize resume {_e(d["id"])}</code>.</span></div>' + _tiles(None) + "</section>")
+    cls = {"Apply": "ok", DO_NOT_APPLY: "bad"}.get(label, "off")
+    sentence = summary_sentence(label, headline_numbers(d["arms"]), v.get("reason"))
     code, why, need = approve_check(d["run"])
-    verdict = d["verdict"].get("verdict")
-    want = {f for f in (d["verdict"].get("base_fingerprint"), d["verdict"].get("draft_fingerprint"),
-                        d["plan"].get("base_fingerprint")) if f}  # the same set decide() uses, so a run without a verdict still matches
+    want = {f for f in (v.get("base_fingerprint"), v.get("draft_fingerprint"), d["plan"].get("base_fingerprint")) if f}
     _, k, _ = owner_root(conn, d["plan"].get("skill"), want)
-    approve = ""
-    if verdict:
-        blocked = "" if code == 200 else f' disabled data-block="1" title="{_e(why)}"'
-        approve = (f'<button type="button" class="primary" data-opt-act="approve"{blocked or (" disabled" if need else "")}>'
-                   'Approve</button>')
-    block = f'<p class="note">Approve is off: {_e(why)}.</p>' if verdict and why else ""
-    label = "Reason (required to approve)" if need else "Reason (optional)"
-    return ('<section class="card" id="decide-card"><h2 class="sec">Decide</h2>' + _decision_box(d) + block
+    blocked = "" if code == 200 else f' disabled data-block="1" title="{_e(why)}"'
+    approve = (f'<button type="button" class="primary" data-opt-act="approve"{blocked or (" disabled" if need else "")}>'
+               'Approve</button>')
+    reason = _str(v.get("reason"))
+    why_line = f'<p class="note vreason">{_e(reason)}</p>' if reason and reason != sentence else ""
+    few = (f'<p class="warn" role="note">Only {cases} case{"s" * (cases != 1)} ran; fewer than {FEW_CASES} is thin evidence.</p>'
+           if cases < FEW_CASES else "")
+    block = f'<p class="note">Approve is off: {_e(why)}.</p>' if why else ""
+    word = "Reason (required to approve)" if need else "Reason (optional)"
+    return (f'<section class="card decide" id="decide-card"><h2 class="sec">Decide</h2><div class="vhead"><span class="vbadge {cls}">'
+            f'{_e(label)}</span></div><p class="vsum">{_e(sentence)}</p>' + _tiles(headline_numbers(d["arms"])) + _chips(d["gates"])
+            + few + why_line + _decision_box(d) + block
             + f'<div class="optform" id="decide" data-run="{_e(d["id"])}" data-need="{int(need)}">'
-            + f'<label class="wide">{label}<textarea id="opt-reason" rows="2"{" required" if need else ""}></textarea></label>'
+            + f'<label class="wide">{word}<textarea id="opt-reason" rows="2"{" required" if need else ""}></textarea></label>'
             + f'<p class="acts">{approve}<button type="button" class="btn danger" data-opt-act="reject">Reject</button></p>'
             + f'<p class="note">{_git_note(k)} Reject records your decision and never changes the skill.</p>'
             + '<p class="err" id="opt-err" hidden></p></div></section>')

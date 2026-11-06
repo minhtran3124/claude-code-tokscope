@@ -870,6 +870,22 @@ p.warn{color:var(--agent-ink);font-size:13px}
 .outcome.ok{background:color-mix(in oklch,var(--pass) 12%,transparent)}
 .outcome.bad{background:color-mix(in oklch,var(--fail) 12%,transparent)}
 .outcome.off{background:var(--chip)}
+.vhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.vbadge{font:700 15px var(--mono);padding:3px 14px;border:var(--line-w) solid var(--line-c);border-radius:var(--r-tile);white-space:nowrap;background:var(--chip)}
+.vbadge.ok{color:var(--pass);border-color:var(--pass);background:color-mix(in oklch,var(--pass) 12%,transparent)}
+.vbadge.bad{color:var(--fail);border-color:var(--fail);background:color-mix(in oklch,var(--fail) 12%,transparent)}
+.vsum{font-size:16px;font-weight:600;margin:10px 0;overflow-wrap:anywhere}
+.nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0}
+.num{border:var(--line-w) solid var(--line-c);border-radius:var(--r-tile);padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.num .k{font-size:12px;color:var(--muted)}
+.num b{font-size:18px;overflow-wrap:anywhere}
+.gchips{display:flex;flex-wrap:wrap;gap:6px;list-style:none;padding:0;margin:8px 0}
+.gchip{white-space:nowrap;font:500 12px var(--mono);padding:2px 10px;border:var(--line-w) solid var(--line-c);border-radius:999px;background:var(--chip);color:var(--ink2)}
+.gchip.ok{color:var(--pass);border-color:var(--pass)}
+.gchip.bad{color:var(--fail);border-color:var(--fail);font-weight:700}
+.vreason{overflow-wrap:anywhere}
+.decide .optform{margin-top:8px}
+@media (max-width:640px){.nums{grid-template-columns:1fr;gap:6px}.num{flex-direction:row;justify-content:space-between;align-items:baseline;padding:6px 10px}.num b{font-size:15px;text-align:right}}
 a.outcome.run{color:var(--ink);text-decoration:none;background:color-mix(in oklch,var(--mark) 9%,var(--surface));margin:-4px 0 14px}
 a.outcome.run:hover{background:color-mix(in oklch,var(--mark) 15%,var(--surface))}
 @media (prefers-reduced-motion:reduce){

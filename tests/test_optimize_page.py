@@ -576,10 +576,40 @@ class DecideMarkupTest(Fixture):
         (self.run_dir(REJECT_RUN) / "verdict.json").unlink()
         body = self.body(REJECT_RUN)
         self.assertIsNone(self.approve_button(body))
-        self.assertIn('data-opt-act="reject"', body)
+        self.assertNotIn('data-opt-act="reject"', body)  # a run with no verdict has no Approve and no Reject on the page
+        self.assertNotIn('id="decide"', body)
+        self.assertIn("tokscope optimize resume " + REJECT_RUN, body)
         path = self.run_dir() / "verdict.json"
         path.write_text(json.dumps({**json.loads(path.read_text()), "draft_version": None, "draft_fingerprint": None}))
         self.assertIn("Approve is off: no draft to apply", self.body(APPLY_RUN))
+
+    def test_the_decide_block_comes_first_with_the_sentence_numbers_and_chips(self):
+        body = self.body(APPLY_RUN)
+        self.assertLess(body.index('id="decide-card"'), body.index('id="gates"'))
+        self.assertLess(body.index('data-opt-act="approve"'), body.index('id="gates"'))
+        self.assertIn("Apply: pass rate 50% to 100%, cost per run $0.10 to $0.08, tokens per run 150 to 150.", body)
+        self.assertIn('<span class="vbadge ok">Apply</span>', body)
+        self.assertIn("because Apply", body)
+        for gate in GATES:
+            self.assertIn(f" {gate}</li>", body)
+
+    def test_few_cases_show_the_caution_line(self):
+        self.assertIn("Only 3 cases ran; fewer than 5 is thin evidence.", self.body(APPLY_RUN))
+        plan = json.loads((self.run_dir() / "plan.json").read_text())
+        plan.update(dev=["a", "b", "c"], holdout=["d", "e"])
+        (self.run_dir() / "plan.json").write_text(json.dumps(plan))
+        self.assertNotIn("thin evidence", self.body(APPLY_RUN))
+
+    def test_a_failed_gate_reads_do_not_apply_first_and_keeps_the_stored_reject(self):
+        path = self.run_dir(REJECT_RUN) / "verdict.json"
+        v = json.loads(path.read_text())
+        v["gates"][3]["passed"] = False
+        path.write_text(json.dumps(v))
+        body = self.body(REJECT_RUN)
+        self.assertIn('<span class="vbadge bad">Do not apply</span>', body)
+        self.assertLess(body.index("✕ No regression</li>"), body.index("✓ Valid</li>"))
+        self.assertIn('disabled data-block="1"', self.approve_button(body))
+        self.assertEqual(json.loads(path.read_text())["verdict"], stats.REJECT)
 
     def test_no_verdict_still_finds_the_installed_skill_by_the_plan_fingerprint(self):
         (self.run_dir(REJECT_RUN) / "verdict.json").unlink()
