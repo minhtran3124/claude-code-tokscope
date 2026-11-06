@@ -1,0 +1,5 @@
+{
+  "baseUrl": "http://127.0.0.1:${PORT}",
+  "startCommand": "TOKSCOPE_HOME=/home/minhtran/Documents/minh.tran/projects/claude-code-tokscope bin/tokscope serve --port ${PORT}",
+  "loginEnv": ["VERIFY_USER", "VERIFY_PASSWORD"]
+}
