@@ -772,3 +772,123 @@ def start(db, body):
         except (OSError, RuntimeError) as e:
             return 500, {"error": str(e)}
     return 200, {"run": run_id, "url": f"/optimize?run={run_id}", "estimate": est}
+
+
+# ---- eval suite generation: one paid `claude -p` call in the background, then the owner approves the draft ----
+
+SUITEGEN_BUDGET_USD, SUITEGEN_MAX_USD = 1.0, 10.0  # one call of a few thousand tokens; the cap guards a typo
+_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+def _suitegen_log(name):
+    return store.runs_dir().parent / f".suitegen-{name}.log"
+
+
+def _alive(pid):
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def suitegen_status(name):
+    """{"state": none | running | done | failed, "lines": last output lines}. A worker prints `exit=<code>` last, so a
+    log without it and without a live worker means it was killed."""
+    log = _suitegen_log(name)
+    try:
+        lines = [l for l in log.read_text(errors="replace").splitlines() if l.strip()]
+        pid = int(log.with_suffix(".pid").read_text())
+    except (OSError, ValueError):
+        return {"state": "none", "lines": []}
+    exits = [l for l in lines if l.startswith("exit=")]
+    body = [l for l in lines if not l.startswith("exit=")][-8:]
+    if exits:
+        return {"state": "done" if exits[-1] == "exit=0" else "failed", "lines": body}
+    return {"state": "running" if _alive(pid) else "failed", "lines": body}
+
+
+def _skill_of(conn, body):
+    k = next((k for k in library.discover(conn) if k["id"] == body.get("skill")), None)
+    if not k:
+        raise ValueError("no such skill")
+    if k["origin"] != "mine" or ":" in k["dir"] or not _NAME.match(k["dir"]):
+        raise ValueError("only your own skills can get an eval suite here")
+    return k
+
+
+def suitegen_start(db, body):
+    """(HTTP code, JSON) of POST optimize/suite/generate: start the background draft. One at a time per skill."""
+    conn = connect(db)
+    try:
+        k = _skill_of(conn, body)
+    except ValueError as e:
+        return 400, {"error": str(e)}
+    finally:
+        conn.close()
+    try:
+        budget = _number(body, "budget", SUITEGEN_BUDGET_USD)
+    except ValueError as e:
+        return 400, {"error": str(e)}
+    model = body.get("model") or "sonnet"
+    if not 0 < budget <= SUITEGEN_MAX_USD:
+        return 400, {"error": f"budget must be above 0 and at most {SUITEGEN_MAX_USD:g}"}
+    if not isinstance(model, str) or not MODEL.match(model):
+        return 400, {"error": "model must be a model name such as sonnet"}
+    with _START_LOCK:
+        if suitegen_status(k["dir"])["state"] == "running":
+            return 409, {"error": f"a draft of {k['dir']} is already being made"}
+        log = _suitegen_log(k["dir"])
+        log.parent.mkdir(parents=True, exist_ok=True)
+        cmd = [sys.executable, "-u", "-m", "tokscope.cli", "optimize", "suite", "--generate", "--budget", str(budget),
+               "--model", model, "--", k["dir"]]
+        root = str(Path(paths.__file__).resolve().parents[1])
+        env = {**os.environ, "PYTHONPATH": os.pathsep.join(x for x in (root, os.environ.get("PYTHONPATH")) if x)}
+        try:
+            with open(log, "w") as out:  # a file, not a pipe: a server stop must not kill the call
+                proc = subprocess.Popen(["sh", "-c", '"$@"; echo "exit=$?"', "sh", *cmd], cwd=str(project_root(k)), env=env,
+                                        stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, text=True,
+                                        start_new_session=True)
+            log.with_suffix(".pid").write_text(str(proc.pid))
+        except OSError as e:
+            return 500, {"error": str(e)}
+    return 200, {"state": "running"}
+
+
+def suitegen_state(db, body):
+    """(HTTP code, JSON) of POST optimize/suite/status."""
+    conn = connect(db)
+    try:
+        k = _skill_of(conn, body)
+    except ValueError as e:
+        return 400, {"error": str(e)}
+    finally:
+        conn.close()
+    return 200, suitegen_status(k["dir"])
+
+
+def suitegen_approve(db, body):
+    """(HTTP code, JSON) of POST optimize/suite/approve: copy a passing draft to evals.json. A suite that passes its checks
+    is never overwritten; one that does not (no machine checks, bad JSON) is, after its text is kept as evals.previous.json."""
+    conn = connect(db)
+    try:
+        k = _skill_of(conn, body)
+        root = str(project_root(k))
+        live = suite._folder(k["dir"], root) / "evals" / suite.NAME
+        replace = False
+        if live.exists():
+            try:
+                replace = bool(suite.load(k["dir"], root).problems)
+            except ValueError:
+                replace = True  # not valid JSON, or not an object
+        old = live.read_bytes() if replace else None
+        path = suite.approve(k["dir"], root, force=replace)
+        if old is not None:  # only after the draft passed: a refused approve leaves the old file and any earlier backup alone
+            live.with_name("evals.previous.json").write_bytes(old)
+    except suite.Refused as e:
+        return 400, {"error": str(e)}
+    except ValueError as e:
+        return 400, {"error": str(e)}
+    finally:
+        conn.close()
+    return 200, {"path": str(path)}

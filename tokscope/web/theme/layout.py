@@ -262,6 +262,7 @@ table.sbs td.add{background:color-mix(in oklch,var(--pass) 12%,transparent)}
 .decide .acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .optform{display:flex;flex-direction:column;gap:8px}
 .optrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.sgraw{font-size:12px;margin:4px 0 8px}.sgraw code{display:block;overflow-wrap:anywhere;margin-top:4px}
 /* a poll that finds new data: the live dot gives one ring (#125 Pulse, 600 ms, not a token), never a loop; offline shows a hollow dot */
 @keyframes ring{from{box-shadow:0 0 0 0 color-mix(in oklch,var(--pass) 60%,transparent)}to{box-shadow:0 0 0 8px transparent}}
 .dot.ring{animation:ring 600ms var(--ease) 1}

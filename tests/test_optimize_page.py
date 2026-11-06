@@ -806,6 +806,54 @@ class LibraryTest(Fixture):
         self.assertIn('name="model" value="sonnet"', body)
         self.assertNotIn('id="optimize-panel"', body)
 
+    def test_a_missing_suite_shows_plain_words_and_the_generate_button(self):
+        (self.folder / "evals" / "evals.json").unlink(missing_ok=True)
+        body = self.page()
+        self.assertIn('id="optstart-card"', body)
+        self.assertIn("This skill has no eval suite yet.", body)
+        self.assertIn("Technical details", body)
+        self.assertIn('id="suitegen"', body)
+        self.assertNotIn('id="optstart"', body)
+
+    def test_a_suite_without_machine_checks_says_so(self):
+        write(self.folder / "evals" / "evals.json", json.dumps({"evals": [{"id": "a", "prompt": "p"}]}))
+        body = self.page()
+        self.assertIn("no machine checks, so a run cannot be graded", body)
+        self.assertNotIn('id="optstart"', body)
+
+    def test_generate_needs_a_skill_of_yours_and_a_sane_budget(self):
+        self.assertEqual(server.post(self.db, "optimize/suite/generate", {"skill": "nope"}, "full")[0], 400)
+        code, out = server.post(self.db, "optimize/suite/generate", {"skill": self.skill_id(), "budget": 99}, "full")
+        self.assertEqual(code, 400)
+        self.assertIn("budget", out["error"])
+        self.assertEqual(server.post(self.db, "optimize/suite/generate", {}, "read")[0], 403)
+
+    def test_approve_replaces_a_suite_that_fails_its_checks_and_keeps_the_old_text(self):
+        old = json.dumps({"evals": [{"id": "a", "prompt": "p"}]})
+        write(self.folder / "evals" / "evals.json", old)
+        good = {"evals": [{"id": "a", "prompt": "p", "checks": [{"type": "answer_regex", "pattern": "ok"}]}], "checks": []}
+        write(self.folder / "evals" / "evals.draft.json", json.dumps(good))
+        code, _ = server.post(self.db, "optimize/suite/approve", {"skill": self.skill_id()}, "full")
+        self.assertEqual(code, 200)
+        self.assertEqual(json.loads((self.folder / "evals" / "evals.json").read_text())["evals"][0]["checks"][0]["pattern"], "ok")
+        self.assertEqual((self.folder / "evals" / "evals.previous.json").read_text(), old)
+
+    def test_approve_never_replaces_a_suite_that_passes(self):
+        keep = json.dumps({"evals": [{"id": "a", "prompt": "p", "checks": [{"type": "answer_regex", "pattern": "keep"}]}]})
+        write(self.folder / "evals" / "evals.json", keep)
+        write(self.folder / "evals" / "evals.draft.json", json.dumps({"evals": [{"id": "b", "prompt": "q", "checks": [{"type": "answer_regex", "pattern": "x"}]}]}))
+        code, out = server.post(self.db, "optimize/suite/approve", {"skill": self.skill_id()}, "full")
+        self.assertEqual(code, 400)
+        self.assertEqual((self.folder / "evals" / "evals.json").read_text(), keep)
+        self.assertFalse((self.folder / "evals" / "evals.previous.json").exists())
+
+    def test_status_is_none_before_any_draft_and_approve_refuses_without_one(self):
+        self.assertEqual(server.post(self.db, "optimize/suite/status", {"skill": self.skill_id()}, "full")[1]["state"], "none")
+        (self.folder / "evals" / "evals.json").unlink(missing_ok=True)
+        code, out = server.post(self.db, "optimize/suite/approve", {"skill": self.skill_id()}, "full")
+        self.assertEqual(code, 400)
+        self.assertIn("error", out)
+
     def test_a_running_run_replaces_the_form_with_a_link(self):
         (self.run_dir() / "verdict.json").unlink()
         (self.run_dir() / "run.lock").write_text(str(os.getpid()))
