@@ -349,14 +349,16 @@ svg .vmark{cursor:default}
 .fl{display:flex;flex-direction:column;gap:3px}
 .filters{align-items:flex-end}
 .dash-head .privacy{display:inline-flex;align-items:center;margin:0;padding:2px 10px;border-radius:999px;font-size:12px}
-.range-dates{flex:1 0 100%;margin:0;text-align:right}
+.range-dates{flex:0 0 auto;margin:0 0 0 auto;text-align:right}
+.dash-tools{display:flex;flex:1 0 100%;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 16px}
+.dash-tools>.filters{margin-left:auto}
 /* the range as tabs (wide screens); the Range select stays in the phone sheet. A filter change applies at once, so Apply is only for a page without script */
 .range-tabs{display:inline-flex;gap:2px;padding:3px;border:var(--line-w) solid var(--line-c);border-radius:var(--r-box);background:var(--surface)}
 .range-tabs a{padding:4px 12px;border-radius:calc(var(--r-box) - 3px);font:var(--btn-w) var(--ctl-size)/1.4 var(--num-font);color:var(--ink2);text-decoration:none;white-space:nowrap}
 .range-tabs a:hover{color:var(--ink);background:var(--chip)}
 .range-tabs a.on{background:var(--ink);color:var(--page)}
 .range-tabs a:focus-visible{outline:2px solid var(--focus-c);outline-offset:1px}
-.dash-head>.filters .fl-range{display:none}
+.dash-head .filters .fl-range{display:none}
 .js .filters .chip[type=submit]{display:none}
 /* sidebar: counts beside the pages, a small label over each group; the Settings page holds Theme, Design and Time zone as segmented controls */
 .toc .grp{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:16px 12px 4px}
@@ -418,11 +420,11 @@ transition:opacity var(--t-layout) var(--ease),transform var(--t-layout) var(--e
 .sheet .sheet-priv{display:block;margin:20px 0 0}
 /* the header: the title row, then the filters as one pill that opens the sheet */
 .dash-head{gap:8px 12px}
-.dash-head>.filters,.range-tabs{display:none}
+.dash-head>.filters,.range-tabs,.dash-tools{display:none}
 body .pill-btn{display:flex;flex:1 0 100%;align-items:center;justify-content:space-between;gap:10px;min-height:44px;padding:0 16px;font-size:14px;text-align:left}
 .pill-btn>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pill-i{display:block;flex:none;width:8px;height:8px;border:solid currentColor;border-width:0 2px 2px 0;transform:rotate(45deg) translate(-2px,-2px)}
-.range-dates{flex-basis:100%;text-align:left}
+.range-dates{flex-basis:100%;margin:0;text-align:left;order:2}
 main{padding:16px 12px 72px}
 /* range totals: two columns, Tokens across both, each tile keeps its sparkline */
 .kpis.strip{grid-template-columns:repeat(2,minmax(0,1fr))}
