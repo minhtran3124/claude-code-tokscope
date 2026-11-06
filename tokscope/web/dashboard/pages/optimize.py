@@ -329,7 +329,78 @@ def _runs_list(found, notice=""):
             f'against the current one. Open a run to read its evidence, then approve or reject it.</p>{body}</section>')
 
 
-def _plan_section(d):
+def _plain(v):
+    """A value as words for a cell: no JSON."""
+    if isinstance(v, dict):
+        return ", ".join(f"{k} {_plain(x)}" for k, x in v.items()) or "–"
+    if isinstance(v, list):
+        return ", ".join(_plain(x) for x in v) or "–"
+    return "–" if v is None else "yes" if v is True else "no" if v is False else str(v)
+
+
+def _num_or_none(v):
+    return v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def _signed(x, fmt):
+    return ("+" if x > 0 else "-" if x < 0 else "") + fmt(abs(x))
+
+
+def _gate_found(g):
+    """One plain sentence for what a gate found, from its stored value; the stored detail when the value is not as expected."""
+    name, val, detail = g.get("name"), g.get("value"), _str(g.get("detail"))
+    if g.get("passed") is None:
+        return "Not run." + (f" {detail[0].upper() + detail[1:]}." if detail and detail != "not run" else "")
+    if name == "Valid" and _num_or_none(val) is not None:
+        return f"{val * 100:.0f}% of the runs counted in the weaker arm."
+    if name == "Meaningful suite" and _num_or_none(val) is not None:
+        return f"The skill scores {val:+.1f} points against no skill."
+    if name == "Safety" and _num_or_none(val) is not None:
+        return f"{val:g} safety check{'s' * (val != 1)} failed in the draft."
+    if name == "No regression" and isinstance(val, dict):
+        lo, ho = _num_or_none(val.get("ci_low")), _num_or_none(val.get("holdout_points"))
+        if lo is not None and ho is not None:
+            return f"Worst likely change {lo:+.1f} points; the holdout cases changed {ho:+.1f} points."
+    if name == "Benefit" and isinstance(val, dict):
+        pm, cm = _mean(val.get("pass")), _mean(val.get("cost"))
+        if pm is not None and cm is not None:
+            return f"Pass rate {pm:+.1f} points and cost per run {_signed(cm, _usd)} against the current version."
+    return (detail[0].upper() + detail[1:] + ".") if detail else "–"
+
+
+def _gate_rule(g):
+    """The gate's threshold in words."""
+    name, th = g.get("name"), g.get("threshold")
+    if name == "Valid" and _num_or_none(th) is not None:
+        return f"At least {th * 100:.0f}% of runs count."
+    if name == "Meaningful suite" and _num_or_none(th) is not None:
+        return f"At least {th:g} points above no skill."
+    if name == "Safety" and _num_or_none(th) is not None:
+        return f"At most {th:g} failed safety checks."
+    if name == "No regression" and isinstance(th, dict) and _num_or_none(th.get("ci_low_min")) is not None:
+        return f"Worst likely change no lower than {th['ci_low_min']:g} points, and holdout not worse than current."
+    if name == "Benefit" and th:
+        return "Cost clearly lower, or pass rate clearly higher."
+    return _plain(th)
+
+
+def _gates_section(d):
+    if not d["gates"]:
+        return ""
+    rows = "".join(f'<tr><td class="nw">{_e(g.get("name"))}</td>'
+                   f'<td>{"not run" if g.get("passed") is None else "pass" if g.get("passed") else "FAIL"}</td>'
+                   f'<td>{_e(_gate_found(g))}</td><td>{_e(_gate_rule(g))}</td></tr>' for g in d["gates"])
+    return ('<section class="card" id="gates"><h2 class="sec">Gates</h2><div class="scroll"><table class="gtable"><thead><tr>'
+            f'<th>Gate</th><th>Result</th><th>What it found</th><th>Rule</th></tr></thead><tbody>{rows}</tbody></table></div></section>')
+
+
+def _row(anchor, title, fact, body, opened=False):
+    """A collapsed one-line row: the title and its key fact, the body behind it."""
+    return (f'<details class="more" id="{anchor}"{" open" if opened else ""}><summary><span class="ttl">{title}</span>'
+            f'<span class="note">{fact}</span></summary>{body}</details>')
+
+
+def _settings_row(d):
     p, s = d["plan"], d["summary"]
     cap = _usd_or_none(p.get("per_run_cap_usd"))
     facts = [("Skill", f"<code>{_e(p.get('skill'))}</code>"), ("State", _state(s["state"])), ("Started", _time(s["created"])),
@@ -338,34 +409,32 @@ def _plan_section(d):
              ("Budget", f"{_usd(s['spent'])} spent of {_usd(_usd_or_none(p.get('budget_usd')))}" + (f" · {_usd(cap)} at most per call" if cap else "")),
              ("Versions", ", ".join(f"<code>{_e(v)}</code>" for v in d["versions"]) or "–"),
              ("Measured version", f"<code>{_e(p.get('base_fingerprint'))}</code>")]
-    return ('<section class="card" id="plan"><h2 class="sec">Plan</h2><dl class="ids">'
-            + "".join(f"<dt>{a}</dt><dd>{b}</dd>" for a, b in facts) + "</dl></section>")
+    fact = f"{_e(p.get('model') or 'model unknown')}, {_usd(s['spent'])} spent of {_usd(_usd_or_none(p.get('budget_usd')))}"
+    return _row("plan", "Run settings", fact, '<dl class="ids">' + "".join(f"<dt>{a}</dt><dd>{b}</dd>" for a, b in facts) + "</dl>")
 
 
-def _value(v):
-    return _e(json.dumps(v, sort_keys=True)) if isinstance(v, (dict, list)) else _e("–" if v is None else v)
+def _trigger_row(d):
+    t = d["verdict"].get("trigger")
+    if not (isinstance(t, dict) and t):
+        return ""
+    prompts = t.get("prompts")
+    evidence = ((isinstance(prompts, dict) and any(_num_or_none(x) for x in prompts.values())) or t.get("current") is not None
+                or t.get("draft") is not None or t.get("passed") is not None or t.get("reverted") is True)
+    fact = _e(": ".join(x for x in (_str(t.get("status")), _str(t.get("reason"))) if x) or "no detail")
+    keys = ("status", "reason", "prompts", "current", "draft", "passed", "reverted") if evidence else ("status", "reason")
+    body = '<dl class="ids">' + "".join(f"<dt>{k}</dt><dd>{_e(_plain(t.get(k)))}</dd>" for k in keys if k in t) + "</dl>"
+    return _row("trigger", "Trigger check", fact, body, opened=evidence)
 
 
-def _gates_section(d):
+def _raw_row(d):
     v = d["verdict"]
-    if not d["gates"] and not v.get("verdict"):
-        return ('<section class="card" id="gates"><h2 class="sec">Gates</h2><p class="note">No verdict yet: the run has not finished '
-                f'(resume it with <code>tokscope optimize resume {_e(d["id"])}</code>).</p></section>')
-    cls = {stats.APPLY: "ok", stats.REJECT: "bad"}.get(v.get("verdict"), "off")
-    head = (f'<div class="outcome {cls}"><b>Verdict: {_e(v.get("verdict") or "unknown")}</b><span>{_e(v.get("reason"))}</span></div>'
-            if v.get("verdict") else "")
-    rows = "".join(f'<tr><td>{_e(g.get("name"))}</td><td>{"not run" if g.get("passed") is None else "pass" if g.get("passed") else "FAIL"}</td>'
-                   f'<td>{_value(g.get("value"))}</td><td>{_value(g.get("threshold"))}</td><td>{_e(g.get("detail"))}</td></tr>'
-                   for g in d["gates"])
-    table = ('<div class="scroll"><table><thead><tr><th>Gate</th><th>Result</th><th>Value</th><th>Threshold</th><th>Detail</th></tr>'
-             f'</thead><tbody>{rows}</tbody></table></div>') if rows else ""
-    t = v.get("trigger")
-    trig = ""
-    if isinstance(t, dict) and t:
-        keys = ("status", "reason", "prompts", "current", "draft", "passed", "reverted")
-        trig = ('<h3 class="sub3">Trigger check</h3><dl class="ids">'
-                + "".join(f"<dt>{k}</dt><dd>{_value(t.get(k))}</dd>" for k in keys if k in t) + "</dl>")
-    return f'<section class="card" id="gates"><h2 class="sec">Gates</h2>{head}{table}{trig}</section>'
+    if not v and not d["gates"]:
+        return ""
+    dump = lambda x: _e(json.dumps(x, indent=2, sort_keys=True))
+    parts = (("Gates", d["gates"]), ("Verdict", {k: x for k, x in v.items() if k not in ("gates", "trigger")}),
+             ("Trigger check", v.get("trigger")))
+    body = "".join(f'<h4 class="sub3">{n}</h4><pre class="src">{dump(x)}</pre>' for n, x in parts)
+    return _row("raw", "Raw values", "the gates, the verdict and the trigger check as stored", body)
 
 
 def _expectations(r):
@@ -377,11 +446,12 @@ def _expectations(r):
     return f'{why}<ul class="plain">{items}</ul>{answer}'
 
 
-def _cases_section(d):
+def _cases_row(d):
     if not d["cases"]:
-        return '<section class="card" id="cases"><h2 class="sec">Cases</h2><p class="note">No cases in the plan.</p></section>'
+        return _row("cases", "Cases", "no cases in the plan", "")
     label = {"dev": "Dev cases", "holdout": "Holdout cases"}
-    out = ['<section class="card" id="cases"><h2 class="sec">Cases</h2><p class="note">Checks passed over checks run, per arm. '
+    n = {sp: len([c for c in d["cases"] if c["split"] == sp]) for sp in label}
+    out = ['<p class="note">Checks passed over checks run, per arm. '
            'Open a case for each check and the evidence the grader found. Baseline: current and no skill. Confirm: current and the draft.</p>']
     if d["skipped"]:
         out.append(f'<p class="warn">{d["skipped"]} result{"s" * (d["skipped"] != 1)} could not be read and {"are" if d["skipped"] != 1 else "is"} left out.</p>')
@@ -402,13 +472,13 @@ def _cases_section(d):
                                   + _expectations(r))
             out.append(f'<details class="more"><summary><span class="ttl">{_e(c["case"])}</span>'
                        f'<span class="note">{" · ".join(counts) or "no results"}</span></summary>{"".join(blocks)}</details>')
-    out.append("</section>")
-    return "".join(out)
+    total = len(d["cases"])
+    return _row("cases", "Cases", f"{total} case{'s' * (total != 1)}, {n['dev']} dev, {n['holdout']} holdout", "".join(out))
 
 
-def _rounds_section(d):
+def _rounds_row(d):
     if not d["rounds"]:
-        return '<section class="card" id="editor"><h2 class="sec">Editor</h2><p class="note">The editor did not run.</p></section>'
+        return _row("editor", "Editor rounds", "the editor did not run", '<p class="note">The editor did not run.</p>')
     items = []
     for r in d["rounds"]:
         word = "accepted" if r["accepted"] else "rejected" if r["accepted"] is False else "unknown"
@@ -417,28 +487,51 @@ def _rounds_section(d):
                      f'{" · became the draft" if r["draft"] else ""}{score}<br>'
                      f'<span>{_e(r["hypothesis"]) or "<i>no hypothesis</i>"}</span>'
                      + (f'<br><span class="note">{_e(r["reason"])}</span>' if r["reason"] else "") + "</li>")
-    return ('<section class="card" id="editor"><h2 class="sec">Editor</h2><p class="note">An accepted round that lost on its dev '
-            f'score has no reason of its own: its score is the reason.</p><ul class="plain">{"".join(items)}</ul></section>')
+    n = len(d["rounds"])
+    won = next((r["round"] for r in d["rounds"] if r["draft"]), None)
+    fact = f"{n} round{'s' * (n != 1)}, " + (f"round {won} became the draft" if won else "no round became the draft")
+    return _row("editor", "Editor rounds", fact, '<p class="note">An accepted round that lost on its dev '
+                f'score has no reason of its own: its score is the reason.</p><ul class="plain">{"".join(items)}</ul>')
 
 
 def _num(ci, fmt):
     return "–" if not ci else f'{fmt(ci["mean"])} <span class="note">[{fmt(ci["ci_low"])}, {fmt(ci["ci_high"])}]</span>'
 
 
-def _compare_section(d):
+def _diff_section(d):
     if not d["draft"]:
-        return ('<section class="card" id="beforeafter"><h2 class="sec">Compare</h2><p class="note">No draft was made, so there is '
-                'nothing to compare. The editor rounds above say why.</p></section>')
+        return ('<section class="card" id="diff"><h2 class="sec">What changed</h2><p class="note">No draft was made, so there is '
+                'nothing to compare. The editor rounds below say why.</p></section>')
+    won = next((r for r in d["rounds"] if r["draft"]), None)
+    why = f'<p class="note">Editor\'s reason: {_e(won["hypothesis"])}</p>' if won and won["hypothesis"] else ""
     files = "".join(f'<section class="card"><h3 class="path">{_e(rel)} <span class="note">{kind}</span></h3>'
                     f'<div class="scroll">{_side_by_side(before, after)}</div></section>' for rel, kind, before, after in d["files"])
-    rows = "".join(f'<tr><td>{_e(a["stage"])}</td><td>{_e(a["arm"])}</td><td>{a["counted"]} of {a["runs"]}</td>'
-                   f'<td>{_num(a["pass"], lambda x: f"{x:.1f}")}</td><td>{_num(a["cost"], _usd)}</td>'
-                   f'<td>{_num(a["tokens"], lambda x: _tok(round(x)))}</td></tr>' for a in d["arms"])
-    table = ('<h3 class="sub3">Per arm</h3><p class="note">Mean per run over cases, with a 95% interval (bootstrap by case, '
-             'the plan\'s seed). Pass rate is in points.</p><div class="scroll"><table><thead><tr><th>Stage</th><th>Arm</th><th>Counted runs</th>'
-             f'<th>Pass rate</th><th>Cost per run</th><th>Tokens per run</th></tr></thead><tbody>{rows}</tbody></table></div>') if rows else ""
-    return (f'<section class="card" id="beforeafter"><h2 class="sec">Before and after</h2><p class="note">{len(d["files"])} file'
-            f'{"s" * (len(d["files"]) != 1)} changed between <code>v0</code> and <code>{_e(d["draft"])}</code>.</p>{table}</section>{files}')
+    return (f'<section class="card" id="diff"><h2 class="sec">What changed</h2><p class="note">{len(d["files"])} file'
+            f'{"s" * (len(d["files"]) != 1)} changed between <code>v0</code> and <code>{_e(d["draft"])}</code>.</p>{why}</section>{files}')
+
+
+def _change_section(d, title, anchor, left, right, names):
+    """A table of one pair of arms, three metrics, with a Change column (right minus left)."""
+    pick = lambda stage, arm: next((a for a in d["arms"] if (a["stage"], a["arm"]) == (stage, arm)), None)
+    a, b = pick(*left), pick(*right)
+    if not (a and b):
+        return ""
+    metrics = (("Pass rate", "pass", lambda x: f"{x:.1f}%", lambda x: f"{x:.1f} points"),
+               ("Cost per run", "cost", _usd, _usd), ("Tokens per run", "tokens", lambda x: _tok(round(x)), lambda x: _tok(round(x))))
+    rows = []
+    for label, key, cell, delta in metrics:
+        x, y = _mean(a[key]), _mean(b[key])
+        change = "–" if x is None or y is None else _signed(y - x, delta)
+        rows.append(f'<tr><td>{label}</td><td>{_num(a[key], cell)}</td><td>{_num(b[key], cell)}</td><td>{_e(change)}</td></tr>')
+    return (f'<section class="card" id="{anchor}"><h2 class="sec">{title}</h2><p class="note">Per arm, the mean per run over cases with '
+            f'a 95% interval (bootstrap by case, the plan\'s seed). Counted runs: {a["counted"]} of {a["runs"]} and {b["counted"]} of '
+            f'{b["runs"]}. Change is {names[1]} minus {names[0]}.</p><div class="scroll"><table><thead><tr><th></th><th>{names[0]}</th>'
+            f'<th>{names[1]}</th><th>Change</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div></section>')
+
+
+def _rows_section(d):
+    rows = [_cases_row(d), _rounds_row(d), _trigger_row(d), _settings_row(d), _raw_row(d)]
+    return f'<section class="card runrows">{"".join(rows)}</section>'
 
 
 def _post_ship_section(conn, d):
@@ -470,7 +563,10 @@ def _report(d, decide, post=""):
     s = d["summary"]
     head = (f'<p><a href="/optimize">← All runs</a></p><section class="card libhead"><h2 class="sec">{_e(d["plan"].get("skill") or d["id"])} · '
             f'{_state(s["state"])}</h2><p class="note">Run <code>{_e(d["id"])}</code></p></section>')
-    return head + decide + _plan_section(d) + _gates_section(d) + _cases_section(d) + _rounds_section(d) + _compare_section(d) + post
+    return (head + decide + _diff_section(d) + _gates_section(d)
+            + _change_section(d, "Draft vs current", "draftvs", ("confirm", "current"), ("confirm", "draft"), ("Current", "Draft"))
+            + _change_section(d, "Skill vs no skill", "skillvs", ("baseline", "none"), ("baseline", "current"), ("No skill", "Skill"))
+            + _rows_section(d) + post)
 
 
 def page_optimize(conn, qs, level):

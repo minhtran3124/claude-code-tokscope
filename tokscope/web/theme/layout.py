@@ -883,6 +883,11 @@ p.warn{color:var(--agent-ink);font-size:13px}
 .gchip{white-space:nowrap;font:500 12px var(--mono);padding:2px 10px;border:var(--line-w) solid var(--line-c);border-radius:999px;background:var(--chip);color:var(--ink2)}
 .gchip.ok{color:var(--pass);border-color:var(--pass)}
 .gchip.bad{color:var(--fail);border-color:var(--fail);font-weight:700}
+.runrows{padding-top:4px;padding-bottom:4px}
+.runrows>details.more{border:0;border-radius:0;margin:0;padding:12px 0;background:none}
+.runrows>details.more+details.more{border-top:1px solid var(--row-c)}
+.runrows>details.more>summary{align-items:baseline;gap:2px 12px}
+table.gtable td.nw{white-space:nowrap}
 .vreason{overflow-wrap:anywhere}
 .decide .optform{margin-top:8px}
 @media (max-width:640px){.nums{grid-template-columns:1fr;gap:6px}.num{flex-direction:row;justify-content:space-between;align-items:baseline;padding:6px 10px}.num b{font-size:15px;text-align:right}}

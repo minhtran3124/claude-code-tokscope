@@ -334,10 +334,12 @@ class RenderTest(Fixture):
 
     def test_the_report_has_every_section_gate_case_and_check_evidence(self):
         body = self.render(f"run={APPLY_RUN}")
-        for section in ("Plan", "Gates", "Cases", "Editor", "Before and after"):
+        for section in ("Decide", "What changed", "Gates", "Draft vs current", "Skill vs no skill"):
             self.assertIn(f">{section}</h2>", body)
+        for row in ("Cases", "Editor rounds", "Trigger check", "Run settings", "Raw values"):  # one-line collapsed rows
+            self.assertIn(f'<summary><span class="ttl">{row}</span>', body)
         for gate in GATES:
-            self.assertIn(f"<td>{gate}</td>", body)
+            self.assertIn(f'<td class="nw">{gate}</td>', body)
         for case in ("d1", "d2", "h1"):
             self.assertIn(f'<span class="ttl">{case}</span>', body)
         self.assertLess(body.index("Dev cases (2)"), body.index('<span class="ttl">d1</span>'))
@@ -364,6 +366,48 @@ class RenderTest(Fixture):
         self.assertIn("Per arm", body)
         self.assertNotIn('id="compare"', body)  # the theme hides #compare (the Sessions compare tray) until it opens
 
+    def test_order_is_decide_check_then_the_collapsed_rows(self):
+        body = self.render(f"run={APPLY_RUN}")
+        marks = ['id="decide-card"', 'id="diff"', 'id="gates"', 'id="draftvs"', 'id="skillvs"', 'id="cases"', 'id="editor"',
+                 'id="trigger"', 'id="plan"', 'id="raw"']
+        at = [body.index(m) for m in marks]
+        self.assertEqual(at, sorted(at))
+        self.assertIn("Editor's reason: hypothesis 1", body)
+
+    def test_no_json_in_a_table_cell_and_the_raw_values_keep_it(self):
+        body = self.render(f"run={APPLY_RUN}")
+        for table in re.findall(r"<table.*?</table>", body, re.S):
+            self.assertNotIn("&quot;", table)
+            self.assertNotIn("{", table)
+        raw = body[body.index('id="raw"'):]
+        self.assertIn("&quot;name&quot;: &quot;Meaningful suite&quot;", raw)
+
+    def test_the_change_tables_have_a_change_column(self):
+        body = self.render(f"run={APPLY_RUN}")
+        self.assertEqual(body.count("<th>Change</th>"), 2)
+        self.assertIn("<td>+50.0 points</td>", body)  # draft vs current: 50 to 100
+        self.assertIn("<td>-$0.02</td>", body)
+        self.assertIn("<td>0</td>", body)  # tokens did not change
+        self.assertIn("<td>+50.0 points</td>", body[body.index('id="skillvs"'):])  # skill vs no skill: 0 to 50
+
+    def test_the_collapsed_rows_carry_their_key_fact(self):
+        body = self.render(f"run={APPLY_RUN}")
+        self.assertIn('<span class="note">3 cases, 2 dev, 1 holdout</span>', body)
+        self.assertIn('<span class="note">2 rounds, round 1 became the draft</span>', body)
+        self.assertIn('<details class="more" id="trigger"><summary>', body)  # status and reason only: closed
+        self.assertIn("not needed: the description did not change", body)
+
+    def test_a_trigger_check_with_evidence_is_open_and_full(self):
+        path = self.run_dir() / "verdict.json"
+        v = json.loads(path.read_text())
+        v["trigger"] = {"status": "ran", "reason": "description changed", "prompts": {"train": 4, "test": 2},
+                        "current": 0.5, "draft": 0.9, "passed": True, "reverted": False}
+        path.write_text(json.dumps(v))
+        body = self.render(f"run={APPLY_RUN}")
+        self.assertIn('<details class="more" id="trigger" open>', body)
+        self.assertIn("<dd>train 4, test 2</dd>", body)
+        self.assertIn("<dt>reverted</dt><dd>no</dd>", body)
+
     def test_a_run_without_a_draft_shows_only_the_editor(self):
         v = json.loads((self.run_dir() / "verdict.json").read_text())
         v.update(draft_version=None, draft_fingerprint=None)
@@ -384,7 +428,7 @@ class RenderTest(Fixture):
         plan = {"skill": 5, "created": 20260101, "budget_usd": "2", "per_run_cap_usd": "x", "dev": 3, "holdout": "a",
                 "model": ["m"], "runs": {"a": 1}}
         (self.run_dir() / "plan.json").write_text(json.dumps(plan))
-        self.assertIn("Plan", self.render(f"run={APPLY_RUN}"))
+        self.assertIn("Run settings", self.render(f"run={APPLY_RUN}"))
         self.assertIn("Optimize runs", self.render())
 
     def test_a_level_below_full_hides_the_text(self):
