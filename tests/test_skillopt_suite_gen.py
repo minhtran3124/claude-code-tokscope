@@ -43,6 +43,22 @@ class Gen(unittest.TestCase):
         self.assertEqual(res["dropped"], 2)
         self.assertTrue(any("no machine checks" in p for p in res["problems"]))
 
+    def test_a_rewritten_prompt_and_its_fixtures_replace_the_real_ones(self):
+        entry = {"prompt": "Here are my notes, write the PR text.", "files": {"notes.md": "fix the login bug", "../x": "no", "big.md": "y" * 5000},
+                 "checks": [{"type": "answer_regex", "pattern": "login"}]}
+        res = suite_gen.generate("demo", run=fake(json.dumps({"cases": {"from-description": entry}})))
+        case = res["cases"][0]
+        self.assertEqual(case["prompt"], "Here are my notes, write the PR text.")
+        self.assertEqual(case["files"], ["evals/fixtures/from-description/notes.md"])  # '../x' and the 5000-char text are skipped
+        self.assertEqual((self.skill / "evals" / "fixtures" / "from-description" / "notes.md").read_text(), "fix the login bug")
+        self.assertEqual(res["problems"], [])
+
+    def test_the_list_shape_still_adds_checks_and_keeps_the_prompt(self):
+        answer = json.dumps({"cases": {"from-description": [{"type": "answer_regex", "pattern": "x"}]}})
+        case = suite_gen.generate("demo", run=fake(answer))["cases"][0]
+        self.assertTrue(case["prompt"].startswith("Use the demo skill"))
+        self.assertEqual(case["checks"], [{"type": "answer_regex", "pattern": "x"}])
+
     def test_a_failed_call_or_a_non_json_answer_is_a_value_error(self):
         with self.assertRaises(ValueError):
             suite_gen.generate("demo", run=fake("budget exceeded", code=1, is_error=True))
