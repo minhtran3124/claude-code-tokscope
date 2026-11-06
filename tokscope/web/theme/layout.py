@@ -1048,4 +1048,7 @@ kbd.keypill{font:500 11px var(--mono);padding:2px 10px;border:var(--line-w) soli
 .srail .big{font:600 26px/1.2 var(--mono);color:var(--ink)}
 .srail .split{height:8px}
 @media (max-width:1100px){.sgrid{grid-template-columns:minmax(0,1fr)}}
+/* beside the rail the title column is narrow: a live row keeps its title and drops the entry name */
+#session-list .srow>summary .tt{min-width:10ch}
+@media (min-width:1101px) and (max-width:1500px){#session-list .srow .live .where,#session-list .srow>summary .sid8{display:none}}
 """
