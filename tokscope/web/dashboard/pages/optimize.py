@@ -490,7 +490,7 @@ def _runs_list(found, notice="", qs=None, now=None):
     if not found:
         return f'{notice}<section class="card"><h2 class="sec">Optimize runs</h2>{_empty()}</section>'
     flt, skill = _filter(qs, found)
-    need = [r for r in found if r["bucket"] == "needs"]  # newest first
+    need = [r for r in found if r["bucket"] == "needs" and (not skill or r["skill"] == skill)]  # newest first, in the chosen skill
     n = len(need)
     review = (f'<a class="primary" href="/optimize?run={quote(need[0]["id"], safe="")}">Review newest</a>' if need else "")
     names = list(dict.fromkeys(r["skill"] for r in found))

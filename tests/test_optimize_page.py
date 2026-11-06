@@ -385,6 +385,19 @@ class RenderTest(Fixture):
         self.assertIn("Needs decision <b>2</b>", page._runs_list(found))
         self.assertIn('class="ol-row"', page._runs_list(found, qs={"filter": ["running"]}))
 
+    def test_headline_and_review_link_follow_the_skill_filter(self):
+        row = {"decided": None, "decided_at": None, "label": "", "result": "", "spent": 0, "budget": 2,
+               "created": "2026-01-04T00:00:00+00:00"}
+        found = [dict(row, id="a-1", skill="a", state="running", bucket="running"),
+                 dict(row, id="b-1", skill="b", state="done", bucket="needs"),
+                 dict(row, id="b-2", skill="b", state="done", bucket="needs")]
+        only_a = page._runs_list(found, qs={"skill": ["a"]})
+        self.assertIn("No runs need your decision", only_a)
+        self.assertNotIn("Review newest", only_a)
+        only_b = page._runs_list(found, qs={"skill": ["b"]})
+        self.assertIn("2 runs need your decision", only_b)
+        self.assertIn("run=b-1", only_b)
+
     def test_skill_chip_limits_the_groups(self):
         self.make_run("other-20260104T000000Z", stats.APPLY, "2026-01-04T00:00:00+00:00", skill="other")
         both = self.render()
