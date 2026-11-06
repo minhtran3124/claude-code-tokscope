@@ -146,10 +146,10 @@ def render(conn, name, qs, stamp, level="full", token=""):
     tabs = ("" if not bar or name == "library" else '<nav class="range-tabs" aria-label="Range">' + "".join(
         f'<a href="{f.link(name, range=k)}"{" class=on aria-current=true" if k == f.range else ""}>{t}</a>' for k, t in RANGE_TABS.items()) + "</nav>")
     # the title and one line under it start the page body; the header above holds the page name, range and filters
-    lead = ("" if name not in PAGE_LEAD or "<h1" in body else
-            f'<div class="pghead"><h1>{PAGES[name]}</h1><p class="sub">{PAGE_LEAD[name]}</p></div>')
     chip = "" if level == "full" else f'<span class="privacy" role="note" title="Names and text follow the {level} level"><b>{level}</b></span>'
     dates = _range_dates(f) if bar and name != "library" else ""
+    lead = ("" if name not in PAGE_LEAD or "<h1" in body else
+            f'<div class="pghead"><h1>{PAGES[name]}</h1><div class="subrow"><p class="sub">{PAGE_LEAD[name]}</p>{dates}</div></div>')
     pill = sheet_filters = ""
     if bar:  # a phone shows the filters as one pill that opens the menu sheet, where the same form sits
         sheet_filters = (bar.replace('<form class="filters"', '<form class="filters sheet-filters" aria-label="Filters"', 1)
@@ -165,7 +165,7 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 <div class="sheet" id="sheet"><nav class="toc" aria-label="Pages">{nav}</nav>{sheet_filters}
 <p class="sheet-priv note">Privacy level: <b>{level}</b>. Names and text follow it.</p></div></aside><main>
 <header class="dash-head"><b class="ptitle">{PAGES[name]}</b>{chip}<span class="fresh" id="fresh"><span class="dot"></span> live</span>
-{dates}<div class="dash-tools">{tabs}{bar}</div>{pill}</header>
+<div class="dash-tools">{tabs}{bar}</div>{pill}</header>
 {lead}{body}
 </main></div><div id="tip"></div><div id="toast" role="status" aria-live="polite"></div>
 <dialog class="keys" id="keys"><h3 style="margin:0">Keyboard shortcuts</h3><dl>
