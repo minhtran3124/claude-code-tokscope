@@ -28,6 +28,18 @@ from .pages.sessions import page_sessions
 from .scripts import DASH_CSS, DASH_JS, LIB_JS, MANAGED_JS, OPT_JS, SETTINGS_JS
 
 
+PAGE_LEAD = {
+    "overview": "What your tokens went to in this range, and what needs a look.",
+    "sessions": "Every session in this range. Open a row for each prompt. Tick 2 to 4 rows to compare.",
+    "breakdowns": "Where the tokens went, by phase, skill, tool and subagent.",
+    "projects": "Token use by project and the MCP servers each one loads.",
+    "library": "Your skills, agents and commands, and what each costs to load.",
+    "benchmarks": "Runs that compare one setup against another on the same task.",
+    "managed": "Managed agents on the Anthropic platform: setup, sessions and cost.",
+    "settings": "Theme, time zone, privacy and the background service.",
+}
+
+
 def _options(conn, f, only=None):
     projects = _q(conn, f"SELECT s.project, max(s.cwd), count(*) FROM sessions s WHERE s.project NOT LIKE '{BENCH_PROJECT}' "
                         "GROUP BY 1 ORDER BY 3 DESC")
@@ -133,6 +145,9 @@ def render(conn, name, qs, stamp, level="full", token=""):
     # the range is tabs on a wide screen (links, so a click applies at once); the form keeps its Range select for the phone sheet
     tabs = ("" if not bar or name == "library" else '<nav class="range-tabs" aria-label="Range">' + "".join(
         f'<a href="{f.link(name, range=k)}"{" class=on aria-current=true" if k == f.range else ""}>{t}</a>' for k, t in RANGE_TABS.items()) + "</nav>")
+    # the title and one line under it start the page body; the header above holds the page name, range and filters
+    lead = ("" if name not in PAGE_LEAD or "<h1" in body else
+            f'<div class="pghead"><h1>{PAGES[name]}</h1><p class="sub">{PAGE_LEAD[name]}</p></div>')
     chip = "" if level == "full" else f'<span class="privacy" role="note" title="Names and text follow the {level} level"><b>{level}</b></span>'
     dates = _range_dates(f) if bar and name != "library" else ""
     pill = sheet_filters = ""
@@ -149,9 +164,9 @@ try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElemen
 <button type="button" class="chip menu-btn" id="menu-btn" aria-controls="sheet" aria-expanded="false"><span class="menu-i" aria-hidden="true"></span>Menu</button>
 <div class="sheet" id="sheet"><nav class="toc" aria-label="Pages">{nav}</nav>{sheet_filters}
 <p class="sheet-priv note">Privacy level: <b>{level}</b>. Names and text follow it.</p></div></aside><main>
-<header class="dash-head"><h1>{PAGES[name]}</h1>{chip}<span class="fresh" id="fresh"><span class="dot"></span> live</span>
+<header class="dash-head"><b class="ptitle">{PAGES[name]}</b>{chip}<span class="fresh" id="fresh"><span class="dot"></span> live</span>
 {dates}<div class="dash-tools">{tabs}{bar}</div>{pill}</header>
-{body}
+{lead}{body}
 </main></div><div id="tip"></div><div id="toast" role="status" aria-live="polite"></div>
 <dialog class="keys" id="keys"><h3 style="margin:0">Keyboard shortcuts</h3><dl>
 <dt><kbd>t</kbd></dt><dd>Light or dark theme</dd><dt><kbd>g</kbd></dt><dd>Back to the top</dd>
