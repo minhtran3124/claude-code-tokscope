@@ -777,6 +777,7 @@ ul.plain li{padding:4px 0;border-bottom:1px solid var(--grid)}
 #newdata{position:fixed;right:20px;bottom:20px;z-index:40}
 .libtools input[type=search]{min-width:min(100%,280px)}
 .libgroup h2 .note{margin:0 0 0 8px;font-weight:400}
+a.sk .runopt,.runbtn{display:inline-block;line-height:20px;align-self:flex-start;margin-top:4px}
 a.sk{display:flex;flex-direction:column;gap:6px;background:var(--surface);border:var(--line-w) solid var(--line-c);border-radius:12px;padding:12px 14px;color:var(--ink);text-decoration:none}
 a.sk b{font-size:14px;overflow-wrap:anywhere}
 a.sk p{margin:0;color:var(--ink2);font-size:12.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
