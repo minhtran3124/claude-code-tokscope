@@ -38,6 +38,8 @@ The dashboard answers only on `127.0.0.1` and refuses requests from other hosts 
   and Copy. The group-by is `?by=` in the URL. `GET /api/summary?by=&format=json|csv` gives the same rows with the same filters
   (without `by` and `format` it keeps returning the totals). The HTML report has the same section; its downloads are built in the browser.
 - **Managed** (full level only): your Claude Managed Agents, read through the `ant` CLI (below).
+- **Optimize**: the runs of `tokscope optimize run`, each with its evidence, before and after, and Approve or Reject
+  (below).
 
 ### Always-on baseline
 
@@ -84,11 +86,10 @@ file); **Show installed** shows them too. To fix a grouping, write `library.json
 
 - **STE check** lists STE100 findings per Markdown file (line, rule, text). It runs `scripts/ste-lint.py` from the
   `asd-ste100` skill; `TOKSCOPE_STE_LINT` points to another linter.
-- **Optimize** runs `claude -p` on a copy of the skill with one or more guide skills (`optimize-skill`, `asd-ste100`,
-  `unslop`), a model and a maximum cost. The run page shows each step and the changed files; when it ends, compare
-  each file (side by side, diff, before, after), optionally benchmark the draft, then **Approve and apply** or
-  **Reject**. The run writes only in `bench/optimize/<job>/`; the skill changes only when you apply, and not if the
-  skill changed after the run started. Only your own skills can be optimized.
+- **Optimize** on a skill starts the evaluated loop (below): the page shows the cost first, and a run needs the skill's
+  approved `evals/evals.json`. A run measures a draft against the skill with gates and evidence per case, then you
+  **Approve** or **Reject** it. Runs live in `bench/optimize/`; the skill changes only on Approve. Only your own skills
+  can be optimized. The old guide-based rewrite is gone ([DECISIONS.md](DECISIONS.md)).
 - **Optimize case** (`tokscope optimize case <skill> <case-id> [--version <hash>] [--max-budget-usd N]`) runs one case of
   `<skill>/evals/evals.json` in a temp sandbox with an isolated `claude -p` (project settings only, no user MCP,
   nothing saved, edits allowed in the sandbox with `acceptEdits`, cost capped at $2.0 unless `--max-budget-usd` says otherwise) and grades it by machine, with no LLM.
@@ -100,6 +101,25 @@ file); **Show installed** shows them too. To fix a grouping, write `library.json
   `bench/skillopt/runs/<skill>/<case>/<time>/` holds `stream.jsonl`, `final.md`, `files/`, `plugins.json` (plugins
   that still load), `run.json` and `grading.json`. A run with no result (timeout, no binary) is INVALID: neither
   passed nor failed. Exit code: 0 all passed, 1 a check failed or INVALID, 2 load error.
+
+### Optimize: measured runs
+
+`/optimize` lists the runs of `tokscope optimize run` (skill, start, state, verdict, cost spent of the budget, decision).
+A run page shows:
+
+- **Plan, gates and verdict**: each gate with its value and threshold.
+- **Evidence**: each dev and holdout case with checks passed per arm (baseline current and no skill, confirm current
+  and draft). Open a case to see each check with the grader's evidence and the answer.
+- **Editor**: each round's hypothesis, and why a draft was rejected.
+- **Before and after**: pass rate, cost and tokens per run for each arm, with a 95% interval, and each changed file
+  side by side.
+- **Approve or Reject**: Approve installs the measured draft through the same code as `tokscope optimize approve`; it is
+  off for a Reject verdict and needs a reason for Not enough evidence. Reject records the decision and never changes
+  the skill.
+
+In the Library, each skill shows **Verified**, **Edited after run** or **Not verified**, and links to the run that
+approved it. **Start an optimize run** shows the number of paid runs and the cost estimate first; nothing starts or is
+spent until you confirm, and a second start of the same skill while a run is going is refused.
 
 ### Managed: Claude Managed Agents
 

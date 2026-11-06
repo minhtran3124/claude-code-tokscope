@@ -302,7 +302,7 @@ class StoreTest(Home):
     def test_run_lock(self):
         run, _ = seed_run()
         store.acquire(run)
-        self.assertEqual((run / "run.lock").read_text(), str(os.getpid()))
+        self.assertEqual(store._read_lock(run / "run.lock"), (os.getpid(), store.start_ticks(os.getpid())))
         store.release(run)
         self.assertFalse((run / "run.lock").exists())
         live = subprocess.Popen(["sleep", "30"])
@@ -315,7 +315,7 @@ class StoreTest(Home):
         dead.wait()
         (run / "run.lock").write_text(str(dead.pid))
         store.acquire(run)  # a dead pid's lock is taken over
-        self.assertEqual((run / "run.lock").read_text(), str(os.getpid()))
+        self.assertEqual(store._read_lock(run / "run.lock"), (os.getpid(), store.start_ticks(os.getpid())))
 
     def test_run_lock_takeover_has_one_winner(self):
         dead = subprocess.Popen(["true"])
@@ -360,9 +360,9 @@ class StoreTest(Home):
 
         with mock.patch("os.link", link):
             store.acquire(run)
-        self.assertEqual(linked, [str(os.getpid())] * 2)
+        self.assertEqual(linked, [(run / "run.lock").read_text()] * 2)
         self.assertEqual(seen, ["lost"])
-        self.assertEqual((run / "run.lock").read_text(), str(os.getpid()))
+        self.assertEqual(store._read_lock(run / "run.lock"), (os.getpid(), store.start_ticks(os.getpid())))
 
     def test_index_is_rebuilt_from_files(self):
         run, _ = seed_run()
@@ -413,8 +413,10 @@ if editor:
     if mode == "crash":
         sys.exit(1)
     text = Path("SKILL.md").read_text()
-    if mode in ("edit", "nohyp"):
+    if mode in ("edit", "nohyp", "symlink"):
         text += "\nDRAFT edit %d\n" % n
+    if mode == "symlink":
+        os.symlink(os.environ["FAKE_SECRET"], "notes.md")
     if mode == "desc":
         text = text.replace("description: Summarize notes", "description: Something else") + "\nDRAFT\n"
     Path("SKILL.md").write_text(text)
@@ -615,6 +617,16 @@ class LoopTest(LoopBase):
         self.assertIn("same files", reasons[2]["reason"])
         self.assertFalse((run / "versions" / "v1").exists())
         self.assertNotIn("confirm", {p.name for p in (run / "results").iterdir()})
+
+    def test_a_symlink_in_the_editor_workspace_is_not_copied(self):
+        secret = self.tmp / "secret.txt"
+        secret.write_text("aws_secret\n")
+        self.set_cfg(editor={"1": "symlink"})
+        with mock.patch.dict(os.environ, {"FAKE_SECRET": str(secret)}):
+            run, v = self.go()
+        self.assertTrue((run / "versions" / "v1" / "SKILL.md").is_file())
+        self.assertFalse(os.path.lexists(run / "versions" / "v1" / "notes.md"))
+        self.assertEqual(v["draft_fingerprint"], skills.fingerprint(run / "versions" / "v1"))
 
     def test_an_editor_with_no_result_is_charged_its_cap(self):
         self.set_cfg(editor={"1": "crash"})

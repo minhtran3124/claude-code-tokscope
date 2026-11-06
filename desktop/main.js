@@ -3,6 +3,7 @@ const { app, BrowserWindow, Menu, WebContentsView, dialog, nativeTheme, shell } 
 const { statusPage } = require("./loading");
 const { serverCommand } = require("./server-command");
 const mac = require("./mac-integration");
+const autostart = require("./autostart");
 const os = require("os");
 const { spawn, execFile } = require("child_process");
 const net = require("net");
@@ -58,9 +59,18 @@ function isTokscope(url) {
   });
 }
 
+// Linux, first run: install and start the user service, so the server runs in the background from now on.
+function enableService() {
+  if (!autostart.firstRun({ dir: app.getPath("userData"), platform: process.platform })) return Promise.resolve(false);
+  const run = autostart.installCommand({ root: ROOT });
+  return new Promise((resolve) => execFile(run.cmd[0], run.cmd.slice(1), { timeout: 20000 }, (err) => resolve(!err)));
+}
+
 async function start() {
   createWindow();  // at once, with a loading page: the server and the first page can take seconds
   const serviceUrl = `http://127.0.0.1:${SERVICE_PORT}/`;
+  // when the install works, wait for the service (up to 20 s); when it fails, the app starts its own server below
+  if (await enableService()) await waitFor(serviceUrl, 200).catch(() => {});
   if (await isTokscope(serviceUrl)) return showDashboard(serviceUrl);  // the service is up: just show it
   const port = await freePort();
   // The server runs under a small sh that stops it when this process is gone, however it went (a quit, a signal,

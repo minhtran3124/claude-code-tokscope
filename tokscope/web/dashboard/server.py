@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, quote, urlparse
 
 from ...core import privacy, summary
 from ...experiments import optimize
-from ...features import library, projects
+from ...features import library, projects, service
 from ...features import live as livemod
 from ...integrations import managed, registry
 from ..theme import fonts
@@ -22,7 +22,7 @@ from ..theme.brand import FAVICON
 from ...core.ingest import connect, ingest
 from ..report.sections.sessions import _sessions_json
 from .common import Filters, PAGES
-from .pages.library import JOB_ID
+from .pages import optimize as optpage
 from .pages.overview import _days, _totals
 from .shell import render, skills_moved
 
@@ -100,7 +100,7 @@ class Live:
 
 
 def post(db, path, body, level):
-    """(code, JSON) for a write: an optimize job, a project's MCP servers, or pausing or unpausing a Managed Agents deployment."""
+    """(code, JSON) for a write: an optimize run, a project's MCP servers, or pausing or unpausing a Managed Agents deployment."""
     if level != "full":
         return 403, {"error": "writes need the full privacy level"}
     if m := re.match(r"^api/projects/([0-9a-f]{10})/health$", path):
@@ -141,41 +141,23 @@ def post(db, path, body, level):
             return 400, {"error": str(e)}
         except RuntimeError as e:
             return 502, {"error": str(e)}
-    if path == "api/optimize":
-        conn = connect(db)
+    if m := re.match(r"^api/service/(install|start|stop|autostart)$", path):
         try:
-            found = library.discover(conn)
-        finally:
-            conn.close()
-        k = next((k for k in found if k["id"] == body.get("skill")), None)
-        if not k:
-            return 404, {"error": "no such skill"}
-        try:
-            job = optimize.start(k, found, body.get("guides") or [], body.get("model") or "", body.get("budget") or 2)
-        except (ValueError, TypeError) as e:
-            return 400, {"error": str(e)}
-        return 200, {"job": job, "url": f"/library?skill={k['id']}&job={job}"}
-    m = re.match(r"^api/optimize/([^/]+)/(apply|discard|cancel|bench|task)$", path)
-    if not m or not JOB_ID.match(m.group(1)) or not (optimize.jobs_dir() / m.group(1) / "job.json").is_file():
-        return 404, {"error": "unknown endpoint"}
-    job, act = m.groups()
-    try:
-        if act == "bench":
-            return 200, optimize.bench_start(job, db, str(body.get("task", "")), body.get("runs") or 2)
-        if act == "task":
-            data = optimize.status(job)
-            return 200, {"task": optimize.new_task(data["skill"], data["source"], body)}
-        if act in ("discard", "cancel"):
-            (optimize.discard if act == "discard" else optimize.cancel)(job)
-            return 200, {"ok": True}
-        conn = connect(db)
-        try:
-            old, new = optimize.apply(conn, job)
-        finally:
-            conn.close()
-        return 200, {"old": old, "new": new}
-    except ValueError as e:
-        return 409, {"error": str(e)}
+            act = m.group(1)
+            if act == "autostart":
+                return 200, {"status": service.set_autostart(bool(body.get("on")))}
+            if act == "install":
+                if service.is_mac():
+                    return 400, {"error": "on macOS use File > Start at login in the app"}
+                return 200, {"status": service.install(exe=service.CHECKOUT / "bin" / "tokscope", quote=True)}
+            return 200, {"status": getattr(service, act)()}
+        except RuntimeError as e:
+            return 502, {"error": str(e)}
+    if path == "optimize/start":
+        return optpage.start(db, body)
+    if m := re.match(r"^optimize/([A-Za-z0-9._-]+)/(approve|reject)$", path):
+        return optpage.decide(db, m.group(1), m.group(2), body)
+    return 404, {"error": "unknown endpoint"}
 
 
 def handler(db, live, port, level, token=None):
@@ -229,17 +211,6 @@ def handler(db, live, port, level, token=None):
                 except RuntimeError as e:
                     return self._send(502, json.dumps({"error": str(e)}), "application/json")
                 return self._send(200, json.dumps(found), "application/json")
-            if m := re.match(r"^api/optimize/([^/]+)$", name):
-                if level != "full" or not JOB_ID.match(m.group(1)) or not (optimize.jobs_dir() / m.group(1) / "job.json").is_file():
-                    return self._send(404, json.dumps({"error": "no such job"}), "application/json")
-                data = optimize.status(m.group(1))
-                shown, total, idle = optimize.steps(m.group(1))
-                out = {k: data.get(k) for k in ("job", "state", "cost", "duration_s", "error")}
-                bench_now = optimize.bench_status(m.group(1)) if data.get("bench") else {}
-                out["bench"] = {"state": bench_now.get("state"), "log": bench_now.get("log", [])}
-                out.update(steps=shown, nsteps=total, idle=idle,
-                           files=[[rel, kind] for rel, kind, _ in optimize.changes(m.group(1))] if data["state"] == "running" else [])
-                return self._send(200, json.dumps(out), "application/json")
             if name == "managed" and qs.get("refresh"):  # read ant again, then drop ?refresh so a reload does not
                 managed.forget()
                 pick = (qs.get("agent") or [""])[0]

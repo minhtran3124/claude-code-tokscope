@@ -11,8 +11,6 @@ a.sk:hover{transform:translate(-2px,-2px);box-shadow:5px 6px 0 var(--shadow)}
 .seg .chip:is(:hover,.on) b{color:inherit}
 .sk.reg:hover{box-shadow:none}
 .ask{border:var(--line-w) solid var(--ink)}
-.runbar{height:8px;border-radius:4px}
-.runbar i{border-radius:4px}
 table.sbs th{font:600 12px var(--sans)}
 table.sbs td.gap{background:var(--chip)}
 .decide{border:var(--line-w) solid var(--ink)}
@@ -28,6 +26,15 @@ table.sbs th{font:500 11px/1.45 var(--mono)}
 .st .pill,.state{font-weight:500}
 .movers th{font-weight:500}
 .libtools input[type=search]{font-family:var(--mono);font-size:12px;font-weight:400}
+/* optimize page: tables scroll in their own wrapper, long evidence wraps, a failed check reads as one */
+ul.plain li.bad{color:var(--fail)}
+.badge.ver.ok{color:var(--pass)}
+.badge.ver.warn{color:var(--agent-ink)}
+a.badge.ver{text-decoration:none}
+.card pre.src{max-height:240px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+.card li,.card dd{overflow-wrap:anywhere}
+.card textarea{width:100%;max-width:100%;box-sizing:border-box}
+#opt-est{margin:8px 0}
 """
 
 LIB_JS = """
@@ -60,11 +67,6 @@ function ask(anchor,text,ok='OK'){return new Promise(res=>{document.querySelecto
   acts.append(y,n);box.append(el('p','',text),acts);anchor.after(box);box.scrollIntoView({block:'nearest'});y.focus()})}
 function busy(b,text){b.dataset.label=b.textContent;b.disabled=true;b.classList.add('busy');b.textContent=text}
 function idle(b){b.disabled=false;b.classList.remove('busy');b.textContent=b.dataset.label||b.textContent}
-document.getElementById('optimize')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.target,b=f.querySelector('button[type=submit]'),
-  guides=[...f.querySelectorAll('[name=guide]:checked')].map(x=>x.value),budget=+f.budget.value;
-  if(!await ask(b.closest('.optrow'),`Run claude -p with ${guides.join(', ')||'no guide'} on a copy of this skill? It spends at most $${budget}. The skill changes only when you apply the result.`,'Run it'))return;
-  busy(b,'Starting…');
-  try{const j=await send('/api/optimize',{skill:f.dataset.skill,guides,model:f.model.value,budget});location.href=j.url}catch(err){showErr(err);idle(b)}});
 document.getElementById('mcp-check')?.addEventListener('click',async e=>{const b=e.target,when=document.getElementById('mcp-when');
   b.disabled=true;when.textContent='Checking… this can take a minute.';
   try{await send(`/api/projects/${document.getElementById('mcp').dataset.project}/health`);location.reload()}
@@ -111,49 +113,51 @@ document.querySelectorAll('[data-mcp-remove]').forEach(b=>b.addEventListener('cl
   busy(b,'Removing…');
   try{await send(`/api/projects/${mcpCard.dataset.project}/mcp/remove`,{name:b.dataset.mcpRemove,scope:b.dataset.scope});location.reload()}
   catch(x){showErr(x);idle(b)}}));
-// a running job: the clock ticks every second, the steps and files come every two; the page reloads into the result
-const jobEl=document.getElementById('job');
-const clock=s=>{s=Math.max(0,Math.round(s));return s>=60?Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s':s+'s'};
-if(jobEl&&jobEl.dataset.state==='running'){const t0=+jobEl.dataset.started;document.title='⏳ '+document.title;
-  setInterval(()=>{const e=document.getElementById('run-elapsed');if(e)e.textContent=clock(Date.now()/1000-t0)},1000);
-  setInterval(async()=>{try{const j=await (await fetch('/api/optimize/'+jobEl.dataset.job)).json();if(j.state!=='running'){location.reload();return}
-    document.getElementById('run-count').textContent=j.nsteps+' steps';
-    const w=document.getElementById('run-idle');w.hidden=j.idle<=120;document.getElementById('run-idle-s').textContent=clock(j.idle);
-    const list=document.getElementById('run-list'),at=list.scrollTop+list.clientHeight>=list.scrollHeight-8;
-    list.replaceChildren(...j.steps.map(st=>{const li=el('li',st.kind+(st.sub?' sub':''));li.append(el('time','','+'+clock(st.t-t0)),el('span','',st.text));return li}));
-    if(at)list.scrollTop=list.scrollHeight;
-    const files=document.getElementById('run-files');files.replaceChildren(...(j.files.length?j.files.map(([r,k])=>{const li=el('li');li.append(el('code','',r),' '+k);return li}):[el('li','note','none yet')]))}
-  catch(_){}},2000)}
-document.querySelectorAll('[data-job-act]').forEach(b=>b.addEventListener('click',async()=>{const act=b.dataset.jobAct,where=b.closest('.acts')||b;
-  if(act==='apply'&&!await ask(where,'Write these changes into the skill folder? tokscope keeps the old version, so a benchmark can compare the two.','Apply'))return;
-  if(act==='cancel'&&!await ask(where,'Stop the run? What it spent so far stays spent; the copy stays in the job folder until you discard it.','Stop it'))return;
-  if(act==='discard'&&b.closest('.decide')&&!await ask(where,'Reject the draft? The job folder and its copy are deleted; the skill stays as it is.','Reject'))return;
-  busy(b,{apply:'Applying…',discard:'Discarding…',cancel:'Stopping…'}[act]);
-  try{await send(`/api/optimize/${jobEl.dataset.job}/${act}`);act==='discard'?location.href=location.pathname+'?skill='+new URLSearchParams(location.search).get('skill'):location.reload()}
-  catch(err){showErr(err);idle(b)}}));
-// compare: each changed file has its own tabs (side by side, diff, after, before)
-document.querySelectorAll('.cmp').forEach(c=>c.querySelectorAll('[data-cmp]').forEach(b=>b.addEventListener('click',()=>{
-  c.querySelectorAll('[data-cmp]').forEach(x=>x.classList.toggle('on',x===b));
-  c.querySelectorAll('[data-cmp-pane]').forEach(p=>p.hidden=p.dataset.cmpPane!==b.dataset.cmp)})));
-// benchmark: the cap is runs x 2 versions x the task's cap per run; the page follows the runs and reloads at the end
-const bf=document.getElementById('bench-form'),benchErr=x=>{const e=document.getElementById('bench-err');e.textContent=x.message;e.hidden=false};
-function benchCap(){if(!bf)return 0;const o=bf.task.selectedOptions[0],cap=+(o?.dataset.cap||0)*2*+bf.runs.value;
-  document.getElementById('bench-cap').textContent=`${+bf.runs.value*2} runs, at most $${cap.toFixed(2)} in all`;return cap}
-if(bf){bf.task.addEventListener('change',benchCap);bf.runs.addEventListener('change',benchCap);benchCap();
-  bf.addEventListener('submit',async e=>{e.preventDefault();const b=bf.querySelector('button[type=submit]'),cap=benchCap();
-    if(!await ask(bf,`Run ${bf.task.value} ${bf.runs.value} times on the current skill and ${bf.runs.value} times on the draft? It spends at most $${cap.toFixed(2)}.`,'Run it'))return;
-    busy(b,'Starting…');try{await send(`/api/optimize/${jobEl.dataset.job}/bench`,{task:bf.task.value,runs:+bf.runs.value});location.reload()}
-    catch(x){benchErr(x);idle(b)}})}
-document.getElementById('task-form')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.target,b=f.querySelector('button[type=submit]');
-  busy(b,'Saving…');try{await send(`/api/optimize/${jobEl.dataset.job}/task`,{name:f.elements['name'].value,prompt:f.prompt.value,
-    grader:f.grader.value,paths:f.paths.value,budget:+f.budget.value});location.reload()}catch(x){benchErr(x);idle(b)}});
-const benchEl=document.getElementById('bench');
-if(benchEl&&benchEl.dataset.bench==='running')setInterval(async()=>{try{const j=await (await fetch('/api/optimize/'+jobEl.dataset.job)).json();
-  if(j.bench.state!=='running'){location.reload();return}const pre=document.getElementById('bench-log');pre.textContent=j.bench.log.join('\\n')||'starting…'}
-  catch(_){}},3000);
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('on',x===b));
   document.querySelectorAll('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==b.dataset.view)}));
+"""
+
+OPT_JS = """
+// optimize page: approve or reject a run (LIB_JS's send, ask, busy and idle carry this page's token)
+const decideEl=document.getElementById('decide');
+if(decideEl){const reason=document.getElementById('opt-reason'),ok=decideEl.querySelector('[data-opt-act=approve]'),
+    syncOk=()=>{if(ok&&!ok.dataset.block)ok.disabled=decideEl.dataset.need==='1'&&!reason.value.trim()};
+  reason.addEventListener('input',syncOk);
+  decideEl.querySelectorAll('[data-opt-act]').forEach(b=>b.addEventListener('click',async()=>{const act=b.dataset.optAct,all=decideEl.querySelectorAll('[data-opt-act]');
+    if(act==='approve'&&!await ask(b.parentElement,'Write the draft into the skill folder? tokscope keeps the old version and commits only the skill\\'s files when it is in git.','Approve'))return;
+    busy(b,act==='approve'?'Approving…':'Rejecting…');all.forEach(x=>x.disabled=true);
+    try{await send(`/optimize/${decideEl.dataset.run}/${act}`,{reason:reason.value});location.reload()}
+    catch(err){showErr(err);all.forEach(x=>{x.disabled=!!x.dataset.block});idle(b);syncOk()}}))}
+// library: ask for the estimate of an optimize run, then for a confirm; the server starts the worker only after the confirm
+const startEl=document.getElementById('optstart');
+if(startEl){const est=document.getElementById('opt-est'),err=document.getElementById('optstart-err'),go=startEl.querySelector('button[type=submit]'),
+    fail=e=>{err.textContent=e.message;err.hidden=false};
+  const body=()=>({skill:startEl.dataset.skill,budget:+startEl.budget.value,runs:+startEl.runs.value,model:startEl.model.value.trim()});
+  startEl.addEventListener('input',()=>{est.hidden=true;est.replaceChildren();go.hidden=false});
+  startEl.addEventListener('submit',async e=>{e.preventDefault();err.hidden=true;busy(go,'Counting…');
+    try{const j=await send('/optimize/start',body());est.replaceChildren(...j.estimate.lines.map(t=>el('p','note',t)));
+      const ok=el('button','primary','Start the run');ok.type='button';est.append(ok);est.hidden=false;go.hidden=true;
+      ok.addEventListener('click',async()=>{busy(ok,'Starting…');
+        try{const r=await send('/optimize/start',{...body(),confirm:true});location.href=r.url}catch(x){fail(x);idle(ok)}})}
+    catch(x){fail(x)}finally{idle(go)}})}
+"""
+
+SETTINGS_JS = """
+// settings: the Background service card; LIB_JS's send() carries this page's token. Stop may end this very page (when the
+// service serves it), so a stop that gets no answer counts as done.
+(()=>{const err=document.getElementById('svc-err');
+  const fail=m=>{if(err){err.textContent=m;err.hidden=false}};
+  const act=async(path,body,b)=>{if(err)err.hidden=true;if(b)busy(b,'Working…');
+    try{await send(path,body);location.reload()}
+    catch(e){if(b)idle(b);
+      if(path.endsWith('/stop')&&e instanceof TypeError){document.getElementById('svc-state').textContent='Stopped';
+        fail('The service stopped, and this page was served by it. Start it again with: tokscope service install');return}
+      fail(e.message);const box=document.getElementById('svc-auto-box');if(box&&path.endsWith('/autostart'))box.checked=!body.on}};
+  document.querySelectorAll('[data-svc]').forEach(b=>b.addEventListener('click',async()=>{const a=b.dataset.svc;
+    if(a==='stop'&&!await ask(b.closest('.setrow'),'Stop the background service? If this dashboard is served by it, this page stops answering until you start it again.','Stop'))return;
+    act('/api/service/'+a,{},b)}));
+  document.getElementById('svc-auto-box')?.addEventListener('change',e=>act('/api/service/autostart',{on:e.target.checked}))})();
 """
 
 MANAGED_JS = """

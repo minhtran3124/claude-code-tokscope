@@ -202,6 +202,33 @@ class ServerTest(unittest.TestCase):
             opener.open(urllib.request.Request(f"http://127.0.0.1:{self.port}/managed?refresh=1&agent=agent_01%2FA"))
         self.assertEqual(e.exception.headers["Location"], "/managed?agent=agent_01%2FA")
 
+    def test_settings_has_the_background_service_card(self):
+        from tokscope.web.dashboard.pages.settings import page_settings
+        on = {"supported": True, "installed": True, "running": True, "autostart": True, "mac": False}
+        html_on = page_settings("full", on)
+        self.assertIn("Background service", html_on)
+        self.assertIn('data-svc="stop"', html_on)
+        self.assertRegex(html_on, r'id="svc-auto-box"[^>]*checked')
+        off = page_settings("full", {**on, "installed": False, "running": False, "autostart": False})
+        self.assertIn('data-svc="install"', off)
+        self.assertIn("Not installed", off)
+        self.assertRegex(off, r'id="svc-auto-box"[^>]*disabled')
+        redacted = page_settings("numbers", on)
+        self.assertNotIn("data-svc=", redacted)                      # writes need the full level
+        self.assertIn("Not available", page_settings("full", {**on, "supported": False}))
+        _, live = self.get("/settings")                              # the real page renders, whatever this machine has
+        self.assertIn('id="set-service"', live)
+        self.assertIn("/api/service/", live)
+
+    def test_service_writes_are_refused_without_the_token_and_below_full(self):
+        from unittest import mock as m
+        with m.patch("tokscope.features.service.stop", return_value="stopped") as stop:
+            self.assertEqual(dashboard.post(self.db, "api/service/stop", {}, "full"), (200, {"status": "stopped"}))
+            stop.assert_called_once()
+        self.assertEqual(dashboard.post(self.db, "api/service/stop", {}, "numbers")[0], 403)
+        with m.patch("tokscope.features.service.set_autostart", side_effect=RuntimeError("nope")):
+            self.assertEqual(dashboard.post(self.db, "api/service/autostart", {"on": True}, "full"), (502, {"error": "nope"}))
+
     def test_pages_carry_one_skin_and_no_design_switch(self):
         _, page = self.get("/overview")
         self.assertIn('<style id="skin-ink">', page)
@@ -218,7 +245,8 @@ class ServerTest(unittest.TestCase):
         groups = re.findall(r'<div class="grp">(\w+)</div>', side)
         self.assertEqual(groups, ["Usage", "Workspace", "Connect", "System"])
         order = re.findall(r'<a href="/(\w+)[?"]', side.split('<nav class="toc"', 1)[1])
-        self.assertEqual(order, ["overview", "sessions", "breakdowns", "projects", "library", "benchmarks", "managed", "settings"])
+        self.assertEqual(order, ["overview", "sessions", "breakdowns", "projects", "library", "optimize", "benchmarks", "managed",
+                                 "settings"])
         self.assertNotIn("data-set-theme", side)
         self.assertNotIn("data-set-tz", side)
 

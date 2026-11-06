@@ -415,12 +415,13 @@ def main():
     pres.add_argument("run_id")
     preg = po_sub.add_parser("regrade", help="grade the stored results of an optimize run again and recompute its verdict (no claude call, no cost)")
     preg.add_argument("run_id")
-    pap = po_sub.add_parser("approve", help="replace the skill with the run's measured draft after fingerprint checks, and commit when the skill is in git; exit 0 done, 1 refused (skill unchanged) or failed, 2 load error")
+    pap = po_sub.add_parser("approve", help="install the measured draft of an optimize run (the installed fingerprint becomes the measured one) and commit only the skill's files when it is in git; exit 0 done, 2 refused")
     pap.add_argument("run_id")
-    pap.add_argument("--reason", help="why; required when the verdict is Not enough evidence")
-    prj = po_sub.add_parser("reject", help="record that you rejected an optimize run; the skill is not touched")
+    pap.add_argument("--reason", help="why; required to approve a Not enough evidence verdict")
+    prj = po_sub.add_parser("reject", help="record that you rejected an optimize run's draft (the skill is not touched)")
     prj.add_argument("run_id")
-    prv = po_sub.add_parser("revert", help="put back the version an approved run replaced, with the same checks and commit")
+    prj.add_argument("--reason")
+    prv = po_sub.add_parser("revert", help="put back the version an approve replaced (from its kept snapshot); exit 0 done, 2 refused")
     prv.add_argument("run_id")
     tz_help = "IANA zone for days (default: local, or TOKSCOPE_TZ), e.g. UTC"
     pv = sub.add_parser("serve", help="live dashboard on 127.0.0.1 that ingests new transcripts as they land")
@@ -605,23 +606,6 @@ def main():
         except ValueError as e:
             print(f"tokscope: {e}", file=sys.stderr)
             sys.exit(2)
-    elif args.cmd == "optimize" and args.optimize_cmd in ("approve", "reject", "revert"):
-        from .experiments.skillopt import apply as skillopt_apply
-
-        try:
-            if args.optimize_cmd == "approve":
-                res = skillopt_apply.approve(args.run_id, args.reason)
-            elif args.optimize_cmd == "reject":
-                res = skillopt_apply.reject(args.run_id)
-            else:
-                res = skillopt_apply.revert(args.run_id)
-        except skillopt_apply.Refused as e:
-            print(f"tokscope: {e}", file=sys.stderr)
-            sys.exit(1)
-        except ValueError as e:  # no such run, or another process holds it
-            print(f"tokscope: {e}", file=sys.stderr)
-            sys.exit(2)
-        print("\n".join(skillopt_apply.report(res)))
     elif args.cmd == "optimize" and args.optimize_cmd in ("run", "resume", "regrade"):
         from .experiments.skillopt import loop
 
@@ -637,6 +621,28 @@ def main():
             sys.exit(2)
         print("\n".join(loop.report(run)[1:] if args.optimize_cmd == "run" else loop.report(run)))
         sys.exit(loop.exit_code(run))
+    elif args.cmd == "optimize" and args.optimize_cmd in ("approve", "reject", "revert"):
+        from .experiments.skillopt import apply
+
+        try:
+            if args.optimize_cmd == "approve":
+                d = apply.approve(args.run_id, args.reason)
+            elif args.optimize_cmd == "reject":
+                d = apply.reject(args.run_id, args.reason)
+            else:
+                d = apply.revert(args.run_id)
+        except ValueError as e:  # a refusal: the skill is at its old fingerprint
+            print(f"tokscope: {e}", file=sys.stderr)
+            sys.exit(2)
+        if d["decision"] == "reject":
+            if d.get("approve_still_applied"):
+                print(f"rejected {d['run_id']} (recorded); {d['skill']} is NOT unchanged: the approved change is still "
+                      f"live, run `tokscope optimize revert {d['run_id']}` to undo it")
+            else:
+                print(f"rejected {d['run_id']} ({d['skill']} unchanged)")
+        else:
+            verb = "approved" if d["decision"] == "approve" else "reverted"
+            print(f"{verb} {d['skill']}: {d['old_fingerprint']} → {d['new_fingerprint']}, commit {(d['commit_sha'] or 'none')[:10]}")
     elif args.cmd == "optimize":
         from .experiments.skillopt import sandbox
 
