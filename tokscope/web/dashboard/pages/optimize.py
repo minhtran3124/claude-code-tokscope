@@ -14,7 +14,9 @@ import sys
 import tempfile
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 from .... import paths
 from ....core import skills
@@ -122,22 +124,84 @@ def _holder_alive(run):
 
 # the list
 
+STOPPED_LINE = "Stopped before confirm"
+_RESULTS = {}  # run id -> (verdict.json mtime, result line): the line is computed once per verdict file, never stored in it
+_LAST = ("approve", "reject", "revert")
+
+
+def _decided_at(run, decision):
+    """When the latest decision was made: its `at`, else decision.json's mtime, else ''."""
+    at = _str(decision.get("at"))
+    if at:
+        return at
+    try:
+        return datetime.fromtimestamp((run / apply.DECISION_JSON).stat().st_mtime, timezone.utc).isoformat()
+    except OSError:
+        return ""
+
+
+def _bucket(state, verdict, decided):
+    """running | decided | needs (an Apply nobody decided) | noaction (Not enough evidence, Reject, Stopped)."""
+    if state == "running":
+        return "running"
+    if decided:
+        return "decided"
+    return "needs" if verdict == stats.APPLY else "noaction"
+
+
 def _summary(run):
     plan, verdict, decision = _dict(run / store.PLAN), _dict(run / loop.VERDICT), _dict(run / apply.DECISION_JSON)
     done = (run / loop.VERDICT).is_file()
+    state = "done" if done else "running" if _holder_alive(run) else "stopped"
+    gates = verdict.get("gates") if isinstance(verdict.get("gates"), list) else []
+    label = page_verdict(verdict.get("verdict"), gates)  # a failed gate on an Apply reads Do not apply, as on the run page
+    act = _str(decision.get("decision"))
+    decided = act if act in _LAST else None
     return {"id": run.name, "skill": _str(plan.get("skill"), run.name), "created": _str(plan.get("created")),
-            "state": "done" if done else "running" if _holder_alive(run) else "stopped",
-            "verdict": verdict.get("verdict"), "spent": store.spent(run), "budget": _usd_or_none(plan.get("budget_usd")),
-            "decision": _str(decision.get("decision")) or None}
+            "state": state, "verdict": verdict.get("verdict"), "label": label, "spent": store.spent(run),
+            "budget": _usd_or_none(plan.get("budget_usd")), "decision": _str(decision.get("decision")) or None,
+            "decided": decided, "decided_at": _decided_at(run, decision) if decided else "",
+            "bucket": _bucket(state, label, decided)}
+
+
+def _result(run, summary):
+    """The one result line of a finished run, built by the run page's number code and cached by verdict.json's mtime.
+    The verdict reason when a number is missing; STOPPED_LINE for a run with no verdict that is not running."""
+    if summary["state"] == "stopped":
+        return STOPPED_LINE
+    if summary["state"] != "done":
+        return ""
+    try:
+        mtime = (run / loop.VERDICT).stat().st_mtime
+    except OSError:
+        return ""
+    hit = _RESULTS.get(run.name)
+    if hit and hit[0] == mtime:
+        return hit[1]
+    plan, verdict = _dict(run / store.PLAN), _dict(run / loop.VERDICT)
+    recs, _ = _records(run)
+    draft = verdict.get("draft_version") if isinstance(verdict.get("draft_version"), str) else None
+    label = summary["label"]
+    line = summary_sentence(label, headline_numbers(arm_numbers(plan, recs, draft)), verdict.get("reason"))
+    if label and line.startswith(f"{label}: "):
+        line = line[len(label) + 2:]  # the pill already says the label
+    _RESULTS[run.name] = (mtime, line)
+    return line
 
 
 def runs():
-    """Every run under the data home, newest first. A folder without plan.json is not a run."""
+    """Every run under the data home, newest first. A folder without plan.json is not a run. Each has its bucket, the
+    time of its decision and its one-line `result`."""
     try:
         found = [d for d in store.runs_dir().iterdir() if (d / store.PLAN).is_file()]
     except OSError:
         return []
-    return sorted((_summary(d) for d in found), key=lambda r: (r["created"], r["id"]), reverse=True)
+    out = []
+    for d in found:
+        r = _summary(d)
+        r["result"] = _result(d, r)
+        out.append(r)
+    return sorted(out, key=lambda r: (r["created"], r["id"]), reverse=True)
 
 
 def running_for(skill):
@@ -317,19 +381,139 @@ def _state(s):
     return f'<span class="state {_e(s)}">{_e(s)}</span>'
 
 
-def _runs_list(found, notice=""):
-    if not found:
-        body = ('<div class="empty"><b>No optimize runs yet</b>Start one from a skill in the Library (it shows a cost estimate '
-                'first), or run <code>tokscope optimize run &lt;skill&gt; --budget 2</code>.</div>')
+RELATIVE_DAYS = 7  # a run older than this shows its date, not "N d ago"
+FILTERS = (("needs", "Needs decision"), ("noaction", "No action"), ("decided", "Decided"))
+_BUCKETS = (("needs", "Needs your decision"), ("running", "Running"), ("noaction", "No action needed"), ("decided", "Decided"))
+
+
+def _when(iso):
+    try:
+        t = datetime.fromisoformat(iso)
+    except (TypeError, ValueError):
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+
+
+def _ago(iso, now=None):
+    """(text, full time) of a time: "just now", "36 min ago", "3 h ago", "2 d ago" up to RELATIVE_DAYS, then the date."""
+    t = _when(iso)
+    if t is None:
+        return "–", ""
+    t = t.astimezone(timezone.utc)
+    secs = ((now or datetime.now(timezone.utc)) - t).total_seconds()
+    if secs < 60:
+        text = "just now"
+    elif secs < 3600:
+        text = f"{int(secs // 60)} min ago"
+    elif secs < 86400:
+        text = f"{int(secs // 3600)} h ago"
+    elif secs <= RELATIVE_DAYS * 86400:
+        text = f"{int(secs // 86400)} d ago"
     else:
-        rows = "".join(
-            f'<tr><td><a href="/optimize?run={_e(r["id"])}">{_e(r["skill"])}</a></td><td>{_time(r["created"])}</td>'
-            f'<td>{_state(r["state"])}</td><td>{_e(r["verdict"] or "–")}</td>'
-            f'<td>{_usd(r["spent"])} of {_usd(r["budget"])}</td><td>{_e(r["decision"] or "–")}</td></tr>' for r in found)
-        body = ('<div class="scroll"><table><thead><tr><th>Skill</th><th>Started</th><th>State</th><th>Verdict</th>'
-                f'<th>Spent</th><th>Decision</th></tr></thead><tbody>{rows}</tbody></table></div>')
-    return (f'{notice}<section class="card"><h2 class="sec">Optimize runs</h2><p class="note">Each run measures a draft of a skill '
-            f'against the current one. Open a run to read its evidence, then approve or reject it.</p>{body}</section>')
+        text = t.strftime("%Y-%m-%d")
+    return text, t.strftime("%Y-%m-%d %H:%M UTC")
+
+
+def _stamp(iso, now=None):
+    """The relative time with its full time on hover, and the clock time beside it."""
+    text, full = _ago(iso, now)
+    if not full:
+        return "–"
+    return (f'<span class="ol-when" title="{_e(full)}">{_e(text)}</span> '
+            f'<time class="ol-clock" data-ts="{_e(iso)}" data-fmt="hm" title="{_e(full)}">{_e(full[11:])}</time>')
+
+
+def _pill(r):
+    if r["state"] == "running":
+        return '<span class="ol-pill run">Running</span>'
+    if r["state"] == "stopped":
+        return '<span class="ol-pill off">Stopped</span>'
+    label = r["label"] or "No verdict"
+    cls = {stats.APPLY: "ok", DO_NOT_APPLY: "bad", stats.NOT_ENOUGH: "warn"}.get(label, "off")
+    return f'<span class="ol-pill {cls}">{_e(label)}</span>'
+
+
+def _action(r, now=None):
+    href = f'/optimize?run={quote(r["id"], safe="")}'
+    if r["bucket"] == "decided":
+        word = {"approve": "Approved", "reject": "Rejected", "revert": "Reverted"}[r["decided"]]
+        text, full = _ago(r["decided_at"], now)
+        return (f'<span class="ol-done" title="{_e(full)}">{word} {_e(text)}</span> '
+                f'<a class="btn" href="{href}">Open</a>')
+    return f'<a class="{"primary" if r["bucket"] == "needs" else "btn"}" href="{href}">{"Review" if r["bucket"] == "needs" else "Open"}</a>'
+
+
+def _orow(r, now=None):
+    result = f'<p class="ol-result">{_e(r["result"])}</p>' if r["result"] else ""
+    return (f'<li class="ol-row">{_pill(r)}<div class="ol-main">{result}<p class="ol-meta">{_stamp(r["created"], now)}'
+            f' <span class="ol-spent">{_usd(r["spent"])} of {_usd(r["budget"])}</span></p></div>'
+            f'<div class="ol-act">{_action(r, now)}</div></li>')
+
+
+def _query(flt, skill):
+    parts = [f"filter={flt}"] if flt else []
+    if skill:
+        parts.append(f"skill={quote(skill, safe='')}")
+    return "/optimize" + ("?" + "&".join(parts) if parts else "")
+
+
+def _filter(qs, found):
+    """(filter, skill) from the query: an unknown value is ignored."""
+    qs = qs if isinstance(qs, dict) else {}
+    flt = (qs.get("filter") or [""])[0]
+    skill = (qs.get("skill") or [""])[0]
+    return (flt if flt in dict(FILTERS) else ""), (skill if any(r["skill"] == skill for r in found) else "")
+
+
+def _chips_row(found, flt, skill):
+    counts = {k: sum(1 for r in found if r["bucket"] == k) for k, _ in FILTERS}
+    out = []
+    for key, name in FILTERS:
+        on = flt == key
+        out.append(f'<a class="chip" href="{_query("" if on else key, skill)}"{" aria-current=true" if on else ""}>'
+                   f'{name} <b>{counts[key]}</b></a>')
+    names = list(dict.fromkeys(r["skill"] for r in found))
+    out.append(f'<a class="chip" href="{_query(flt, "")}"{"" if skill else " aria-current=true"}>All skills</a>')
+    for n in names:
+        on = skill == n
+        out.append(f'<a class="chip" href="{_query(flt, "" if on else n)}"{" aria-current=true" if on else ""}>{_e(n)}</a>')
+    return f'<nav class="ol-chips" aria-label="Filter runs">{"".join(out)}</nav>'
+
+
+def _empty():
+    return ('<div class="empty"><b>No runs yet</b>Start one from a skill in the <a href="/library">Library</a> (it shows a cost '
+            'estimate first), or run <code>tokscope optimize run &lt;skill&gt; --budget 2</code>.</div>')
+
+
+def _runs_list(found, notice="", qs=None, now=None):
+    if not found:
+        return f'{notice}<section class="card"><h2 class="sec">Optimize runs</h2>{_empty()}</section>'
+    flt, skill = _filter(qs, found)
+    need = [r for r in found if r["bucket"] == "needs"]  # newest first
+    n = len(need)
+    review = (f'<a class="primary" href="/optimize?run={quote(need[0]["id"], safe="")}">Review newest</a>' if need else "")
+    names = list(dict.fromkeys(r["skill"] for r in found))
+    facts = (f'{len(found)} run{"s" * (len(found) != 1)} · {_usd(sum(r["spent"] or 0 for r in found))} spent · '
+             f'{len(names)} skill{"s" * (len(names) != 1)}')
+    head = (f'<section class="card ol-top"><div><h2 class="sec">{n} run{"s" * (n != 1)} {"need" if n != 1 else "needs"} your decision'
+            if n else '<section class="card ol-top"><div><h2 class="sec">No runs need your decision')
+    head += f'</h2><p class="note">{facts}</p></div>{review}</section>'
+    groups = []
+    for name in names:
+        if skill and name != skill:
+            continue
+        subs = []
+        for key, title in _BUCKETS:
+            if flt and key != flt:
+                continue
+            rs = [r for r in found if r["skill"] == name and r["bucket"] == key]
+            if rs:
+                subs.append(f'<h4 class="ol-sub">{title} <span>{len(rs)}</span></h4><ul class="ol-rows">'
+                            + "".join(_orow(r, now) for r in rs) + "</ul>")
+        if subs:
+            groups.append(f'<section class="card ol-group"><h3 class="ol-skill">{_e(name)}</h3>{"".join(subs)}</section>')
+    body = "".join(groups) or '<div class="empty"><b>No runs match</b>Clear a filter above to see the others.</div>'
+    return f'{notice}{head}{_chips_row(found, flt, skill)}{body}'
 
 
 def _plain(v):
@@ -585,7 +769,7 @@ def page_optimize(conn, qs, level):
             notice = f'<p class="warn" role="note">There is no run <code>{_e(pick)}</code>.</p>'
         else:
             return _report(d, _decide_block(conn, d), _post_ship_section(conn, d))
-    return _runs_list(runs(), notice)
+    return _runs_list(runs(), notice, qs)
 
 
 # deciding
