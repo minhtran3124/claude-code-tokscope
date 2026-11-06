@@ -181,6 +181,12 @@ class ServerTest(unittest.TestCase):
         self.assertIn("/api/live", page)
         self.assertIn("liveTag", page)
 
+    def test_the_sessions_page_has_a_rail_with_range_totals_and_the_biggest_session(self):
+        _, page = self.get("/sessions")
+        self.assertIn('<aside class="srail"', page)
+        for text in ("This range", "Median tokens", "Biggest session"):
+            self.assertIn(text, page)
+
     def test_every_page_renders_and_names_itself(self):
         for name, title in dashboard.PAGES.items():
             code, body = self.get(f"/{name}")
