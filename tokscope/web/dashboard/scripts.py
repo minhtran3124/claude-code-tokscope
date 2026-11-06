@@ -39,6 +39,8 @@ a.badge.ver{text-decoration:none}
 
 LIB_JS = """
 // library: find by name or description, show installed skills on request, rendered or source view
+document.querySelectorAll('.runopt').forEach(b=>{const go=e=>{e.preventDefault();e.stopPropagation();location.href=b.dataset.go};
+  b.addEventListener('click',go);b.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')go(e)})});
 const libFind=document.getElementById('lib-find'),libInst=document.getElementById('lib-inst'),libDead=document.getElementById('lib-dead');
 function libFilter(){const q=(libFind?.value||'').trim().toLowerCase(),all=libInst?.checked;let shown=0;
   document.querySelectorAll('a.sk').forEach(a=>{const ok=(all||a.dataset.origin==='mine')&&(!libDead?.checked||a.dataset.unused==='1')&&(!q||a.dataset.find.includes(q));a.hidden=!ok;shown+=ok});

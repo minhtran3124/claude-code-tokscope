@@ -55,10 +55,12 @@ def _skill_card(k, used, lint=None, rng="", state=None, ver=None, top=1):
     hide = " hidden" if k["origin"] == "installed" else ""
     bar = (f'<div class="bar-track skbar" title="Description tokens in every session, against the heaviest skill">'
            f'<u style="width:{max(2, ntok * 100 // max(top, 1))}%"></u></div>')
+    run = (f'<span class="runopt primary" role="link" tabindex="0" data-go="/library?skill={k["id"]}#optstart-card" '
+           'title="Estimate the cost, then start an optimize run of this skill">Run optimize</span>') if _can_run(k) else ""
     return (f'<a class="sk" href="/library?skill={k["id"]}" data-dir="{html.escape(k["dir"])}" data-origin="{k["origin"]}"{keys} '
             f'data-find="{html.escape((k["name"] + " " + k["description"]).lower())}"{hide}>'
             f'<b class="skname">{html.escape(k["name"])}{badge}</b><p title="{html.escape(k["description"])}">{markdown.inline(k["description"]) or "<i>No description.</i>"}</p>'
-            f'{bar}<span class="meta">{meta}</span></a>')
+            f'{bar}<span class="meta">{meta}</span>{run}</a>')
 
 
 def _library_list(found, used, lint=None, lint_note="", project="", rng="", state=None, ver=None):
@@ -192,24 +194,28 @@ def _side_by_side(a, b):
             f'<tbody>{"".join(rows)}</tbody></table>')
 
 
+def _can_run(k):
+    return k["origin"] == "mine" and ":" not in k["dir"]
+
+
 def _start_form(k):
     """Start an evaluated optimize run (the Optimize page): the form asks for the estimate, then for a confirm. While a run of
     the skill is going, a link to it replaces the form."""
     from . import optimize as optpage  # not at the top: the Optimize page imports this module
-    if k["origin"] != "mine" or ":" in k["dir"]:
+    if not _can_run(k):
         return ""
     going = optpage.running_for(k["dir"])
     if going:
         return (f'<a class="outcome run" href="/optimize?run={html.escape(going)}"><b><span class="spin"></span>An optimize run of '
                 'this skill is going</b><span>See its progress on the Optimize page</span></a>')
-    return ('<section class="card" id="optstart-card"><h2 class="sec">Start an optimize run</h2>'
+    return ('<section class="card" id="optstart-card"><h2 class="sec">Run optimize</h2>'
             '<p class="note">Measures a draft against this skill on its approved eval suite (<code>tokscope optimize suite</code>). '
             'You see the size and the cost first; nothing is spent until you confirm.</p>'
             f'<form class="optform" id="optstart" data-skill="{k["id"]}"><div class="optrow">'
             '<label>Spend at most $<input type="number" name="budget" value="2" min="0.1" step="0.1"></label>'
             '<label>Runs per case <input type="number" name="runs" value="3" min="1" max="10" step="1"></label>'
             '<label>Model <input name="model" value="sonnet" maxlength="64"></label>'
-            '<button type="submit" class="primary">Show the cost</button></div>'
+            '<button type="submit" class="primary">Run optimize</button></div>'
             '<div id="opt-est" hidden></div><p class="err" id="optstart-err" hidden></p></form></section>')
 
 
@@ -226,6 +232,7 @@ def _approvals(conn, k):
 
 
 def _library_skill(k, qs, used, conn, linter=None, found=(), back="/library", rng=""):
+    from . import optimize as optpage
     listed = library.files(k["folder"])
     names = {rel for rel, _ in listed}
     rel = (qs.get("file") or ["SKILL.md"])[0]
@@ -284,6 +291,8 @@ def _library_skill(k, qs, used, conn, linter=None, found=(), back="/library", rn
     state, run = library.verified(conn, k["dir"], k["folder"], len(same) == 1)
     facts.append(("Optimize", _ver_badge(state, run, link=True)))
     desc = f'<p>{markdown.inline(k["description"])}</p>' if k["description"] else ""
+    if _can_run(k) and not optpage.running_for(k["dir"]):
+        desc += '<p><a class="primary runbtn" href="#optstart-card">Run optimize</a></p>'
     head = (f'<p><a href="{html.escape(back)}">← All skills</a></p>'
             f'<section class="card libhead"><h2 class="sec">{html.escape(k["name"])}</h2>{desc}'
             '<dl class="ids">' + "".join(f"<dt>{a}</dt><dd>{b}</dd>" for a, b in facts) + "</dl></section>")
