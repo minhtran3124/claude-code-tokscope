@@ -264,6 +264,48 @@ class DataTest(Fixture):
                 page.load(bad)
 
 
+class SentenceTest(unittest.TestCase):
+    ARMS = [{"stage": "confirm", "arm": "current", "pass": {"mean": 50.0}, "cost": {"mean": 0.1}, "tokens": {"mean": 150.0}},
+            {"stage": "confirm", "arm": "draft", "pass": {"mean": 100.0}, "cost": {"mean": 0.08}, "tokens": {"mean": 120.0}},
+            {"stage": "baseline", "arm": "current", "pass": {"mean": 1.0}, "cost": {"mean": 9.0}, "tokens": {"mean": 9.0}}]
+
+    def test_page_verdict_labels(self):
+        ok, bad = [{"passed": True}, {"passed": None}], [{"passed": True}, {"passed": False}]
+        self.assertEqual(page.page_verdict(stats.APPLY, ok), "Apply")
+        self.assertEqual(page.page_verdict(stats.NOT_ENOUGH, ok), stats.NOT_ENOUGH)
+        self.assertEqual(page.page_verdict(stats.REJECT, ok), "Do not apply")
+        self.assertEqual(page.page_verdict(stats.REJECT, bad), "Do not apply")
+        self.assertEqual(page.page_verdict(stats.APPLY, bad), "Do not apply")
+        self.assertIsNone(page.page_verdict(None, bad))
+
+    def test_headline_numbers_take_the_confirm_arms(self):
+        n = page.headline_numbers(self.ARMS)
+        self.assertEqual(n, {"pass": (50.0, 100.0), "cost": (0.1, 0.08), "tokens": (150.0, 120.0)})
+
+    def test_headline_numbers_are_none_for_a_missing_arm_or_ci(self):
+        self.assertEqual(page.headline_numbers([]), {"pass": None, "cost": None, "tokens": None})
+        arms = [dict(self.ARMS[0]), dict(self.ARMS[1], cost=None)]
+        n = page.headline_numbers(arms)
+        self.assertIsNone(n["cost"])
+        self.assertEqual(n["pass"], (50.0, 100.0))
+
+    def test_sentence_for_each_verdict(self):
+        n = page.headline_numbers(self.ARMS)
+        tail = "pass rate 50% to 100%, cost per run $0.10 to $0.08, tokens per run 150 to 120."
+        for label in ("Apply", "Do not apply", "Not enough evidence"):
+            self.assertEqual(page.summary_sentence(label, n, "why"), f"{label}: {tail}")
+
+    def test_sentence_falls_back_to_the_reason(self):
+        n = page.headline_numbers(self.ARMS[:1])
+        self.assertEqual(page.summary_sentence("Apply", n, "because it is good"), "because it is good")
+        self.assertEqual(page.summary_sentence("Apply", n, None), "")
+        self.assertEqual(page.summary_sentence("Apply", n, ""), "")
+
+    def test_a_reject_with_a_failed_gate_reads_do_not_apply(self):
+        label = page.page_verdict(stats.REJECT, [{"passed": False}])
+        self.assertTrue(page.summary_sentence(label, page.headline_numbers(self.ARMS), "r").startswith("Do not apply: pass rate"))
+
+
 class RenderTest(Fixture):
     def render(self, qs="", level="full"):
         conn = ingest.connect(self.db)

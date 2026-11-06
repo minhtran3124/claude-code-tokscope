@@ -257,6 +257,48 @@ def load(run_id):
             "rounds": editor_rounds(run, recs, draft), "files": changed_files(run, draft)}
 
 
+# the decide block: what the page says in words (pure, so the rule is testable)
+
+DO_NOT_APPLY = "Do not apply"
+
+
+def page_verdict(verdict, gates):
+    """The label the page shows for a stored verdict: a Reject or any failed gate reads "Do not apply" (the stored value
+    stays Reject); Apply and Not enough evidence read as stored. None when there is no verdict."""
+    if not verdict:
+        return None
+    if verdict == stats.REJECT or any(isinstance(g, dict) and g.get("passed") is False for g in gates or []):
+        return DO_NOT_APPLY
+    return str(verdict)
+
+
+def _mean(ci):
+    v = ci.get("mean") if isinstance(ci, dict) else None
+    return v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def headline_numbers(arms):
+    """{"pass", "cost", "tokens"}: (old, new) means of the confirm stage, old = the current arm, new = the draft arm
+    (pass in points, cost in USD, tokens per run). A metric is None when an arm or its mean is missing."""
+    by = {a["arm"]: a for a in arms or [] if a.get("stage") == "confirm"}
+    out = {}
+    for key in ("pass", "cost", "tokens"):
+        old, new = _mean((by.get("current") or {}).get(key)), _mean((by.get("draft") or {}).get(key))
+        out[key] = None if old is None or new is None else (old, new)
+    return out
+
+
+def summary_sentence(label, numbers, reason):
+    """`<Label>: pass rate A% to B%, cost per run $X to $Y, tokens per run X to Y.`, or the verdict reason when a number
+    is missing (or "" when there is neither)."""
+    n = numbers or {}
+    if not label or any(n.get(k) is None for k in ("pass", "cost", "tokens")):
+        return reason if isinstance(reason, str) else ""
+    (p0, p1), (c0, c1), (t0, t1) = n["pass"], n["cost"], n["tokens"]
+    return (f"{label}: pass rate {p0:.0f}% to {p1:.0f}%, cost per run {_usd(c0)} to {_usd(c1)}, "
+            f"tokens per run {_tok(round(t0))} to {_tok(round(t1))}.")
+
+
 # the page
 
 def _e(x):
