@@ -998,3 +998,28 @@ class ServeProjectsDirTest(unittest.TestCase):
         with mock.patch("tokscope.web.dashboard.server.ingest") as ing:
             dashboard.Live(tmp / "t.db", ASSETS / "phases.json", 60, projects_dir=tmp / "p").tick()
         self.assertEqual(ing.call_args.args[2], tmp / "p")
+
+
+class QuietServerTest(unittest.TestCase):
+    def errors(self, exc):
+        import contextlib
+        import io
+        from http.server import BaseHTTPRequestHandler
+
+        from tokscope.web.dashboard import server as dash_server
+        srv = dash_server.QuietServer(("127.0.0.1", 0), BaseHTTPRequestHandler)
+        self.addCleanup(srv.server_close)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            try:
+                raise exc
+            except Exception:
+                srv.handle_error(None, ("127.0.0.1", 1))
+        return err.getvalue()
+
+    def test_a_browser_that_drops_the_connection_prints_nothing(self):
+        for exc in (BrokenPipeError(32, "Broken pipe"), ConnectionResetError(), ConnectionAbortedError()):
+            self.assertEqual(self.errors(exc), "", type(exc).__name__)
+
+    def test_any_other_error_in_a_request_is_still_printed(self):
+        self.assertIn("ValueError: boom", self.errors(ValueError("boom")))
