@@ -927,6 +927,22 @@ ol.attn li{display:flex;gap:10px;align-items:flex-start}ol.attn .k{font:500 11px
 ol.attn .note{margin:2px 0 0}
 .reuse-n{font:600 28px var(--mono);color:var(--pass)}
 .bar-track{height:var(--bar-h);background:var(--track);border-radius:var(--r-bar);overflow:hidden}.bar-track u{display:block;height:100%;background:var(--pass);text-decoration:none}
+/* overview */
+.ov-rest .kpis.strip{grid-template-columns:repeat(6,minmax(0,1fr))}
+.ov-rest .strip .kpi b,.ov-rest .strip .kpi:first-child b{font-size:min(26px,calc(100cqw/4.4));color:var(--ink)}
+.ov-rest .strip .kpi:last-child b{color:var(--pass)}
+.ov-rest .strip .kpi:first-child .spark{max-width:140px}
+.ovpair{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:0 20px;align-items:stretch}
+.ovpair>*{min-width:0;display:flex;flex-direction:column}.ovpair>*>.card{flex:1}
+.ov-rest .kpis.strip{margin-bottom:14px}
+.ov-rail{display:flex;flex-direction:column}
+.ov-rail .card h2{font-size:15px}
+ol.attn a{color:var(--ink);text-decoration:none;font-weight:500}ol.attn a:hover{text-decoration:underline}
+.models td a,.spenders td a{color:var(--ink);text-decoration:none}.models td a:hover,.spenders td a:hover{text-decoration:underline}
+.models td:first-child{font-family:var(--mono)}
+.card.cache-reuse .reuse-n{font-size:26px}
+@media (max-width:1200px){.ov-rest .kpis.strip{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:640px){.ov-rest .kpis.strip{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* page header: a slim bar (name, range tabs, filters, dates), then the big title and one line in the body */
 .dash-head{align-items:center;gap:10px 14px;margin:0 0 22px;padding:0 0 14px;border-bottom:1px solid var(--grid)}
 .dash-head .ptitle{font:600 15px var(--num-font);color:var(--ink)}

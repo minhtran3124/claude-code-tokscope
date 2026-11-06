@@ -585,17 +585,19 @@ def page_overview(conn, f):
         '<div data-region="cost-check">'
         + cost_check(conn, *f.cond(), since=_iso(f.now - timedelta(days=f.days)) if f.days else None,
                      scoped=bool(f.project or f.model or f.skill)) + '</div>',
-        _session_start(conn, f),
-        f'<section class="card" id="changed"><h2>Biggest movers</h2><p class="note">{f.label()}, tokens per day against the window before</p>'
-        f'<div data-region="changed">{_movers(conn, f, cmp)}<h3>New skill versions</h3>{_new_versions(conn, f)}</div></section>',
         f'<section class="card" id="trend"><h2>Daily tokens</h2><p class="note">{f.label()}, days in {tz.label()}</p>'
         f'<div data-region="trend">{_daily_stacked(rows, list_changes(conn), versions)}</div></section>',
+        f'<section class="card" id="changed"><h2>Biggest movers</h2><p class="note">{f.label()}, tokens per day against the window before</p>'
+        f'<div data-region="changed">{_movers(conn, f, cmp)}<h3>New skill versions</h3>{_new_versions(conn, f)}</div></section>',
+        '<div class="ovpair">',
+        _session_start(conn, f),
         f'<div data-region="models">{_models(conn, f)}</div>',
+        '</div>',
         f'<div data-region="top">{_top(conn, f)}</div>',
     ])
     rail = "".join([
+        f'<div data-region="cache">{_cache_reuse(conn, f)}</div>',
         f'<div data-region="attention">{_attention(conn, f, cmp)}</div>',
         f'<div data-region="budgets" id="budgets">{_budgets(conn)}</div>',
-        f'<div data-region="cache">{_cache_reuse(conn, f)}</div>',
     ])
     return f'<div class="ovgrid"><div class="ov-today">{today}</div><aside class="ov-rail" aria-label="What needs attention">{rail}</aside><div class="ov-rest">{rest}</div></div>'
