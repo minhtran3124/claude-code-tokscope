@@ -902,7 +902,7 @@ class OverviewTest(unittest.TestCase):
         self.assertIn('Sessions<span class="cnt"', redacted)
         for hidden in ("Projects", "Library", "Benchmarks"):               # pages the level hides carry no count
             self.assertRegex(redacted, rf'>{hidden}</a>')
-        self.assertRegex(redacted, r'<h1>Overview</h1><span class="privacy" role="note"[^>]*><b>redacted</b></span>')
+        self.assertRegex(redacted, r'<b class="ptitle">Overview</b><span class="privacy" role="note"[^>]*><b>redacted</b></span>')
 
     def test_the_cause_is_main_thread_tokens_when_the_total_fell_and_no_skill_did(self):
         for d in range(40):                                                # before the range: 3000 a day, none of it a skill

@@ -902,4 +902,16 @@ ol.attn li{display:flex;gap:10px;align-items:flex-start}ol.attn .k{font:500 11px
 ol.attn .note{margin:2px 0 0}
 .reuse-n{font:600 28px var(--mono);color:var(--pass)}
 .bar-track{height:var(--bar-h);background:var(--track);border-radius:var(--r-bar);overflow:hidden}.bar-track u{display:block;height:100%;background:var(--pass);text-decoration:none}
+/* page header: a slim bar (name, range tabs, filters, dates), then the big title and one line in the body */
+.dash-head{align-items:center;gap:10px 14px;margin:0 0 22px;padding:0 0 14px;border-bottom:1px solid var(--grid)}
+.dash-head .ptitle{font:600 15px var(--num-font);color:var(--ink)}
+.dash-tools{flex:1 1 0;min-width:0;flex-wrap:nowrap;align-items:center;justify-content:flex-start;padding-left:6px}
+.dash-tools .filters{flex-wrap:nowrap;gap:6px}
+.dash-tools .filters select{max-width:150px}
+.dash-tools>.filters{margin-left:0;align-items:center}
+.dash-head .range-dates{order:3;margin-left:auto}
+.dash-tools .fl>span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.pghead{margin:0 0 18px}
+.pghead h1{margin:0 0 4px;font-size:28px;line-height:1.2}
+.pghead .sub{margin:0;color:var(--ink2)}
 """

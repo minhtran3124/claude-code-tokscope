@@ -18,6 +18,7 @@ Owner reviews and merges PR #221 by hand.
 - macOS app (#144-#148) cannot be verified without a Mac.
 
 ## Recent
+- 2026-11-06: Page header matches the design: slim top bar (name, range tabs, filters, dates), then a big title and one line in the body (PR open). Breakdowns, Projects, Library, Benchmarks and Managed are being matched in parallel.
 - 2026-11-06: Owner found the screens do not match the approved design. Starting a per-screen pass: Sessions first (full-width main/subagent bar, right-aligned numbers, brighter top skill), then page header, Breakdowns, Projects, Library, Benchmarks, Managed.
 - 2026-11-06: Fixed the dashboard header so the Project, Model and Skill filters stay on one row (PR open).
 - 2026-11-06: Desktop `.deb` keeps only the en-US Electron locale (`electronLanguages`): 75.7 MB to 68.5 MB; PR open.
@@ -27,4 +28,3 @@ Owner reviews and merges PR #221 by hand.
 - 2026-11-05: Background service: `setup.sh` and the Linux desktop app (first launch) turn the user service on by themselves (#222); Settings page gets a Background service card (status, Stop/Start, Start automatically; PR 2). DECISIONS.md updated.
 - 2026-11-04: #190 merged into the feat branch (PR #206): `tokscope optimize approve|reject|revert` installs the measured draft, commits only the skill's files and can finish or undo an interrupted apply.
 - 2026-11-04: #194 merged into the feat branch (PR #207): description changes are gated by a trigger eval; a budget stop saves a partial state that resumes.
-- 2026-11-04: Skill Optimize v2 slice 1: #187-#189 merged; final PR #200 merged into `main` (`073f017`).
