@@ -115,6 +115,33 @@ document.querySelectorAll('[data-mcp-remove]').forEach(b=>b.addEventListener('cl
   busy(b,'Removing…');
   try{await send(`/api/projects/${mcpCard.dataset.project}/mcp/remove`,{name:b.dataset.mcpRemove,scope:b.dataset.scope});location.reload()}
   catch(x){showErr(x);idle(b)}}));
+// projects: list or cards, find, sort (all in the page), and Remove (hides a folder in projects.json after a question)
+(()=>{const find=document.getElementById('proj-find');if(!find)return;
+  const sortBy=document.getElementById('proj-sort'),count=document.getElementById('proj-count'),none=document.getElementById('proj-none'),
+    list=document.getElementById('proj-list'),cards=document.getElementById('proj-cards');
+  const items=()=>[...document.querySelectorAll('tr.prow, article.pcard')];
+  const num={tokens:1,usd:1,sessions:1,start:1};
+  function apply(){const q=find.value.trim().toLowerCase(),by=sortBy.value;let shown=0;
+    const cmp=(a,b)=>by==='name'?a.dataset.name.localeCompare(b.dataset.name):by==='last'?b.dataset.last.localeCompare(a.dataset.last):(+b.dataset[by])-(+a.dataset[by]);
+    [[list.querySelector('tbody')],[cards]].forEach(([box])=>{[...box.children].sort((a,b)=>cmp(a,b)||a.dataset.name.localeCompare(b.dataset.name)).forEach(x=>box.append(x))});
+    items().forEach(x=>{const ok=!q||x.dataset.find.includes(q);x.hidden=!ok});
+    shown=list.querySelectorAll('tr.prow:not([hidden])').length;
+    count.textContent=q?`${shown} of ${list.querySelectorAll('tr.prow').length}`:'';none.hidden=shown>0}
+  function view(v){document.querySelectorAll('[data-pview]').forEach(b=>{const on=b.dataset.pview===v;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)});
+    list.hidden=v!=='list';cards.hidden=v!=='card';try{localStorage.setItem('tokscope-projects-view',v)}catch(_){}}
+  find.addEventListener('input',apply);sortBy.addEventListener('change',apply);
+  document.querySelectorAll('[data-pview]').forEach(b=>b.addEventListener('click',()=>view(b.dataset.pview)));
+  let saved='list';try{saved=localStorage.getItem('tokscope-projects-view')==='card'?'card':'list'}catch(_){}
+  view(saved);apply();
+  const fail=e=>{const x=document.getElementById('proj-err');x.textContent=e.message;x.hidden=false};
+  document.querySelectorAll('[data-proj-remove]').forEach(b=>b.addEventListener('click',async()=>{
+    const anchor=b.closest('tr.prow, article.pcard');
+    if(!await ask(b.closest('article')?b.closest('.pfoot'):document.querySelector('.ptools'),
+      `Remove ${b.dataset.name} from tokscope? It disappears from this list and from the totals. Nothing is deleted: your folder, your transcripts and tokscope's stored sessions stay. You can restore it from "Removed from this list" below.`,'Remove'))return;
+    busy(b,'Removing…');
+    try{await send(`/api/projects/${b.dataset.projRemove}/hide`);location.reload()}catch(x){fail(x);idle(b)}}));
+  document.querySelectorAll('[data-proj-restore]').forEach(b=>b.addEventListener('click',async()=>{busy(b,'Restoring…');
+    try{await send('/api/projects/unhide',{pattern:b.dataset.projRestore});location.reload()}catch(x){fail(x);idle(b)}}))})();
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('on',x===b));
   document.querySelectorAll('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==b.dataset.view)}));

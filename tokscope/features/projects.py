@@ -4,7 +4,7 @@ A project is the folder a session ran in, with its worktrees, eval copies and su
 they belong to (a deleted one too, by its name). Temporary folders (/tmp, scratchpads) form one group. The servers come from the files Claude Code
 reads: ~/.claude.json (user scope, and local scope per project), the project's .mcp.json, the MCP servers of the
 plugins enabled for the project, and the claude.ai connectors the transcripts used. Usage comes from the transcripts.
-Nothing here writes a file. Values of env and headers are never read out, only their names.
+Nothing here writes a file, except Hide and Restore, which edit "ignore" in projects.json. Values of env and headers are never read out, only their names.
 
 Approval of .mcp.json servers is not guessed: `claude mcp list` (the health check) reports it.
 
@@ -13,6 +13,7 @@ an explicit scope, so Claude Code writes its own files (~/.claude.json is shared
 in the data folder records each change without its values."""
 
 import fnmatch
+import glob
 import hashlib
 import json
 import os
@@ -180,11 +181,50 @@ def _ignored(root, patterns):
                                     for p in patterns)
 
 
+def _settings_file():
+    return paths.home() / "projects.json"
+
+
+def hidden():
+    """The "ignore" patterns of projects.json, as the user or Hide wrote them."""
+    return [str(x) for x in _json(_settings_file()).get("ignore", [])]
+
+
+def _write_ignore(patterns):
+    path = _settings_file()
+    data = _json(path)
+    data = data if isinstance(data, dict) else {}
+    data["ignore"] = patterns
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, indent=2) + "\n")
+    tmp.replace(path)
+
+
+def hide(root):
+    """Stop showing a project: add its folder to "ignore" in projects.json. Nothing else changes: the stored sessions,
+    the transcripts and the project's own files stay, and Restore takes the folder out of the list again."""
+    if root is None:
+        raise ValueError("the temporary folders are not a project to hide")
+    pattern = glob.escape(str(root))
+    current = hidden()
+    if pattern not in current:
+        _write_ignore([*current, pattern])
+    return pattern
+
+
+def unhide(pattern):
+    current = hidden()
+    if pattern not in current:
+        raise ValueError("that folder is not in the hidden list")
+    _write_ignore([p for p in current if p != pattern])
+
+
 def discover(conn, bench_project="%tokscope%-bench-%"):
     """[project] with its folders, sessions, tokens, cost and MCP usage; the temporary folders last, as one group.
     projects.json in the data home may list "ignore" patterns for folders that are not projects."""
     known = set(_json(Path.home() / ".claude.json").get("projects", {}))
-    ignore = [str(x) for x in _json(paths.home() / "projects.json").get("ignore", [])]
+    ignore = hidden()
     since = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - 30 * 86400))
     groups = {}
     for cwd, keys, sessions, tokens, recent, usd, first, last in conn.execute(

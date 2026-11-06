@@ -116,6 +116,22 @@ def post(db, path, body, level):
             return 200, {"status": projects.health(g["root"], optimize._claude())}
         except (OSError, RuntimeError, subprocess.TimeoutExpired) as e:
             return 502, {"error": f"claude mcp list failed: {e}"}
+    if path == "api/projects/unhide":
+        try:
+            projects.unhide(str(body.get("pattern", "")))
+            return 200, {"ok": True}
+        except ValueError as e:
+            return 400, {"error": str(e)}
+    if m := re.match(r"^api/projects/([0-9a-f]{10})/hide$", path):
+        conn = connect(db)
+        try:
+            g = next((g for g in projects.discover(conn) if g["id"] == m.group(1)), None)
+        finally:
+            conn.close()
+        if not g or not g["root"]:
+            return 404, {"error": "no such project"}
+        projects.hide(g["root"])
+        return 200, {"ok": True}
     if m := re.match(r"^api/projects/([0-9a-f]{10})/mcp(/remove)?$", path):
         conn = connect(db)
         try:

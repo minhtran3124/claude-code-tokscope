@@ -1038,7 +1038,22 @@ p.sub{margin:0 0 14px;color:var(--ink2);font-size:13px}
 .prail .lim{margin-top:10px}.prail .lim .l{display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink2);margin-bottom:4px}
 .prail .lim .l span:last-child{font-family:var(--num-font);color:var(--ink)}
 .prail .bar{height:var(--bar-h);background:var(--track);border-radius:var(--r-bar);overflow:hidden}.prail .bar u{display:block;height:100%;text-decoration:none}
-@container (max-width:520px){table.plist.plist td.go{display:none}table.plist.plist td:first-child{flex-direction:column;align-items:flex-start;gap:0;text-align:left}}
+.ptools{margin:0 0 12px}.ptools .seg .chip.on{background:var(--ink);color:var(--page);border-color:var(--ink)}
+.plist td.go{white-space:nowrap}.plist td.go .btn{margin-right:8px;padding:3px 10px;font-size:12px}
+.pcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:12px}
+.pcard{background:var(--surface);border:var(--line-w) solid var(--line-c);border-radius:var(--r-tile);padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.pcard[hidden],.prow[hidden]{display:none}
+.pcard .ptitle{color:var(--ink);text-decoration:none;font-size:15px}.pcard .note{margin:0;overflow-wrap:anywhere}
+.pstats{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin:2px 0}.pstats div{min-width:0}
+.pstats dt{color:var(--lab-c);font-size:var(--lab-size);text-transform:var(--lab-case);letter-spacing:var(--lab-track)}
+.pstats dd{margin:0;font-family:var(--num-font);color:var(--ink);font-size:15px}.pstats .up{color:var(--fail);font-weight:600}
+.ppills .pill{display:inline-block;padding:1px 8px;border:var(--line-w) solid var(--line-c);border-radius:999px;font:500 11.5px var(--mono);color:var(--ink2);margin:0 2px 2px 0}
+.pfoot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:auto}.pfoot .acts{display:flex;gap:8px}
+.pfoot .btn,a.btn{text-decoration:none}
+.hlist li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--grid)}.hlist code{overflow-wrap:anywhere}
+#proj-hidden{margin-top:14px}
+@media (max-width:600px){.ptools{display:grid;grid-template-columns:1fr 1fr}.ptools #proj-find{grid-column:1/-1}.pfoot .btn{min-height:44px;display:inline-flex;align-items:center}}
+@container (max-width:520px){table.plist.plist td.go a{display:none}table.plist.plist td.go:not(:has(button)){display:none}table.plist.plist td:first-child{flex-direction:column;align-items:flex-start;gap:0;text-align:left}}
 /* benchmarks and managed: a main column and a 300 px rail (one column under 1100 px), flat tables, status pills */
 .dpage{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:0 20px;align-items:start}
 .dcol,.drail{min-width:0}
