@@ -366,12 +366,12 @@ class ServerTest(unittest.TestCase):
 
 
 class SessionsTableTest(unittest.TestCase):
-    def test_the_table_groups_by_day_and_sizes_the_bar_by_tokens(self):
+    def test_the_table_groups_by_day_and_the_bar_shows_the_main_and_subagent_share(self):
         js = JS_SESSIONS
         self.assertIn("function dayEl(", js)                       # a header per day: its sessions and tokens
         self.assertIn("session${n===1?'':'s'} · ${fmt(tk)} tokens", js)
-        self.assertIn("const MAXT=Math.max(...S.map(s=>s.tokens),1)", js)    # the bar is tokens against the largest in the list
-        self.assertIn("100*(main+ag)/MAXT", js)
+        self.assertNotIn("MAXT", js)                               # the bar fills its cell: it shows the share, not the size
+        self.assertIn("(100*main/t)", js)
         self.assertIn("<u class=a", js)                            # the colours still split main thread and subagents
         head = js.split("function headEl", 1)[1].split("function dayEl", 1)[0]
         for col in ("time", "session", "top skill", "prompts", "subagents", "tokens", "split"):

@@ -97,11 +97,10 @@ const isRoot=s=>{const seen=new Set([s.id]);for(let p=byId.get(s.parent);p;p=byI
 const hl=(text,needle)=>{if(!needle)return esc(text);const lo=text.toLowerCase(),n=needle.toLowerCase();let out='',pos=0,at;
   while((at=lo.indexOf(n,pos))>-1){out+=esc(text.slice(pos,at))+'<mark>'+esc(text.slice(at,at+n.length))+'</mark>';pos=at+n.length}
   return out+esc(text.slice(pos))};
-// the bar's length is the session's tokens against the largest session in the data (all of S, so a filter does not
-// rescale it), at least 3% so a small session still shows; the colours split it into main thread and subagents
-const MAXT=Math.max(...S.map(s=>s.tokens),1);
-function split(main,ag){const t=Math.max(main+ag,1),len=Math.max(3,100*(main+ag)/MAXT);
-  return `<span class=track><span class=split style="width:${len.toFixed(1)}%" title="main ${fmt(main)} · subagents ${fmt(ag)}"><u style="width:${(100*main/t).toFixed(1)}%"></u>${ag?`<u class=a style="width:${(100*ag/t).toFixed(1)}%"></u>`:''}</span></span>`}
+// the bar fills its cell and shows the share of the session's tokens in the main thread (blue) and in subagents (mustard);
+// the size of the session is the number next to it, so a small session is as easy to read as a huge one
+function split(main,ag){const t=Math.max(main+ag,1);
+  return `<span class=track><span class=split title="main ${fmt(main)} · subagents ${fmt(ag)}"><u style="width:${(100*main/t).toFixed(1)}%"></u>${ag?`<u class=a style="width:${(100*ag/t).toFixed(1)}%"></u>`:''}</span></span>`}
 // time of day when the list is by day; date and time when it is ranked
 const when=s=>{if(!s.start)return'';const p=tzp(s.start);return sortKey==='recent'?p.hm:p.day.slice(5)+' '+p.hm};
 // the dashboard fills LIVE from /api/live (open sessions: {id:{status,entry}}); the static report has none
@@ -180,7 +179,7 @@ const dayName=d=>!d?'No date':new Date(d+'T00:00:00Z').toLocaleDateString('en-GB
 const SORTS={recent:['Newest first',(a,b)=>b[0].s.start.localeCompare(a[0].s.start)],tokens:['Most tokens first',(a,b)=>b[0].s.tokens-a[0].s.tokens],
   agents:['Most subagent tokens first',(a,b)=>b[0].s.agents-a[0].s.agents]};
 function headEl(){const h=document.createElement('div');h.className='shead';
-  h.innerHTML=`<span></span><span class=d title="${esc(tzName())}">time</span><span class=t>session</span><span class=sk>top skill</span><span class="r n">prompts</span><span class="r n" title="subagent runs started in the session">subagents</span><span class=r>tokens</span><span class=track title="length is tokens against the largest session in the list">split</span><span></span>`;return h}
+  h.innerHTML=`<span></span><span class=d title="${esc(tzName())}">time</span><span class=t>session</span><span class=sk>top skill</span><span class="r n">prompts</span><span class="r n" title="subagent runs started in the session">subagents</span><span class=r>tokens</span><span class=track title="share of the session's tokens: main thread and subagents">split</span><span></span>`;return h}
 window.onTz=()=>render();
 function dayEl(label,n,tk){const h=document.createElement('div');h.className='dayhd';
   h.innerHTML=`<b>${esc(label)}</b><span>${n} session${n===1?'':'s'} · ${fmt(tk)} tokens</span>`;return h}
