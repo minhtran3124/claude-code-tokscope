@@ -924,4 +924,22 @@ a.sk p{color:var(--ink)}
 .lim{margin-top:12px}.lim .l{display:flex;justify-content:space-between;font:500 12px var(--mono);color:var(--ink);margin-bottom:4px}
 .lib-rail .card h2{font-size:14px}.lib-rail .attn .k{flex:none;white-space:nowrap;overflow-wrap:normal;width:auto}
 @media (min-width:1101px){.lib-main>.finding{display:none}}
+/* projects */
+.pgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:0 20px;align-items:start}
+.pmain,.prail{min-width:0}
+@media (max-width:1100px){.pgrid{grid-template-columns:minmax(0,1fr)}}
+p.sub{margin:0 0 14px;color:var(--ink2);font-size:13px}
+.card.flat{padding:0}.plist td,.plist th{padding:10px 12px}
+.plist th{color:var(--lab-c);font-size:var(--lab-size);text-transform:var(--lab-case);letter-spacing:var(--lab-track);font-weight:var(--lab-w)}
+.plist tbody tr{border-top:1px solid var(--grid)}.plist tbody tr:hover{background:color-mix(in oklch,var(--mark) 8%,transparent)}
+.plist td:first-child b{color:var(--ink);font-size:14px}.plist td:first-child a{text-decoration:none;color:var(--ink)}
+.plist td:first-child .note{margin:2px 0 0;font-weight:400}
+.plist td:not(:first-child){color:var(--ink)}.plist td.l,.plist th:nth-child(6){text-align:left;white-space:normal}
+.plist .pill{display:inline-block;padding:1px 8px;border:var(--line-w) solid var(--line-c);border-radius:999px;font:500 11.5px var(--mono);color:var(--ink2);margin:0 2px 2px 0}
+.plist .up{color:var(--fail);font-weight:600}
+.plist td.go{width:24px;padding-left:0}.plist td.go a{color:var(--muted);text-decoration:none;font-size:18px}
+.prail .lim{margin-top:10px}.prail .lim .l{display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink2);margin-bottom:4px}
+.prail .lim .l span:last-child{font-family:var(--num-font);color:var(--ink)}
+.prail .bar{height:var(--bar-h);background:var(--track);border-radius:var(--r-bar);overflow:hidden}.prail .bar u{display:block;height:100%;text-decoration:none}
+@container (max-width:520px){table.plist.plist td.go{display:none}table.plist.plist td:first-child{flex-direction:column;align-items:flex-start;gap:0;text-align:left}}
 """

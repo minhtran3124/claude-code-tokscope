@@ -18,6 +18,7 @@ Owner reviews and merges PR #221 by hand.
 - macOS app (#144-#148) cannot be verified without a Mac.
 
 ## Recent
+- 2026-11-06: Projects matches the design: a table (sessions, tokens, API-eq, session start, MCP pills) with a rail (Needs a look, Session start by project) (PR open).
 - 2026-11-06: Library matches the design: a right rail (Needs a look, description cost per session) and a cost bar on each skill card (PR open).
 - 2026-11-06: Page header matches the design: slim top bar (name, range tabs, filters, dates), then a big title and one line in the body (PR open). Breakdowns, Projects, Library, Benchmarks and Managed are being matched in parallel.
 - 2026-11-06: Owner found the screens do not match the approved design. Starting a per-screen pass: Sessions first (full-width main/subagent bar, right-aligned numbers, brighter top skill), then page header, Breakdowns, Projects, Library, Benchmarks, Managed.
@@ -27,4 +28,3 @@ Owner reviews and merges PR #221 by hand.
 - 2026-11-06: Rebuilt the desktop `.deb` from `main` after removing the install.sh copy; added `desktop/scripts/reinstall-deb.sh` (rebuild and install over) and a README line; PR open.
 - 2026-11-05: Resolved PR #221 conflicts with `main` (DECISIONS.md, STATUS.md). #193 removed the guide-based Optimize. #195 added a Real sessions card on an approved run. #192 added the `/optimize` page, Approve and Reject routes and Library start. Dashboard redesign steps merged into `main`, then `main` (with PR #220) merged into PR #221's branch. PR #221 security fixes: approve refuses symlinked subfolders, draft copies skip symlinks, and the commit reason stays on one line.
 - 2026-11-05: Background service: `setup.sh` and the Linux desktop app (first launch) turn the user service on by themselves (#222); Settings page gets a Background service card (status, Stop/Start, Start automatically; PR 2). DECISIONS.md updated.
-- 2026-11-04: #190 merged into the feat branch (PR #206): `tokscope optimize approve|reject|revert` installs the measured draft, commits only the skill's files and can finish or undo an interrupted apply.
