@@ -17,7 +17,7 @@ b,strong{font-weight:600}
 .kpi b{font-weight:600}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
-main{max-width:1180px;margin:0 auto;padding:28px 16px 72px}
+main{padding:28px 16px 72px}
 h1{font-size:22px;margin:0 0 2px;text-wrap:balance}
 h2{font-size:17px;margin:0 0 4px}
 h3{font-size:14px;margin:14px 0 6px}
@@ -58,7 +58,7 @@ svg g.d:hover rect.m{opacity:1}
 .srow .body tr:hover td{background:color-mix(in oklch,var(--mark) 7%,transparent)}
 /* left sidebar: every section one click away; the link of the section in view is highlighted */
 .layout>main{min-width:0}
-.layout{display:grid;grid-template-columns:224px minmax(0,1fr);max-width:1460px;margin:0 auto}
+.layout{display:grid;grid-template-columns:224px minmax(0,1fr)}
 .brand .logo{width:24px;height:15px;flex:none;position:relative;top:-1px}
 .toc{display:flex;flex-direction:column;gap:2px}
 [id]{scroll-margin-top:16px}

@@ -18,7 +18,7 @@ Owner reviews and merges PR #221 by hand.
 - macOS app (#144-#148) cannot be verified without a Mac.
 
 ## Recent
-- 2026-11-06: Added a root `Makefile`: `make deb` (rebuild + install the .deb), `make dev` (run the desktop app from the clone), `make serve`, `make test` (PR open).
+- 2026-11-06: Added a root `Makefile`: `make deb` (rebuild + install the .deb), `make dev` (run the desktop app from the clone), `make serve`, `make test` (PR open). The page now uses the full window width: the 1180 px and 1460 px caps are gone (PR open).
 - 2026-11-06: Library: a clear "Run optimize" button on each of your skill cards and on the skill page (PR open). The desktop `reinstall-deb.sh` restarts the tokscope user service after installing, so a new build is not shown with the old code (PR open); `desktop/scripts/dev.sh` runs the app from the clone with no .deb or sudo (PR open).
 - 2026-11-06: Fixed the header date range overlapping the filters: it now sits on the line under the page title (PR open).
 - 2026-11-06: Overview: the Today card is flat (no offset shadow over the KPI strip) (PR open).
