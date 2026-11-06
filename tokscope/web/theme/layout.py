@@ -491,6 +491,31 @@ details.more>.how{margin:2px 0 10px;max-width:84ch}
 details.finding-sec>.empty{text-align:left;padding:18px 16px}
 details.finding-sec .empty code{overflow-wrap:anywhere}
 @media (max-width:640px){details.more>summary .mini{display:block;margin:6px 0 0;width:min(100%,160px)}}
+/* breakdowns */
+.bdgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;grid-template-areas:"main rail";gap:0 20px;align-items:start}
+.bd-main{grid-area:main;min-width:0}.bd-rail{grid-area:rail;min-width:0}
+@media (max-width:1100px){.bdgrid{grid-template-columns:minmax(0,1fr);grid-template-areas:"rail" "main"}}
+.bd-h{font-size:15px;margin:18px 0 10px}
+/* Summary by phase: a separate Share bar column */
+.sumview th:nth-child(4),.sumview td:nth-child(4){width:22%}
+.shr{display:block;height:var(--bar-h);min-width:60px;border-radius:var(--r-bar);background:var(--track);overflow:hidden}
+.shr i{display:block;height:100%;min-width:2px;border-radius:var(--r-bar);background:var(--mark)}
+/* Sections: one flat card of accordion rows, the finding in the ink colour, a mini bar or an ok/warn pill at the end */
+.bd-flat{background:var(--surface);border:var(--line-w) solid var(--line-c);border-radius:var(--r-card);overflow:hidden}
+.bd-flat>details.more{border:0;border-radius:0;margin:0;padding:12px 16px;background:none}
+.bd-flat>details.more+details.more{border-top:1px solid var(--row-c)}
+.bd-flat>details.more>summary{flex-wrap:nowrap;align-items:center;gap:12px}
+.bd-flat>details.more>summary .note.finding{flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.bd-flat>details.more>summary .note.finding>b{flex:1 1 0;min-width:0;font-weight:400;color:var(--ink2)}
+.bd-flat>details.more>summary .mini{flex:none;margin:0;width:120px;height:8px;border-radius:4px}
+.bd-flat>details.more>summary .pill{flex:none}
+.bd-flat>details.more>summary .ttl{min-width:9em}
+.pill{font:500 11px var(--mono);border:1px solid var(--line-c);border-radius:999px;padding:2px 10px;white-space:nowrap}
+.pill.ok{color:var(--pass);border-color:var(--pass)}.pill.warn{color:var(--agent-ink);border-color:var(--agent-ink)}.pill.bad{color:var(--fail);border-color:currentColor}
+@media (max-width:640px){
+ .bd-flat>details.more>summary{flex-wrap:wrap}.bd-flat>details.more>summary .note.finding{flex-basis:100%;flex-wrap:wrap}
+ .bd-flat>details.more>summary .mini{width:min(100%,160px)}.bd-flat>details.more>summary .ttl{min-width:0}}
+ol.attn .k{flex:none}
 /* end breakdowns */
 """
 

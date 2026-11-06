@@ -139,7 +139,9 @@ class ServerTest(unittest.TestCase):
 
     def test_breakdowns_opens_with_the_needs_a_look_card(self):
         body = self.get("/breakdowns")[1]
-        self.assertLess(body.index('data-region="attention"'), body.index('id="summary"'))
+        self.assertIn('<aside class="bd-rail"', body)  # the rail (Needs a look, Share of all tokens) sits beside the summary; a phone shows it first
+        self.assertLess(body.index('class="bd-rail"'), body.index('data-region="attention"'))
+        self.assertIn('Share of all tokens', body)
 
     def test_overview_has_a_right_rail_with_attention_budgets_and_cache_reuse(self):
         body = self.get("/overview")[1]
