@@ -96,6 +96,8 @@ npm run dist
 The file is `desktop/dist/tokscope_<version>_amd64.deb` (about 75 MB). The version comes from `desktop/package.json`.
 It holds the Electron app, the CLI (`bin/` and `tokscope/`) and the service file, but not the Claude Code mod.
 
+To rebuild and install over the current one on this machine: `sh desktop/scripts/reinstall-deb.sh`.
+
 ### Install the `.deb` on another machine
 
 The other machine needs Ubuntu or Debian on x86_64 (amd64). `apt` installs Python 3.10+ and the other dependencies

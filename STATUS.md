@@ -2,7 +2,7 @@
 state: active         # active | paused | blocked | done
 progress: 11          # rough estimate, 0-100
 priority: medium     # high | medium | low
-updated: 2026-11-05
+updated: 2026-11-06
 updated_by: claude   # claude | manual
 ---
 
@@ -18,6 +18,7 @@ Merge the #190 PR, then build #192, #194, #193 and #195 (the harness plugin is n
 - macOS app (#144-#148) cannot be verified without a Mac.
 
 ## Recent
+- 2026-11-06: Rebuilt the desktop `.deb` from `main` after removing the install.sh copy; added `desktop/scripts/reinstall-deb.sh` (rebuild and install over) and a README line; PR open.
 - 2026-11-05: Skill Optimize v2 #190 (no harness plugin in the cloud session, so done by hand): `tokscope optimize approve|reject|revert <run-id>` in `skillopt/apply.py`, 11 tests; PR open. Dashboard redesign (direction B) in steps; #209, #211-#215 merged. Step 8: Classic skin retired (Design button, Settings row, `s` key, classic.py removed; DECISIONS.md updated). The static report still renders without errors. Owner asked for auto merge: each PR is merged after green CI and review. Follow-up: light theme checked on all 8 pages (no fixes needed); unused `_cache_finding` removed, its 7-day test now covers the Needs a look item.
 - 2026-11-04: Skill Optimize v2 slice 1: autopilot runs wf_36f81f53-0a0 and wf_b6f9d143-94a opened PRs #203 (#188) and #204 (#189), both fixed after review and merged into the feat branch; PR #199 (#187) merged; final PR #200 merged into `main` (`073f017`). D26 live probe: the real claude puts the skill text in the stream, `stream_load` returns ok ($0.0017). Removed ADRs 0004, 0006-0009 (workflow logs or already in the brief, code and tests; kept 0005). Follow-up #202 (leaked sqlite connections, Python 3.13).
 - 2026-11-04: Autopilot run wf_0e96290a-254 shipped #180 and #181 (PRs #183, #184 into the feat branch, final PR #185 merged into `main`, `a895f3e`); the milestone is closed and the desktop `.deb` was rebuilt from `main`. Skill Optimize v2: brief `docs/research-skill-optimize.md` (from the design artifact https://claude.ai/artifact/ANQd9hiw6dZizuAQ7Prabi: isolated runner, approved suite with holdout, locked gates, run store, before/after page, Approve that checks the fingerprint and commits only the skill's files in git, else keeps a snapshot with Revert); milestone 2 with #187-#195 and epic #196.
@@ -27,4 +28,3 @@ Merge the #190 PR, then build #192, #194, #193 and #195 (the harness plugin is n
 - 2026-11-02: Research on the logs-to-plan idea: measured repetition on the local database (repeated real tasks are at most 8% of spend; 97% of tokens are cache reads), wrote `docs/research-prompt-insights.md` with the flow, 5 slices and risks (PR #170); no product code changed. An independent review overturned two conclusions, and the note is rewritten around 4 slices for the owner's goals (tokens, workflow, useful features). Trial runs: `/insights` works ($2.10, no token data, facets give a quality signal), `autoCompactWindow` 100000 compacts and 80000 did nothing; numbers re-run and the note is updated. Review of PR #170 (1 consistency reviewer, 3 Important and 2 Nits) and a recent-window re-check changed the plan: grouping rules written down, skill slice held, nudge on with a toast and an off switch; milestone 1 and issues #171-#174 created.
 - 2026-10-28: run 01M602P6H66Q15NXYZ7FJM45GP (default) failed, 4 stage run(s): canary: stage implement needs a fresh canary pass (no canary result)
 - 2026-10-26: Overview gets a Models card (PR #168: models by request count, links to the model filter, region `models`); a follow-up shows exact counts and trims Recent to 10 lines.
-- 2026-10-26: Rule added: one assumptions artifact per PR, all that PR's assumptions in it (`.claude/rules/behavior.md` #5); old per-assumption files left as they are.
