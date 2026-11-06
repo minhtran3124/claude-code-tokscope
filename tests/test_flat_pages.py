@@ -2,7 +2,8 @@ import sqlite3
 import unittest
 from unittest import mock
 
-from tokscope.web.dashboard.pages import benchmarks
+from tokscope.integrations import managed
+from tokscope.web.dashboard.pages import benchmarks, managed as managed_page
 
 
 class BenchmarksPageTest(unittest.TestCase):
@@ -30,6 +31,20 @@ class BenchmarksPageTest(unittest.TestCase):
         c = sqlite3.connect(":memory:")
         with mock.patch.object(benchmarks.paths, "tasks", return_value="/nonexistent"):
             self.assertIn("No benchmark runs yet", benchmarks.page_benchmarks(c, None))
+
+
+
+class ManagedPageTest(unittest.TestCase):
+    def test_list_has_pills_rail_and_pause_button(self):
+        dep = {"id": "depl_aaaaaaaa1", "name": "d", "status": "active", "paused": "", "agent": "ag", "cron": "", "tz": "",
+               "next": "", "budget": None, "sessions": 1, "tokens": 5, "cost": 1.0}
+        ses = {"id": "s", "title": "t", "status": "failed", "created_at": "2026-11-06T09:40:00Z", "agent": "ag", "deployment": "depl_aaaaaaaa1",
+               "active_s": 5, "tokens": 5, "cost": 1.0}
+        ag = {"id": "ag", "name": "bot", "model": "claude-x", "effort": "", "tools": [{}], "skills": [], "sessions": 1, "tokens": 5, "cost": 1.0}
+        out = managed_page._list_view({"deployments": [dep], "sessions": [ses], "agents": [ag]}, "")
+        for want in ("dpill ok", "dpill bad", "Needs a look (1)", "bot failed at", "Spend, latest 1 sessions", "data-dep-act=\"pause\""):
+            self.assertIn(want, out)
+        self.assertTrue(managed.SESSIONS)
 
 
 if __name__ == "__main__":
