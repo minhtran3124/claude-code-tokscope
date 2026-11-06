@@ -19,6 +19,9 @@
     "appId": "io.github.minhtran3124.tokscope",
     "productName": "tokscope",
     "executableName": "tokscope",
+    "electronLanguages": [
+      "en-US"
+    ],
     "directories": {
       "output": "dist"
     },
