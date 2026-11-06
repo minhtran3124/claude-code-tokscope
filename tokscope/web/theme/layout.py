@@ -314,11 +314,13 @@ pointer-events:none;animation:chip-in var(--t-state) var(--ease) both}
 /* range totals: one container, 1px rules between the tiles (the grid gap shows the container's colour) */
 .kpis.strip{display:grid;grid-template-columns:1.5fr repeat(5,minmax(0,1fr));gap:1px;background:var(--grid);overflow:hidden;margin:0 0 6px}
 .strip .kpi{display:flex;flex-direction:column;gap:2px;min-width:0;border:0;border-radius:0;padding:14px 16px;background:var(--surface)}
+.strip .kpi{container-type:inline-size}
 .strip .kpi b{order:1}
 .strip .kpi .dl{order:2;margin:0}
 .strip .kpi .spark{order:3;margin-top:auto;padding-top:6px;width:100%;max-width:140px;height:auto}
-.strip .kpi b{font-size:22px}
-.strip .kpi:first-child b{font-size:28px}
+/* the number shrinks to its tile (7 mono characters at 0.6em), so a narrow tile never cuts it off */
+.strip .kpi b{font-size:min(22px,calc(100cqw/4.4))}
+.strip .kpi:first-child b{font-size:min(28px,calc(100cqw/4.4))}
 .strip .kpi:first-child .spark{max-width:220px}
 .strip-note{margin:0 0 16px}
 @media (max-width:1200px){.kpis.strip{grid-template-columns:repeat(3,minmax(0,1fr))}}

@@ -14,6 +14,13 @@ def _usd(v):
     return "–" if v is None else f"${v:,.2f}"
 
 
+def _usd_tile(v):
+    """A KPI tile is narrow: no cents from $1,000, K from $10,000 (the tooltip and tables keep the exact value)."""
+    if v is None:
+        return "–"
+    return f"${v / 1000:,.1f}K" if v >= 10000 else f"${v:,.0f}" if v >= 1000 else f"${v:,.2f}"
+
+
 def _bar(value, top, fmt=_tok):
     pct = 0 if not top else max(1.5, 100 * (value or 0) / top)
     return f'<span class="bar">{fmt(value)}<i><u style="width:{pct:.1f}%"></u></i></span>'

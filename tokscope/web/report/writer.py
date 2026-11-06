@@ -22,7 +22,7 @@ from .sections.sessions import _sessions_json
 from .sections.skills import FEW_LOADS, _change_cards, _skill_versions
 from .sections.summary import _hero, _session_start
 from .styles import CSS
-from .widgets import _daily_chart, _more, _tok, _usd
+from .widgets import _daily_chart, _more, _tok, _usd, _usd_tile
 
 
 PRIVACY_NOTE = {
@@ -64,7 +64,7 @@ def write_report(db_path, out_path, where="", params=(), tasks_dir=None, level="
     kpis = [("Sessions", f"{n_sess:,}", n_sess, "int"), ("Tokens", _tok(tokens), tokens, "tok"),
             ("Output tokens", _tok(out), out, "tok"), ("Subagent runs", f"{n_runs:,}", n_runs, "int"),
             ("From cache", f"{(cache_read or 0) / (tokens or 1):.0%}", round(100 * (cache_read or 0) / (tokens or 1)), "pct"),
-            ("API-eq", _usd(usd), round(usd or 0, 2), "usd")]
+            ("API-eq", _usd_tile(usd), round(usd or 0, 2), "usd")]
     api_eq_title = f' title="{html.escape(API_EQ_NOTE + otel.ONLY_NOTE if only else API_EQ_NOTE)}"'
     kpi_html = "".join(f'<div class="kpi" style="--i:{i}"{api_eq_title if k == "API-eq" else ""}><span>{k}</span><b data-count="{raw or 0}" data-kind="{kind}">{v}</b></div>'
                        for i, (k, v, raw, kind) in enumerate(kpis))
