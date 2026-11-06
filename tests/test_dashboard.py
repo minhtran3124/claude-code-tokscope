@@ -240,6 +240,8 @@ class ServerTest(unittest.TestCase):
         self.assertIn('data-set-theme="auto"', settings)
         self.assertIn('data-set-tz="utc"', settings)
         self.assertIn('id="keys-btn"', settings)
+        self.assertIn('class="setcol"', settings)                  # one 760 px column
+        self.assertIn('id="set-about"', settings)
 
     def test_the_sidebar_groups_the_pages_and_holds_no_settings_controls(self):
         _, page = self.get("/overview")
