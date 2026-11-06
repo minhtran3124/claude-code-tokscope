@@ -152,7 +152,8 @@ def stream_load(events, skill, want):
     "not loaded" when no Skill call names the skill. Compared the way skills.check_load does."""
     args, texts, called = [None], [], False
     for ev in events:
-        content = (ev.get("message") or {}).get("content")
+        msg = ev.get("message")  # a system event (permission_denied) carries its message as a plain string
+        content = msg.get("content") if isinstance(msg, dict) else None
         if not isinstance(content, list):
             continue
         for b in content:
