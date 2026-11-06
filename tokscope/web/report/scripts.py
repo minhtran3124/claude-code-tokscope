@@ -78,7 +78,7 @@ SORT_SEG = ('<span class="seg" id="s-sort" role="group" aria-label="Sort session
             '<button type="button" class="chip" data-sort="agents" aria-pressed="false">Most subagent</button></span>')
 JS_SESSIONS = """
 const S=JSON.parse(document.getElementById('sessions-data').textContent);
-const list=document.getElementById('session-list'),q=document.getElementById('s-q'),sortBox=document.getElementById('s-sort');
+const list=document.getElementById('session-list'),q=document.getElementById('s-q'),projBox=document.getElementById('s-proj'),sortBox=document.getElementById('s-sort');
 // sort is the segmented control SORT_SEG: Newest, Most tokens, Most subagent tokens
 let sortKey='recent';
 // durations come from the layout sheet's tokens, so the script and the stylesheet never disagree
@@ -211,7 +211,8 @@ function finder(n){const memo=new Map();
   return{match:s=>!n||ev(s).ok,whyOf:s=>n?text(ev(s).w):''}}
 function render(){
   // one trimmed needle for the match, the chip and the <mark> (a pasted trailing space still finds the folder)
-  const {match,whyOf}=finder(q.value.trim().toLowerCase());
+  const {match:textMatch,whyOf}=finder(q.value.trim().toLowerCase());
+  const proj=projBox?projBox.value:'',match=s=>(!proj||s.project===proj)&&textMatch(s);
   let rows=S.filter(isRoot).map(s=>group(s,match)).filter(g=>g.length);
   rows.sort(SORTS[sortKey][1]);
   // sessions with no start go last under Newest, so "No date" never sits between two days
@@ -255,6 +256,10 @@ function render(){
   document.getElementById('s-count').textContent=`showing ${Math.min(limit,rows.length)} of ${rows.length}`}
 document.getElementById('s-more').addEventListener('click',()=>{limit+=50;render()});
 q.addEventListener('input',()=>{limit=15;render()});
+// the project list is built from the sessions in the range, most sessions first; picking one filters the list at once
+if(projBox){const n=new Map();S.forEach(s=>{if(s.project)n.set(s.project,(n.get(s.project)||0)+1)});
+  projBox.append(...[...n].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).map(([p,c])=>{const o=document.createElement('option');o.value=p;o.textContent=`${p} (${c})`;return o}));
+  projBox.addEventListener('change',()=>{limit=15;render()})}
 list.addEventListener('click',e=>{const b=e.target.closest('.cp');if(!b)return;
   navigator.clipboard.writeText(b.dataset.copy).then(()=>{b.textContent='Copied ✓';b.classList.add('ok');toast('Copied to the clipboard');
     setTimeout(()=>{b.textContent='Copy';b.classList.remove('ok')},1400)},

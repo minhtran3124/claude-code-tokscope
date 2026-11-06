@@ -50,6 +50,7 @@ def page_sessions(conn, f, qs):
     return (f'<div class="sgrid"><div class="smain"><section class="card" id="sessions"><p class="note"><span class="key"><i></i>main thread</span><span class="key">'
             f'<i class="a"></i>subagents</span> Sessions with activity in {f.label()}. Open a row for each prompt; tick 2 to 4 to compare.</p>'
             f'<div class="tools"><input type="search" id="s-q" value="{prefill}" placeholder="Filter by title, skill, folder or session id  ( / )">'
+            '<select id="s-proj" aria-label="Project"><option value="">All projects</option></select>'
             + SORT_SEG + '<span class="note" id="s-count"></span></div><section class="card" id="compare"><h3>Compare</h3>'
             '<p class="note">Bold = fewest. Tokens per prompt evens out sessions of different length.</p><table></table></section>'
             '<div id="session-list"></div><div class="pickbar" id="pickbar" role="region" aria-label="Compare sessions" hidden><span id="pick-hint"></span><span class="acts">'
