@@ -403,6 +403,9 @@ def main():
     pmode = psuite.add_mutually_exclusive_group()
     pmode.add_argument("--draft", action="store_true", help="write evals/evals.draft.json (no paid run, no LLM)")
     pmode.add_argument("--approve", action="store_true", help="copy evals.draft.json to evals.json when its checks pass")
+    pmode.add_argument("--generate", action="store_true", help="write evals.draft.json with machine checks from one paid claude -p call (capped by --budget); evals.json is never touched")
+    psuite.add_argument("--budget", type=float, default=1.0, help="with --generate: cost cap in USD (default 1.0)")
+    psuite.add_argument("--model", default="sonnet", help="with --generate: model name (default sonnet)")
     psuite.add_argument("--force", action="store_true", help="with --approve: overwrite an existing evals.json")
     psuite.add_argument("--n", type=int, default=5, help="most cases in a draft (default 5)")
     pcase.add_argument("--max-budget-usd", type=float, default=None, help="cost cap of this run in USD (default 2.0)")
@@ -590,6 +593,17 @@ def main():
             if args.draft:
                 res = suite.draft(args.skill, args.n)
                 print(f"{res['note']}\ndraft {res['path']}\nadd machine checks, then: tokscope optimize suite {args.skill} --approve")
+            elif args.generate:
+                from .experiments.skillopt import suite_gen
+
+                res = suite_gen.generate(args.skill, args.n, args.budget, args.model)
+                cost = f", cost ${res['cost']:.2f}" if res["cost"] is not None else ""
+                print(f"{res['note']}{cost}\ndraft {res['path']}")
+                for problem in res["problems"]:
+                    print(problem)
+                if not res["problems"]:
+                    print(f"review it, then: tokscope optimize suite {args.skill} --approve")
+                sys.exit(1 if res["problems"] else 0)
             elif args.approve:
                 print(f"approved: {suite.approve(args.skill, force=args.force)}")
             else:

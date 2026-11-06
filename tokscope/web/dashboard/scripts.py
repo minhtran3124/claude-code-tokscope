@@ -67,7 +67,7 @@ function ask(anchor,text,ok='OK'){return new Promise(res=>{document.querySelecto
   const esc=e=>{if(e.key==='Escape')done(false)},done=v=>{box.remove();document.removeEventListener('keydown',esc);res(v)};
   y.addEventListener('click',()=>done(true));n.addEventListener('click',()=>done(false));document.addEventListener('keydown',esc);
   acts.append(y,n);box.append(el('p','',text),acts);anchor.after(box);box.scrollIntoView({block:'nearest'});y.focus()})}
-function busy(b,text){b.dataset.label=b.textContent;b.disabled=true;b.classList.add('busy');b.textContent=text}
+function busy(b,text){if(!b.classList.contains('busy'))b.dataset.label=b.textContent;b.disabled=true;b.classList.add('busy');b.textContent=text}
 function idle(b){b.disabled=false;b.classList.remove('busy');b.textContent=b.dataset.label||b.textContent}
 document.getElementById('mcp-check')?.addEventListener('click',async e=>{const b=e.target,when=document.getElementById('mcp-when');
   b.disabled=true;when.textContent='Checking… this can take a minute.';
@@ -143,6 +143,24 @@ if(startEl){const est=document.getElementById('opt-est'),err=document.getElement
       ok.addEventListener('click',async()=>{busy(ok,'Starting…');
         try{const r=await send('/optimize/start',{...body(),confirm:true});location.href=r.url}catch(x){fail(x);idle(ok)}})}
     catch(x){fail(x)}finally{idle(go)}})}
+// library: draft an eval suite in the background (one capped call), poll it, then ask before it becomes evals.json
+const sgEl=document.getElementById('suitegen');
+if(sgEl){const st=document.getElementById('sg-state'),err=document.getElementById('sg-err'),go=sgEl.querySelector('button[type=submit]'),skill=sgEl.dataset.skill;
+  let timer=null;
+  const fail=m=>{err.textContent=m;err.hidden=false};
+  const show=t=>{st.replaceChildren(t);st.hidden=false};
+  const poll=async()=>{try{const j=await send('/optimize/suite/status',{skill});
+      if(j.state==='running'){busy(go,'Generating…');show('Generating in the background. You can leave this page; the draft is kept.');timer=setTimeout(poll,3000);return}
+      idle(go);
+      if(j.state==='done'){const ok=el('button','primary','Approve the suite');ok.type='button';
+        show(el('span','',j.lines.join(' · ')+' '));st.append(ok);
+        ok.addEventListener('click',async()=>{busy(ok,'Approving…');try{await send('/optimize/suite/approve',{skill});location.reload()}catch(x){fail(x.message);idle(ok)}})}
+      else if(j.state==='failed'){show(j.lines.join(' · ')||'The draft stopped before it finished.');fail('The draft failed. Nothing was approved; you can try again.')}}
+    catch(x){idle(go);fail(x.message)}};
+  sgEl.addEventListener('submit',async e=>{e.preventDefault();err.hidden=true;busy(go,'Starting…');
+    try{await send('/optimize/suite/generate',{skill,budget:+sgEl.budget.value,model:sgEl.model.value.trim()});poll()}
+    catch(x){idle(go);fail(x.message)}});
+  if(sgEl.dataset.state!=='none')poll()}
 """
 
 SETTINGS_JS = """
