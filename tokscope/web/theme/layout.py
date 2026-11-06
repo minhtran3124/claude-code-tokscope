@@ -870,6 +870,29 @@ p.warn{color:var(--agent-ink);font-size:13px}
 .outcome.ok{background:color-mix(in oklch,var(--pass) 12%,transparent)}
 .outcome.bad{background:color-mix(in oklch,var(--fail) 12%,transparent)}
 .outcome.off{background:var(--chip)}
+.vhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.vbadge{font:700 15px var(--mono);padding:3px 14px;border:var(--line-w) solid var(--line-c);border-radius:var(--r-tile);white-space:nowrap;background:var(--chip)}
+.vbadge.ok{color:var(--pass);border-color:var(--pass);background:color-mix(in oklch,var(--pass) 12%,transparent)}
+.vbadge.bad{color:var(--fail);border-color:var(--fail);background:color-mix(in oklch,var(--fail) 12%,transparent)}
+.vsum{font-size:16px;font-weight:600;margin:10px 0;overflow-wrap:anywhere}
+.nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0}
+.num{border:var(--line-w) solid var(--line-c);border-radius:var(--r-tile);padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.num .k{font-size:12px;color:var(--muted)}
+.num b{font-size:18px;overflow-wrap:anywhere}
+.gchips{display:flex;flex-wrap:wrap;gap:6px;list-style:none;padding:0;margin:8px 0}
+.gchip{white-space:nowrap;font:500 12px var(--mono);padding:2px 10px;border:var(--line-w) solid var(--line-c);border-radius:999px;background:var(--chip);color:var(--ink2)}
+.gchip.ok{color:var(--pass);border-color:var(--pass)}
+.gchip.bad{color:var(--fail);border-color:var(--fail);font-weight:700}
+.runrows{padding-top:4px;padding-bottom:4px}
+.runrows>details.more{border:0;border-radius:0;margin:0;padding:12px 0;background:none}
+.runrows>details.more+details.more{border-top:1px solid var(--row-c)}
+.runrows>details.more>summary{align-items:baseline;gap:2px 12px}
+table.gtable td.nw{white-space:nowrap}
+.vreason{overflow-wrap:anywhere}
+.decideblock .optform{margin-top:8px}
+.decideblock .acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+table.gtable td,table.gtable th{text-align:left}
+@media (max-width:640px){.nums{gap:6px;margin:6px 0}.num{padding:5px 7px}.num .k{font-size:11px}.num b{font-size:13px;line-height:1.25}.decideblock textarea{min-height:0}}
 a.outcome.run{color:var(--ink);text-decoration:none;background:color-mix(in oklch,var(--mark) 9%,var(--surface));margin:-4px 0 14px}
 a.outcome.run:hover{background:color-mix(in oklch,var(--mark) 15%,var(--surface))}
 @media (prefers-reduced-motion:reduce){

@@ -264,6 +264,53 @@ class DataTest(Fixture):
                 page.load(bad)
 
 
+class SentenceTest(unittest.TestCase):
+    ARMS = [{"stage": "confirm", "arm": "current", "pass": {"mean": 50.0}, "cost": {"mean": 0.1}, "tokens": {"mean": 150.0}},
+            {"stage": "confirm", "arm": "draft", "pass": {"mean": 100.0}, "cost": {"mean": 0.08}, "tokens": {"mean": 120.0}},
+            {"stage": "baseline", "arm": "current", "pass": {"mean": 1.0}, "cost": {"mean": 9.0}, "tokens": {"mean": 9.0}}]
+
+    def test_page_verdict_labels(self):
+        ok, bad = [{"passed": True}, {"passed": None}], [{"passed": True}, {"passed": False}]
+        self.assertEqual(page.page_verdict(stats.APPLY, ok), "Apply")
+        self.assertEqual(page.page_verdict(stats.NOT_ENOUGH, ok), stats.NOT_ENOUGH)
+        self.assertEqual(page.page_verdict(stats.REJECT, ok), "Do not apply")
+        self.assertEqual(page.page_verdict(stats.REJECT, bad), "Do not apply")
+        self.assertEqual(page.page_verdict(stats.APPLY, bad), "Do not apply")
+        self.assertEqual(page.page_verdict(stats.NOT_ENOUGH, bad), stats.NOT_ENOUGH)  # Benefit failed stores Not enough evidence
+        self.assertIsNone(page.page_verdict(None, bad))
+
+    def test_chips_survive_a_stored_passed_that_is_not_a_bool(self):
+        html = page._chips([{"name": "Valid", "passed": []}, {"name": "Safety", "passed": False}, {"name": "x", "passed": {}}])
+        self.assertLess(html.index("Safety"), html.index("Valid"))
+
+    def test_headline_numbers_take_the_confirm_arms(self):
+        n = page.headline_numbers(self.ARMS)
+        self.assertEqual(n, {"pass": (50.0, 100.0), "cost": (0.1, 0.08), "tokens": (150.0, 120.0)})
+
+    def test_headline_numbers_are_none_for_a_missing_arm_or_ci(self):
+        self.assertEqual(page.headline_numbers([]), {"pass": None, "cost": None, "tokens": None})
+        arms = [dict(self.ARMS[0]), dict(self.ARMS[1], cost=None)]
+        n = page.headline_numbers(arms)
+        self.assertIsNone(n["cost"])
+        self.assertEqual(n["pass"], (50.0, 100.0))
+
+    def test_sentence_for_each_verdict(self):
+        n = page.headline_numbers(self.ARMS)
+        tail = "pass rate 50% to 100%, cost per run $0.10 to $0.08, tokens per run 150 to 120."
+        for label in ("Apply", "Do not apply", "Not enough evidence"):
+            self.assertEqual(page.summary_sentence(label, n, "why"), f"{label}: {tail}")
+
+    def test_sentence_falls_back_to_the_reason(self):
+        n = page.headline_numbers(self.ARMS[:1])
+        self.assertEqual(page.summary_sentence("Apply", n, "because it is good"), "because it is good")
+        self.assertEqual(page.summary_sentence("Apply", n, None), "")
+        self.assertEqual(page.summary_sentence("Apply", n, ""), "")
+
+    def test_a_reject_with_a_failed_gate_reads_do_not_apply(self):
+        label = page.page_verdict(stats.REJECT, [{"passed": False}])
+        self.assertTrue(page.summary_sentence(label, page.headline_numbers(self.ARMS), "r").startswith("Do not apply: pass rate"))
+
+
 class RenderTest(Fixture):
     def render(self, qs="", level="full"):
         conn = ingest.connect(self.db)
@@ -292,10 +339,12 @@ class RenderTest(Fixture):
 
     def test_the_report_has_every_section_gate_case_and_check_evidence(self):
         body = self.render(f"run={APPLY_RUN}")
-        for section in ("Plan", "Gates", "Cases", "Editor", "Before and after"):
+        for section in ("Decide", "What changed", "Gates", "Draft vs current", "Skill vs no skill"):
             self.assertIn(f">{section}</h2>", body)
+        for row in ("Cases", "Editor rounds", "Trigger check", "Run settings", "Raw values"):  # one-line collapsed rows
+            self.assertIn(f'<summary><span class="ttl">{row}</span>', body)
         for gate in GATES:
-            self.assertIn(f"<td>{gate}</td>", body)
+            self.assertIn(f'<td class="nw">{gate}</td>', body)
         for case in ("d1", "d2", "h1"):
             self.assertIn(f'<span class="ttl">{case}</span>', body)
         self.assertLess(body.index("Dev cases (2)"), body.index('<span class="ttl">d1</span>'))
@@ -322,6 +371,48 @@ class RenderTest(Fixture):
         self.assertIn("Per arm", body)
         self.assertNotIn('id="compare"', body)  # the theme hides #compare (the Sessions compare tray) until it opens
 
+    def test_order_is_decide_check_then_the_collapsed_rows(self):
+        body = self.render(f"run={APPLY_RUN}")
+        marks = ['id="decide-card"', 'id="diff"', 'id="gates"', 'id="draftvs"', 'id="skillvs"', 'id="cases"', 'id="editor"',
+                 'id="trigger"', 'id="plan"', 'id="raw"']
+        at = [body.index(m) for m in marks]
+        self.assertEqual(at, sorted(at))
+        self.assertIn("Editor's reason: hypothesis 1", body)
+
+    def test_no_json_in_a_table_cell_and_the_raw_values_keep_it(self):
+        body = self.render(f"run={APPLY_RUN}")
+        for table in re.findall(r"<table.*?</table>", body, re.S):
+            self.assertNotIn("&quot;", table)
+            self.assertNotIn("{", table)
+        raw = body[body.index('id="raw"'):]
+        self.assertIn("&quot;name&quot;: &quot;Meaningful suite&quot;", raw)
+
+    def test_the_change_tables_have_a_change_column(self):
+        body = self.render(f"run={APPLY_RUN}")
+        self.assertEqual(body.count("<th>Change</th>"), 2)
+        self.assertIn("<td>+50.0 points</td>", body)  # draft vs current: 50 to 100
+        self.assertIn("<td>-$0.02</td>", body)
+        self.assertIn("<td>0</td>", body)  # tokens did not change
+        self.assertIn("<td>+50.0 points</td>", body[body.index('id="skillvs"'):])  # skill vs no skill: 0 to 50
+
+    def test_the_collapsed_rows_carry_their_key_fact(self):
+        body = self.render(f"run={APPLY_RUN}")
+        self.assertIn('<span class="note">3 cases, 2 dev, 1 holdout</span>', body)
+        self.assertIn('<span class="note">2 rounds, round 1 became the draft</span>', body)
+        self.assertIn('<details class="more" id="trigger"><summary>', body)  # status and reason only: closed
+        self.assertIn("not needed: the description did not change", body)
+
+    def test_a_trigger_check_with_evidence_is_open_and_full(self):
+        path = self.run_dir() / "verdict.json"
+        v = json.loads(path.read_text())
+        v["trigger"] = {"status": "ran", "reason": "description changed", "prompts": {"train": 4, "test": 2},
+                        "current": 0.5, "draft": 0.9, "passed": True, "reverted": False}
+        path.write_text(json.dumps(v))
+        body = self.render(f"run={APPLY_RUN}")
+        self.assertIn('<details class="more" id="trigger" open>', body)
+        self.assertIn("<dd>train 4, test 2</dd>", body)
+        self.assertIn("<dt>reverted</dt><dd>no</dd>", body)
+
     def test_a_run_without_a_draft_shows_only_the_editor(self):
         v = json.loads((self.run_dir() / "verdict.json").read_text())
         v.update(draft_version=None, draft_fingerprint=None)
@@ -342,7 +433,7 @@ class RenderTest(Fixture):
         plan = {"skill": 5, "created": 20260101, "budget_usd": "2", "per_run_cap_usd": "x", "dev": 3, "holdout": "a",
                 "model": ["m"], "runs": {"a": 1}}
         (self.run_dir() / "plan.json").write_text(json.dumps(plan))
-        self.assertIn("Plan", self.render(f"run={APPLY_RUN}"))
+        self.assertIn("Run settings", self.render(f"run={APPLY_RUN}"))
         self.assertIn("Optimize runs", self.render())
 
     def test_a_level_below_full_hides_the_text(self):
@@ -521,7 +612,7 @@ class DecideMarkupTest(Fixture):
         body = self.body(NOT_ENOUGH_RUN)
         self.assertIn("disabled", self.approve_button(body))
         self.assertNotIn("data-block", self.approve_button(body))  # the page script enables it once a reason is typed
-        self.assertIn("<textarea id=\"opt-reason\" rows=\"2\" required>", body)
+        self.assertIn("<textarea id=\"opt-reason\" rows=\"1\" required>", body)
         self.assertIn("Reason (required to approve)", body)
 
     def test_reject_verdict_has_approve_off_with_its_reason(self):
@@ -534,10 +625,45 @@ class DecideMarkupTest(Fixture):
         (self.run_dir(REJECT_RUN) / "verdict.json").unlink()
         body = self.body(REJECT_RUN)
         self.assertIsNone(self.approve_button(body))
-        self.assertIn('data-opt-act="reject"', body)
+        self.assertNotIn('data-opt-act="reject"', body)  # a run with no verdict has no Approve and no Reject on the page
+        self.assertNotIn('id="decide"', body)
+        self.assertIn("tokscope optimize resume " + REJECT_RUN, body)
         path = self.run_dir() / "verdict.json"
         path.write_text(json.dumps({**json.loads(path.read_text()), "draft_version": None, "draft_fingerprint": None}))
         self.assertIn("Approve is off: no draft to apply", self.body(APPLY_RUN))
+
+    def test_the_decide_block_comes_first_with_the_sentence_numbers_and_chips(self):
+        body = self.body(APPLY_RUN)
+        self.assertLess(body.index('id="decide-card"'), body.index('id="gates"'))
+        self.assertLess(body.index('data-opt-act="approve"'), body.index('id="gates"'))
+        self.assertIn("Apply: pass rate 50% to 100%, cost per run $0.10 to $0.08, tokens per run 150 to 150.", body)
+        self.assertIn('<span class="vbadge ok">Apply</span>', body)
+        self.assertIn("because Apply", body)
+        for gate in GATES:
+            self.assertIn(f" {gate}</li>", body)
+
+    def test_few_cases_show_the_caution_line(self):
+        self.assertIn("Only 3 cases ran; fewer than 5 is thin evidence.", self.body(APPLY_RUN))
+        plan = json.loads((self.run_dir() / "plan.json").read_text())
+        plan.update(dev=["a", "b", "c"], holdout=["d", "e"])
+        (self.run_dir() / "plan.json").write_text(json.dumps(plan))
+        self.assertNotIn("thin evidence", self.body(APPLY_RUN))
+
+    def test_a_failed_gate_on_an_apply_reads_do_not_apply_first_and_keeps_the_stored_verdict(self):
+        path = self.run_dir(APPLY_RUN) / "verdict.json"
+        v = json.loads(path.read_text())
+        v["gates"][3]["passed"] = False
+        path.write_text(json.dumps(v))
+        body = self.body(APPLY_RUN)
+        self.assertIn('<span class="vbadge bad">Do not apply</span>', body)
+        self.assertLess(body.index("✕ No regression</li>"), body.index("✓ Valid</li>"))
+        self.assertEqual(json.loads(path.read_text())["verdict"], stats.APPLY)
+
+    def test_a_stored_reject_reads_do_not_apply_and_keeps_approve_off(self):
+        body = self.body(REJECT_RUN)
+        self.assertIn('<span class="vbadge bad">Do not apply</span>', body)
+        self.assertIn('disabled data-block="1"', self.approve_button(body))
+        self.assertEqual(json.loads((self.run_dir(REJECT_RUN) / "verdict.json").read_text())["verdict"], stats.REJECT)
 
     def test_no_verdict_still_finds_the_installed_skill_by_the_plan_fingerprint(self):
         (self.run_dir(REJECT_RUN) / "verdict.json").unlink()

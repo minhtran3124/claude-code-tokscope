@@ -257,6 +257,51 @@ def load(run_id):
             "rounds": editor_rounds(run, recs, draft), "files": changed_files(run, draft)}
 
 
+# the decide block: what the page says in words (pure, so the rule is testable)
+
+DO_NOT_APPLY = "Do not apply"
+
+
+def page_verdict(verdict, gates):
+    """The label the page shows for a stored verdict: a Reject, or an Apply with a failed gate, reads "Do not apply" (the
+    stored value stays as it is); Not enough evidence reads as stored even with a failed gate, because the verdict code
+    stores it for a failed Valid, Meaningful suite or Benefit gate and Approve stays possible with a reason. None when
+    there is no verdict."""
+    if not verdict:
+        return None
+    failed = any(isinstance(g, dict) and g.get("passed") is False for g in gates or [])
+    if verdict == stats.REJECT or (failed and verdict == stats.APPLY):
+        return DO_NOT_APPLY
+    return str(verdict)
+
+
+def _mean(ci):
+    v = ci.get("mean") if isinstance(ci, dict) else None
+    return v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def headline_numbers(arms):
+    """{"pass", "cost", "tokens"}: (old, new) means of the confirm stage, old = the current arm, new = the draft arm
+    (pass in points, cost in USD, tokens per run). A metric is None when an arm or its mean is missing."""
+    by = {a["arm"]: a for a in arms or [] if a.get("stage") == "confirm"}
+    out = {}
+    for key in ("pass", "cost", "tokens"):
+        old, new = _mean((by.get("current") or {}).get(key)), _mean((by.get("draft") or {}).get(key))
+        out[key] = None if old is None or new is None else (old, new)
+    return out
+
+
+def summary_sentence(label, numbers, reason):
+    """`<Label>: pass rate A% to B%, cost per run $X to $Y, tokens per run X to Y.`, or the verdict reason when a number
+    is missing (or "" when there is neither)."""
+    n = numbers or {}
+    if not label or any(n.get(k) is None for k in ("pass", "cost", "tokens")):
+        return reason if isinstance(reason, str) else ""
+    (p0, p1), (c0, c1), (t0, t1) = n["pass"], n["cost"], n["tokens"]
+    return (f"{label}: pass rate {p0:.0f}% to {p1:.0f}%, cost per run {_usd(c0)} to {_usd(c1)}, "
+            f"tokens per run {_tok(round(t0))} to {_tok(round(t1))}.")
+
+
 # the page
 
 def _e(x):
@@ -287,7 +332,78 @@ def _runs_list(found, notice=""):
             f'against the current one. Open a run to read its evidence, then approve or reject it.</p>{body}</section>')
 
 
-def _plan_section(d):
+def _plain(v):
+    """A value as words for a cell: no JSON."""
+    if isinstance(v, dict):
+        return ", ".join(f"{k} {_plain(x)}" for k, x in v.items()) or "–"
+    if isinstance(v, list):
+        return ", ".join(_plain(x) for x in v) or "–"
+    return "–" if v is None else "yes" if v is True else "no" if v is False else str(v)
+
+
+def _num_or_none(v):
+    return v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def _signed(x, fmt):
+    return ("+" if x > 0 else "-" if x < 0 else "") + fmt(abs(x))
+
+
+def _gate_found(g):
+    """One plain sentence for what a gate found, from its stored value; the stored detail when the value is not as expected."""
+    name, val, detail = g.get("name"), g.get("value"), _str(g.get("detail"))
+    if g.get("passed") is None:
+        return "Not run." + (f" {detail[0].upper() + detail[1:]}." if detail and detail != "not run" else "")
+    if name == "Valid" and _num_or_none(val) is not None:
+        return f"{val * 100:.0f}% of the runs counted in the weaker arm."
+    if name == "Meaningful suite" and _num_or_none(val) is not None:
+        return f"The skill scores {val:+.1f} points against no skill."
+    if name == "Safety" and _num_or_none(val) is not None:
+        return f"{val:g} safety check{'s' * (val != 1)} failed in the draft."
+    if name == "No regression" and isinstance(val, dict):
+        lo, ho = _num_or_none(val.get("ci_low")), _num_or_none(val.get("holdout_points"))
+        if lo is not None and ho is not None:
+            return f"Worst likely change {lo:+.1f} points; the holdout cases changed {ho:+.1f} points."
+    if name == "Benefit" and isinstance(val, dict):
+        pm, cm = _mean(val.get("pass")), _mean(val.get("cost"))
+        if pm is not None and cm is not None:
+            return f"Pass rate {pm:+.1f} points and cost per run {_signed(cm, _usd)} against the current version."
+    return (detail[0].upper() + detail[1:] + ".") if detail else "–"
+
+
+def _gate_rule(g):
+    """The gate's threshold in words."""
+    name, th = g.get("name"), g.get("threshold")
+    if name == "Valid" and _num_or_none(th) is not None:
+        return f"At least {th * 100:.0f}% of runs count."
+    if name == "Meaningful suite" and _num_or_none(th) is not None:
+        return f"At least {th:g} points above no skill."
+    if name == "Safety" and _num_or_none(th) is not None:
+        return f"At most {th:g} failed safety checks."
+    if name == "No regression" and isinstance(th, dict) and _num_or_none(th.get("ci_low_min")) is not None:
+        return f"Worst likely change no lower than {th['ci_low_min']:g} points, and holdout not worse than current."
+    if name == "Benefit" and th:
+        return "Cost clearly lower, or pass rate clearly higher."
+    return _plain(th)
+
+
+def _gates_section(d):
+    if not d["gates"]:
+        return ""
+    rows = "".join(f'<tr><td class="nw">{_e(g.get("name"))}</td>'
+                   f'<td>{"not run" if g.get("passed") is None else "pass" if g.get("passed") else "FAIL"}</td>'
+                   f'<td>{_e(_gate_found(g))}</td><td>{_e(_gate_rule(g))}</td></tr>' for g in d["gates"])
+    return ('<section class="card" id="gates"><h2 class="sec">Gates</h2><div class="scroll"><table class="gtable"><thead><tr>'
+            f'<th>Gate</th><th>Result</th><th>What it found</th><th>Rule</th></tr></thead><tbody>{rows}</tbody></table></div></section>')
+
+
+def _row(anchor, title, fact, body, opened=False):
+    """A collapsed one-line row: the title and its key fact, the body behind it."""
+    return (f'<details class="more" id="{anchor}"{" open" if opened else ""}><summary><span class="ttl">{title}</span>'
+            f'<span class="note">{fact}</span></summary>{body}</details>')
+
+
+def _settings_row(d):
     p, s = d["plan"], d["summary"]
     cap = _usd_or_none(p.get("per_run_cap_usd"))
     facts = [("Skill", f"<code>{_e(p.get('skill'))}</code>"), ("State", _state(s["state"])), ("Started", _time(s["created"])),
@@ -296,34 +412,32 @@ def _plan_section(d):
              ("Budget", f"{_usd(s['spent'])} spent of {_usd(_usd_or_none(p.get('budget_usd')))}" + (f" · {_usd(cap)} at most per call" if cap else "")),
              ("Versions", ", ".join(f"<code>{_e(v)}</code>" for v in d["versions"]) or "–"),
              ("Measured version", f"<code>{_e(p.get('base_fingerprint'))}</code>")]
-    return ('<section class="card" id="plan"><h2 class="sec">Plan</h2><dl class="ids">'
-            + "".join(f"<dt>{a}</dt><dd>{b}</dd>" for a, b in facts) + "</dl></section>")
+    fact = f"{_e(p.get('model') or 'model unknown')}, {_usd(s['spent'])} spent of {_usd(_usd_or_none(p.get('budget_usd')))}"
+    return _row("plan", "Run settings", fact, '<dl class="ids">' + "".join(f"<dt>{a}</dt><dd>{b}</dd>" for a, b in facts) + "</dl>")
 
 
-def _value(v):
-    return _e(json.dumps(v, sort_keys=True)) if isinstance(v, (dict, list)) else _e("–" if v is None else v)
+def _trigger_row(d):
+    t = d["verdict"].get("trigger")
+    if not (isinstance(t, dict) and t):
+        return ""
+    prompts = t.get("prompts")
+    evidence = ((isinstance(prompts, dict) and any(_num_or_none(x) for x in prompts.values())) or t.get("current") is not None
+                or t.get("draft") is not None or t.get("passed") is not None or t.get("reverted") is True)
+    fact = _e(": ".join(x for x in (_str(t.get("status")), _str(t.get("reason"))) if x) or "no detail")
+    keys = ("status", "reason", "prompts", "current", "draft", "passed", "reverted") if evidence else ("status", "reason")
+    body = '<dl class="ids">' + "".join(f"<dt>{k}</dt><dd>{_e(_plain(t.get(k)))}</dd>" for k in keys if k in t) + "</dl>"
+    return _row("trigger", "Trigger check", fact, body, opened=evidence)
 
 
-def _gates_section(d):
+def _raw_row(d):
     v = d["verdict"]
-    if not d["gates"] and not v.get("verdict"):
-        return ('<section class="card" id="gates"><h2 class="sec">Gates</h2><p class="note">No verdict yet: the run has not finished '
-                f'(resume it with <code>tokscope optimize resume {_e(d["id"])}</code>).</p></section>')
-    cls = {stats.APPLY: "ok", stats.REJECT: "bad"}.get(v.get("verdict"), "off")
-    head = (f'<div class="outcome {cls}"><b>Verdict: {_e(v.get("verdict") or "unknown")}</b><span>{_e(v.get("reason"))}</span></div>'
-            if v.get("verdict") else "")
-    rows = "".join(f'<tr><td>{_e(g.get("name"))}</td><td>{"not run" if g.get("passed") is None else "pass" if g.get("passed") else "FAIL"}</td>'
-                   f'<td>{_value(g.get("value"))}</td><td>{_value(g.get("threshold"))}</td><td>{_e(g.get("detail"))}</td></tr>'
-                   for g in d["gates"])
-    table = ('<div class="scroll"><table><thead><tr><th>Gate</th><th>Result</th><th>Value</th><th>Threshold</th><th>Detail</th></tr>'
-             f'</thead><tbody>{rows}</tbody></table></div>') if rows else ""
-    t = v.get("trigger")
-    trig = ""
-    if isinstance(t, dict) and t:
-        keys = ("status", "reason", "prompts", "current", "draft", "passed", "reverted")
-        trig = ('<h3 class="sub3">Trigger check</h3><dl class="ids">'
-                + "".join(f"<dt>{k}</dt><dd>{_value(t.get(k))}</dd>" for k in keys if k in t) + "</dl>")
-    return f'<section class="card" id="gates"><h2 class="sec">Gates</h2>{head}{table}{trig}</section>'
+    if not v and not d["gates"]:
+        return ""
+    dump = lambda x: _e(json.dumps(x, indent=2, sort_keys=True))
+    parts = (("Gates", d["gates"]), ("Verdict", {k: x for k, x in v.items() if k not in ("gates", "trigger")}),
+             ("Trigger check", v.get("trigger")))
+    body = "".join(f'<h4 class="sub3">{n}</h4><pre class="src">{dump(x)}</pre>' for n, x in parts)
+    return _row("raw", "Raw values", "the gates, the verdict and the trigger check as stored", body)
 
 
 def _expectations(r):
@@ -335,11 +449,12 @@ def _expectations(r):
     return f'{why}<ul class="plain">{items}</ul>{answer}'
 
 
-def _cases_section(d):
+def _cases_row(d):
     if not d["cases"]:
-        return '<section class="card" id="cases"><h2 class="sec">Cases</h2><p class="note">No cases in the plan.</p></section>'
+        return _row("cases", "Cases", "no cases in the plan", "")
     label = {"dev": "Dev cases", "holdout": "Holdout cases"}
-    out = ['<section class="card" id="cases"><h2 class="sec">Cases</h2><p class="note">Checks passed over checks run, per arm. '
+    n = {sp: len([c for c in d["cases"] if c["split"] == sp]) for sp in label}
+    out = ['<p class="note">Checks passed over checks run, per arm. '
            'Open a case for each check and the evidence the grader found. Baseline: current and no skill. Confirm: current and the draft.</p>']
     if d["skipped"]:
         out.append(f'<p class="warn">{d["skipped"]} result{"s" * (d["skipped"] != 1)} could not be read and {"are" if d["skipped"] != 1 else "is"} left out.</p>')
@@ -360,13 +475,13 @@ def _cases_section(d):
                                   + _expectations(r))
             out.append(f'<details class="more"><summary><span class="ttl">{_e(c["case"])}</span>'
                        f'<span class="note">{" · ".join(counts) or "no results"}</span></summary>{"".join(blocks)}</details>')
-    out.append("</section>")
-    return "".join(out)
+    total = len(d["cases"])
+    return _row("cases", "Cases", f"{total} case{'s' * (total != 1)}, {n['dev']} dev, {n['holdout']} holdout", "".join(out))
 
 
-def _rounds_section(d):
+def _rounds_row(d):
     if not d["rounds"]:
-        return '<section class="card" id="editor"><h2 class="sec">Editor</h2><p class="note">The editor did not run.</p></section>'
+        return _row("editor", "Editor rounds", "the editor did not run", '<p class="note">The editor did not run.</p>')
     items = []
     for r in d["rounds"]:
         word = "accepted" if r["accepted"] else "rejected" if r["accepted"] is False else "unknown"
@@ -375,28 +490,51 @@ def _rounds_section(d):
                      f'{" · became the draft" if r["draft"] else ""}{score}<br>'
                      f'<span>{_e(r["hypothesis"]) or "<i>no hypothesis</i>"}</span>'
                      + (f'<br><span class="note">{_e(r["reason"])}</span>' if r["reason"] else "") + "</li>")
-    return ('<section class="card" id="editor"><h2 class="sec">Editor</h2><p class="note">An accepted round that lost on its dev '
-            f'score has no reason of its own: its score is the reason.</p><ul class="plain">{"".join(items)}</ul></section>')
+    n = len(d["rounds"])
+    won = next((r["round"] for r in d["rounds"] if r["draft"]), None)
+    fact = f"{n} round{'s' * (n != 1)}, " + (f"round {won} became the draft" if won else "no round became the draft")
+    return _row("editor", "Editor rounds", fact, '<p class="note">An accepted round that lost on its dev '
+                f'score has no reason of its own: its score is the reason.</p><ul class="plain">{"".join(items)}</ul>')
 
 
 def _num(ci, fmt):
     return "–" if not ci else f'{fmt(ci["mean"])} <span class="note">[{fmt(ci["ci_low"])}, {fmt(ci["ci_high"])}]</span>'
 
 
-def _compare_section(d):
+def _diff_section(d):
     if not d["draft"]:
-        return ('<section class="card" id="beforeafter"><h2 class="sec">Compare</h2><p class="note">No draft was made, so there is '
-                'nothing to compare. The editor rounds above say why.</p></section>')
+        return ('<section class="card" id="diff"><h2 class="sec">What changed</h2><p class="note">No draft was made, so there is '
+                'nothing to compare. The editor rounds below say why.</p></section>')
+    won = next((r for r in d["rounds"] if r["draft"]), None)
+    why = f'<p class="note">Editor\'s reason: {_e(won["hypothesis"])}</p>' if won and won["hypothesis"] else ""
     files = "".join(f'<section class="card"><h3 class="path">{_e(rel)} <span class="note">{kind}</span></h3>'
                     f'<div class="scroll">{_side_by_side(before, after)}</div></section>' for rel, kind, before, after in d["files"])
-    rows = "".join(f'<tr><td>{_e(a["stage"])}</td><td>{_e(a["arm"])}</td><td>{a["counted"]} of {a["runs"]}</td>'
-                   f'<td>{_num(a["pass"], lambda x: f"{x:.1f}")}</td><td>{_num(a["cost"], _usd)}</td>'
-                   f'<td>{_num(a["tokens"], lambda x: _tok(round(x)))}</td></tr>' for a in d["arms"])
-    table = ('<h3 class="sub3">Per arm</h3><p class="note">Mean per run over cases, with a 95% interval (bootstrap by case, '
-             'the plan\'s seed). Pass rate is in points.</p><div class="scroll"><table><thead><tr><th>Stage</th><th>Arm</th><th>Counted runs</th>'
-             f'<th>Pass rate</th><th>Cost per run</th><th>Tokens per run</th></tr></thead><tbody>{rows}</tbody></table></div>') if rows else ""
-    return (f'<section class="card" id="beforeafter"><h2 class="sec">Before and after</h2><p class="note">{len(d["files"])} file'
-            f'{"s" * (len(d["files"]) != 1)} changed between <code>v0</code> and <code>{_e(d["draft"])}</code>.</p>{table}</section>{files}')
+    return (f'<section class="card" id="diff"><h2 class="sec">What changed</h2><p class="note">{len(d["files"])} file'
+            f'{"s" * (len(d["files"]) != 1)} changed between <code>v0</code> and <code>{_e(d["draft"])}</code>.</p>{why}</section>{files}')
+
+
+def _change_section(d, title, anchor, left, right, names):
+    """A table of one pair of arms, three metrics, with a Change column (right minus left)."""
+    pick = lambda stage, arm: next((a for a in d["arms"] if (a["stage"], a["arm"]) == (stage, arm)), None)
+    a, b = pick(*left), pick(*right)
+    if not (a and b):
+        return ""
+    metrics = (("Pass rate", "pass", lambda x: f"{x:.1f}%", lambda x: f"{x:.1f} points"),
+               ("Cost per run", "cost", _usd, _usd), ("Tokens per run", "tokens", lambda x: _tok(round(x)), lambda x: _tok(round(x))))
+    rows = []
+    for label, key, cell, delta in metrics:
+        x, y = _mean(a[key]), _mean(b[key])
+        change = "–" if x is None or y is None else _signed(y - x, delta)
+        rows.append(f'<tr><td>{label}</td><td>{_num(a[key], cell)}</td><td>{_num(b[key], cell)}</td><td>{_e(change)}</td></tr>')
+    return (f'<section class="card" id="{anchor}"><h2 class="sec">{title}</h2><p class="note">Per arm, the mean per run over cases with '
+            f'a 95% interval (bootstrap by case, the plan\'s seed). Counted runs: {a["counted"]} of {a["runs"]} and {b["counted"]} of '
+            f'{b["runs"]}. Change is {names[1]} minus {names[0]}.</p><div class="scroll"><table><thead><tr><th></th><th>{names[0]}</th>'
+            f'<th>{names[1]}</th><th>Change</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div></section>')
+
+
+def _rows_section(d):
+    rows = [_cases_row(d), _rounds_row(d), _trigger_row(d), _settings_row(d), _raw_row(d)]
+    return f'<section class="card runrows">{"".join(rows)}</section>'
 
 
 def _post_ship_section(conn, d):
@@ -428,7 +566,10 @@ def _report(d, decide, post=""):
     s = d["summary"]
     head = (f'<p><a href="/optimize">← All runs</a></p><section class="card libhead"><h2 class="sec">{_e(d["plan"].get("skill") or d["id"])} · '
             f'{_state(s["state"])}</h2><p class="note">Run <code>{_e(d["id"])}</code></p></section>')
-    return (head + _plan_section(d) + _gates_section(d) + _cases_section(d) + _rounds_section(d) + _compare_section(d) + post + decide)
+    return (head + decide + _diff_section(d) + _gates_section(d)
+            + _change_section(d, "Draft vs current", "draftvs", ("confirm", "current"), ("confirm", "draft"), ("Current", "Draft"))
+            + _change_section(d, "Skill vs no skill", "skillvs", ("baseline", "none"), ("baseline", "current"), ("No skill", "Skill"))
+            + _rows_section(d) + post)
 
 
 def page_optimize(conn, qs, level):
@@ -443,7 +584,7 @@ def page_optimize(conn, qs, level):
         except ValueError:
             notice = f'<p class="warn" role="note">There is no run <code>{_e(pick)}</code>.</p>'
         else:
-            return _report(d, _decide_section(conn, d), _post_ship_section(conn, d))
+            return _report(d, _decide_block(conn, d), _post_ship_section(conn, d))
     return _runs_list(runs(), notice)
 
 
@@ -553,22 +694,59 @@ def _decision_box(d):
     return f'<div class="outcome {cls}"><b>{word}</b><span>{" · ".join(detail)}</span>{note}</div>'
 
 
-def _decide_section(conn, d):
+FEW_CASES = 5  # fewer cases than this is thin evidence
+
+
+def _tiles(numbers):
+    """The three headline numbers as "A to B" tiles; "-" for a number that is not there."""
+    fmt = {"pass": lambda x: f"{x:.0f}%", "cost": _usd, "tokens": lambda x: _tok(round(x))}
+    out = []
+    for key, name in (("pass", "Pass rate"), ("cost", "Cost per run"), ("tokens", "Tokens per run")):
+        v = (numbers or {}).get(key)
+        text = "-" if v is None else f"{fmt[key](v[0])} to {fmt[key](v[1])}"
+        out.append(f'<div class="num"><span class="k">{name}</span><b>{_e(text)}</b></div>')
+    return f'<div class="nums">{"".join(out)}</div>'
+
+
+def _chips(gates):
+    """One chip per gate, failed first, then not run, then passed."""
+    ranked = sorted(gates, key=lambda g: {False: 0, True: 2}.get(g.get("passed"), 1) if isinstance(g.get("passed"), bool) else 1)
+    return ('<ul class="gchips" aria-label="Gates">' + "".join(
+        f'<li class="gchip {"bad" if g.get("passed") is False else "ok" if g.get("passed") else "off"}">'
+        f'{"✕" if g.get("passed") is False else "✓" if g.get("passed") else "–"} {_e(g.get("name"))}</li>' for g in ranked)
+        + "</ul>") if ranked else ""
+
+
+def _decide_block(conn, d):
+    """The first block of a run: verdict, one sentence, three numbers, gate chips, a caution for few cases, then the
+    reason field with Approve and Reject. A run with no verdict gets a neutral block and no Approve or Reject."""
+    v = d["verdict"]
+    stored = v.get("verdict")
+    label = page_verdict(stored, d["gates"])
+    cases = _count(d["plan"].get("dev")) + _count(d["plan"].get("holdout"))
+    if not stored:
+        return ('<section class="card decideblock" id="decide-card"><h2 class="sec">Decide</h2>' + _decision_box(d)
+                + '<div class="outcome off"><b>No verdict yet</b><span>The run has not finished. Resume it with '
+                f'<code>tokscope optimize resume {_e(d["id"])}</code>.</span></div>' + _tiles(None) + "</section>")
+    cls = {"Apply": "ok", DO_NOT_APPLY: "bad"}.get(label, "off")
+    sentence = summary_sentence(label, headline_numbers(d["arms"]), v.get("reason"))
     code, why, need = approve_check(d["run"])
-    verdict = d["verdict"].get("verdict")
-    want = {f for f in (d["verdict"].get("base_fingerprint"), d["verdict"].get("draft_fingerprint"),
-                        d["plan"].get("base_fingerprint")) if f}  # the same set decide() uses, so a run without a verdict still matches
+    want = {f for f in (v.get("base_fingerprint"), v.get("draft_fingerprint"), d["plan"].get("base_fingerprint")) if f}
     _, k, _ = owner_root(conn, d["plan"].get("skill"), want)
-    approve = ""
-    if verdict:
-        blocked = "" if code == 200 else f' disabled data-block="1" title="{_e(why)}"'
-        approve = (f'<button type="button" class="primary" data-opt-act="approve"{blocked or (" disabled" if need else "")}>'
-                   'Approve</button>')
-    block = f'<p class="note">Approve is off: {_e(why)}.</p>' if verdict and why else ""
-    label = "Reason (required to approve)" if need else "Reason (optional)"
-    return ('<section class="card" id="decide-card"><h2 class="sec">Decide</h2>' + _decision_box(d) + block
+    blocked = "" if code == 200 else f' disabled data-block="1" title="{_e(why)}"'
+    approve = (f'<button type="button" class="primary" data-opt-act="approve"{blocked or (" disabled" if need else "")}>'
+               'Approve</button>')
+    reason = _str(v.get("reason"))
+    why_line = f'<p class="note vreason">{_e(reason)}</p>' if reason and reason != sentence else ""
+    few = (f'<p class="warn" role="note">Only {cases} case{"s" * (cases != 1)} ran; fewer than {FEW_CASES} is thin evidence.</p>'
+           if cases < FEW_CASES else "")
+    block = f'<p class="note">Approve is off: {_e(why)}.</p>' if why else ""
+    word = "Reason (required to approve)" if need else "Reason (optional)"
+    return (f'<section class="card decideblock" id="decide-card"><h2 class="sec">Decide</h2><div class="vhead"><span class="vbadge {cls}">'
+            f'{_e(label)}</span></div><p class="vsum">{_e(sentence)}</p>' + _tiles(headline_numbers(d["arms"])) + _chips(d["gates"])
+            + few + why_line + _decision_box(d) + block
             + f'<div class="optform" id="decide" data-run="{_e(d["id"])}" data-need="{int(need)}">'
-            + f'<label class="wide">{label}<textarea id="opt-reason" rows="2"{" required" if need else ""}></textarea></label>'
+            + f'<label class="wide">{word}<textarea id="opt-reason" rows="1"{" required" if need else ""}></textarea></label>'
             + f'<p class="acts">{approve}<button type="button" class="btn danger" data-opt-act="reject">Reject</button></p>'
             + f'<p class="note">{_git_note(k)} Reject records your decision and never changes the skill.</p>'
             + '<p class="err" id="opt-err" hidden></p></div></section>')
