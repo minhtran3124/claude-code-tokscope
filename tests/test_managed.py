@@ -223,7 +223,7 @@ class ManagedPageTest(unittest.TestCase):
     def test_the_full_level_lists_all_three_and_escapes_names(self):
         with mock.patch.object(managed, "_run", fake()):
             body = dashboard.page_managed({}, "full")
-        for part in ('id="deployments"', 'id="managed-sessions"', 'id="agents"', "<code>depl_01Abc</code>", "dep-st\">paused <button",
+        for part in ('id="deployments"', 'id="managed-sessions"', 'id="agents"', "title=\"depl_01Abc\"", "dep-st\">paused <button",
                      "45 7 * * 1-5 Asia/Ho_Chi_Minh", "$25.00", "Brief &lt;writer&gt;", "haiku-5-5 · medium"):
             self.assertIn(part, body)
         self.assertNotIn("secret prompt", body)

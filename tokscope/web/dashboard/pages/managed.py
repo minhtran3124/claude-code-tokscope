@@ -6,8 +6,9 @@ from datetime import datetime
 from urllib.parse import quote
 
 from ....integrations import managed
-from ...report.widgets import _table, _tok, _usd
+from ...report.widgets import _tok, _usd
 from ..common import _dur
+from ._flat import card_head, flat_table, needs_look, pill
 
 
 def _when(iso):
@@ -103,31 +104,68 @@ def page_managed(qs, level):
     if "error" in data:
         return (head + '<div class="empty"><b>ant could not read your account</b>Install the ant CLI and sign in with '
                 f'<code>ant auth login</code>, then refresh. ant said: {html.escape(data["error"])}</div>')
-    deps, sessions, agents = data["deployments"], data["sessions"], data["agents"]
+    agents = data["agents"]
     if pick:
         a = next((a for a in agents if a["id"] == pick), None)
         return _agent_view(a, head) if a else (
             '<p><a href="/managed">← All managed agents</a></p>' + head
             + f'<div class="empty"><b>No such agent</b>No agent <code>{html.escape(pick)}</code> in this workspace.</div>')
-    note = f'tokens and cost count the latest {managed.SESSIONS} sessions'
-    dep_rows = [(d["name"] or d["id"], _dep_status(d),
-                 f'{d["cron"]} {d["tz"]}'.strip() or "–", _when(d["next"]) if d["status"] != "paused" else "–",
-                 _usd(d["budget"]), d["sessions"], d["tokens"], _usd(d["cost"]), _id_cell(d["id"])) for d in deps]
-    ses_rows = [(s["title"] or s["id"], s["status"], _when(s["created_at"]), _dur(s["active_s"]), s["tokens"],
-                 _usd(s["cost"]), _id_cell(s["id"])) for s in sessions]
-    agent_rows = [(_agent_link(a), " · ".join(x for x in (a["model"].removeprefix("claude-"), a["effort"]) if x) or "–",
-                   ", ".join(a["mcp"]) or "–", ", ".join(a["skills"]) or "–", a["sessions"], a["tokens"], _usd(a["cost"]),
-                   _id_cell(a["id"])) for a in agents]
+    return _list_view(data, head)
+
+
+def _kind(status):
+    """A session's status as a pill colour: failed red, in progress yellow, finished green, anything else plain."""
+    low = status.lower()
+    return "bad" if "fail" in low or "error" in low else "warn" if low in ("running", "rescheduling") else "ok" if low else ""
+
+
+def _agent_deploy(a, deps):
+    """The agent's deployment state as a pill: live when any of its deployments is active, else paused; blank without one."""
+    mine = [d["status"] for d in deps if d["agent"] == a["id"]]
+    return pill("live", "ok") if "active" in mine else pill(mine[0]) if mine else "–"
+
+
+def _looks(deps, sessions, names):
+    out = [(f'{html.escape(names.get(s["agent"]) or s["agent"] or "A session")} failed at {_when(s["created_at"])[-5:]}',
+            html.escape(s["title"] or s["id"])) for s in sessions if _kind(s["status"]) == "bad"][:5]
+    out += [(f'{html.escape(d["name"] or d["id"])} paused', html.escape(d["paused"].replace("_", " ")))
+            for d in deps if d["status"] == "paused" and d["paused"] not in ("", "manual")]
+    return out
+
+
+def _spend(agents, sessions):
+    total = sum(s["cost"] or 0 for s in sessions)
+    shares = sorted(((a["cost"], a["name"] or a["id"]) for a in agents if a["cost"]), reverse=True)[:4]
+    who = ", ".join(f"{html.escape(n)} {c / total * 100:.0f}%" for c, n in shares) if total else ""
+    return (f'<section class="card"><h2>Spend, latest {len(sessions)} sessions</h2><div class="big">{_usd(total)}</div>'
+            f'<p class="note">{who + "." if who else "No cost reported."}</p></section>')
+
+
+def _list_view(data, head):
+    deps, sessions, agents = data["deployments"], data["sessions"], data["agents"]
+    names = {a["id"]: a["name"] or a["id"] for a in agents}
     empty = lambda what: f'<div class="empty"><b>No {what}</b>None in this workspace yet.</div>'  # noqa: E731
-    return "".join([
-        head,
-        f'<section class="card" id="deployments"><h2>Deployments</h2><p class="note">{len(deps)} in this workspace; {note}</p>'
-        + (_table(["Deployment", "Status", "Schedule", "Next run", "Budget", "Sessions", "Tokens", "Cost", "ID"], dep_rows, 6)
+    cut = f'tokens and cost count the latest {managed.SESSIONS} sessions'
+    agent_rows = [(_agent_link(a)[0], f'<span class="mono">{html.escape(" · ".join(x for x in (a["model"].removeprefix("claude-"), a["effort"]) if x) or "–")}</span>',
+                   str(len(a["tools"])), str(len(a["skills"])), _agent_deploy(a, deps), str(a["sessions"]), _tok(a["tokens"]), _usd(a["cost"]))
+                  for a in agents]
+    ses_rows = [(f'<span class="mono">{_when(s["created_at"])}</span>',
+                 html.escape(names.get(s["agent"]) or s["agent"] or "–") + (f'<div class="note">{html.escape(s["title"])}</div>' if s["title"] else ""),
+                 pill(s["status"] or "–", _kind(s["status"])), _dur(s["active_s"]), _tok(s["tokens"]), _usd(s["cost"])) for s in sessions]
+    dep_rows = [(f'<span title="{html.escape(d["id"])}">{html.escape(d["name"] or d["id"])}</span>', _dep_status(d)[0],
+                 html.escape(f'{d["cron"]} {d["tz"]}'.strip() or "–"), _when(d["next"]) if d["status"] != "paused" else "–",
+                 _usd(d["budget"]), str(d["sessions"]), _tok(d["tokens"]), _usd(d["cost"])) for d in deps]
+    right = ("Toolsets", "Skills", "Sessions", "Tokens", "Cost", "Active", "Budget")
+    cards = [
+        f'<section class="card flat" id="agents">{card_head("Agents", f"{len(agents)} defined; {cut}")}'
+        + (flat_table(["Agent", "Model", "Toolsets", "Skills", "Deployment", "Sessions", "Tokens", "Cost"], agent_rows, right)
+           if agents else empty("agents")) + "</section>",
+        f'<section class="card flat" id="managed-sessions">{card_head("Latest sessions", f"{len(sessions)}, newest first")}'
+        + (flat_table(["Time", "Agent", "Status", "Active", "Tokens", "Cost"], ses_rows, right) if sessions else empty("sessions")) + "</section>",
+        f'<section class="card flat" id="deployments">{card_head("Deployments", f"{len(deps)} in this workspace")}'
+        + (flat_table(["Deployment", "Status", "Schedule", "Next run", "Budget", "Sessions", "Tokens", "Cost"], dep_rows, right)
            if deps else empty("deployments")) + '<p class="err" id="dep-err" role="alert" hidden></p></section>',
-        f'<section class="card" id="managed-sessions"><h2>Sessions</h2><p class="note">The latest {len(sessions)}, newest first</p>'
-        + (_table(["Session", "Status", "Started", "Active", "Tokens", "Cost", "ID"], ses_rows, 4) if sessions else empty("sessions"))
-        + '</section>',
-        f'<section class="card" id="agents"><h2>Agents</h2><p class="note">{len(agents)} defined; {note}</p>'
-        + (_table(["Agent", "Model", "MCP servers", "Skills", "Sessions", "Tokens", "Cost", "ID"], agent_rows, 5)
-           if agents else empty("agents")) + '</section>',
-    ])
+    ]
+    sub = '<p class="sub">Your Claude Managed Agents, their deployments and latest sessions.</p>'
+    return (f'<div class="dhead">{sub}{head}</div><div class="dpage"><div class="dcol">{"".join(cards)}</div>'
+            f'<aside class="drail" aria-label="What needs attention">{needs_look(_looks(deps, sessions, names))}{_spend(agents, sessions)}</aside></div>')

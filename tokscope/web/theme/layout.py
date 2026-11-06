@@ -967,4 +967,46 @@ p.sub{margin:0 0 14px;color:var(--ink2);font-size:13px}
 .prail .lim .l span:last-child{font-family:var(--num-font);color:var(--ink)}
 .prail .bar{height:var(--bar-h);background:var(--track);border-radius:var(--r-bar);overflow:hidden}.prail .bar u{display:block;height:100%;text-decoration:none}
 @container (max-width:520px){table.plist.plist td.go{display:none}table.plist.plist td:first-child{flex-direction:column;align-items:flex-start;gap:0;text-align:left}}
+/* benchmarks and managed: a main column and a 300 px rail (one column under 1100 px), flat tables, status pills */
+.dpage{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:0 20px;align-items:start}
+.dcol,.drail{min-width:0}
+@media (max-width:1100px){.dpage{grid-template-columns:minmax(0,1fr)}}
+.dhead{margin:0 0 14px}.dhead .sub{margin:0;color:var(--ink2);font-size:14px}
+.dhead .note{margin:4px 0 0}
+.card.flat{padding:0;overflow:hidden}
+.card.flat>.cardh{padding:14px 16px 8px}
+.card.flat>.err{margin:0;padding:8px 16px}
+.cardh{display:flex;justify-content:space-between;align-items:baseline;gap:4px 12px;flex-wrap:wrap}
+.cardh h2,.drail h2{margin:0;font-size:14px}
+.cardh .note{margin:0}
+.ftw{overflow-x:auto}
+table.ft{width:100%;border-collapse:collapse;font-size:13px}
+.ft th{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:9px 12px;border-bottom:1px solid var(--grid);white-space:nowrap}
+.ft th:first-child,.ft td:first-child{padding-left:16px}.ft th:last-child,.ft td:last-child{padding-right:16px}
+.ft td{padding:10px 12px;border-bottom:1px solid var(--grid);vertical-align:middle;text-align:left;color:var(--ink);font-family:var(--sans);white-space:normal}
+.ft tr:last-child td{border-bottom:0}
+.ft th.r,.ft td.r{text-align:right;font-variant-numeric:tabular-nums}
+.ft td.r,.ft td .mono{font-family:var(--mono)}
+.ft td b{font-weight:600}
+.ft td{flex-wrap:wrap}.ft td:first-child>.note{flex-basis:100%;text-align:left}
+.ft td .note{margin:2px 0 0;font-family:var(--sans)}
+.ft td .note code{font-size:11px}
+.dpill{display:inline-block;font:500 11px var(--mono);border:1px solid var(--grid);border-radius:999px;padding:2px 10px;white-space:nowrap;color:var(--ink2)}
+.dpill.ok{color:var(--pass);border-color:var(--pass)}.dpill.warn{color:var(--agent-ink);border-color:var(--agent-ink)}.dpill.bad{color:var(--fail);border-color:var(--fail)}
+.chg-dn{color:var(--pass)}.chg-up{color:var(--fail)}.chg-0{color:var(--muted)}
+.ft td .chg-dn,.ft td .chg-up,.ft td .chg-0{font:500 13px var(--mono)}
+.drail .card{gap:10px}
+.drail .big{font:600 26px/1.2 var(--mono);color:var(--ink)}
+.drail p.note{line-height:1.5}
+ol.attn{margin-top:0}ol.attn .k{flex:none;white-space:nowrap}
+ol.attn li>div>div:first-child{color:var(--ink)}
+/* benchmarks */
+.bgrid{margin-top:6px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px}
+.bgrid .lab{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.bgrid .big{font:600 26px/1.2 var(--mono);color:var(--ink)}.bgrid .big.good{color:var(--pass)}.bgrid .big.bad{color:var(--fail)}
+.bgrid .split{margin-top:8px;height:8px;border-radius:4px;background:var(--track);overflow:hidden}
+.bgrid .split u{display:block;height:100%;background:var(--mark);text-decoration:none;border-radius:4px}
+/* managed */
+.dpage .dep-st{display:inline-flex;align-items:center;gap:8px}
+.ft td[data-label=Deployment],.ft td[data-label=Schedule],.ft td[data-label="Next run"],.ft td[data-label=Time]{white-space:nowrap}
 """

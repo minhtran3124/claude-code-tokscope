@@ -42,10 +42,10 @@ def _pass_class(passed, n):
     return "pass" if passed == n else "fail" if passed == 0 else ""
 
 
-def _benchmarks(conn, tasks_dir):
-    """Returns (one-line verdict per task, shown up front; the full detail for a collapsed section)."""
+def _runs(conn):
+    """Every benchmark run with its tokens and cost; empty when the table does not exist yet."""
     try:
-        runs = conn.execute(
+        return conn.execute(
             f"""SELECT b.task, b.variant, b.run_idx, b.passed, b.is_error, b.duration_s, b.result, b.commit_sha,
                        sum({TOKENS}), sum(r.output), sum(r.cost_usd),
                        sum(CASE WHEN r.agent_id IS NULL THEN {TOKENS} END), sum(CASE WHEN r.agent_id IS NOT NULL THEN {TOKENS} END),
@@ -53,7 +53,12 @@ def _benchmarks(conn, tasks_dir):
                 FROM bench_runs b LEFT JOIN requests r USING (session_id)
                 GROUP BY b.run_id ORDER BY b.task, b.variant, b.run_idx""").fetchall()
     except sqlite3.OperationalError:
-        runs = []
+        return []
+
+
+def _benchmarks(conn, tasks_dir):
+    """Returns (one-line verdict per task, shown up front; the full detail for a collapsed section)."""
+    runs = _runs(conn)
     if not runs:
         return "<p class='note'>No benchmark runs yet: <code>tokscope bench run &lt;task&gt; --runs 3</code>.</p>", ""
     tasks = {}

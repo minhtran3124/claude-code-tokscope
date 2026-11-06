@@ -139,7 +139,7 @@ def render(conn, name, qs, stamp, level="full", token=""):
     nav = "".join(f'<div class="grp">{group}</div>' + "".join(link(p) for p in pages) for group, pages in NAV_GROUPS)
     reset = f' <a href="/{name}">clear filters</a>' if (f.project if name == "library" else f.query()) else ""
     # a skill page or an optimize run has its own header; a ?skill= that matches no skill falls back to the list, with the bar
-    bar = ("" if name in ("projects", "managed", "optimize", "settings") or (name == "library" and 'class="card libhead"' in body) else
+    bar = ("" if name in ("projects", "managed", "optimize", "settings", "benchmarks") or (name == "library" and 'class="card libhead"' in body) else
            f'<form class="filters" method="get" action="/{name}">{_options(conn, f, "project" if name == "library" else None)}'
            f'<button type="submit" class="chip">Apply</button>{reset}</form>')
     # the range is tabs on a wide screen (links, so a click applies at once); the form keeps its Range select for the phone sheet
