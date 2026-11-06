@@ -893,6 +893,32 @@ table.gtable td.nw{white-space:nowrap}
 .decideblock .acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 table.gtable td,table.gtable th{text-align:left}
 @media (max-width:640px){.nums{gap:6px;margin:6px 0}.num{padding:5px 7px}.num .k{font-size:11px}.num b{font-size:13px;line-height:1.25}.decideblock textarea{min-height:0}}
+.ol-top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px}
+.ol-top .sec{margin:0}
+.ol-top .note{margin:4px 0 0}
+.ol-top .primary{text-decoration:none;white-space:nowrap}
+.ol-chips{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+.ol-chips .chip{text-decoration:none}
+.ol-chips .chip[aria-current=true]{background:var(--ink);color:var(--page);border-color:var(--ink)}
+.ol-chips .chip b{font-weight:600}
+.ol-skill{margin:0 0 4px;font-size:16px;overflow-wrap:anywhere}
+.ol-sub{margin:14px 0 4px;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.ol-sub span{font-weight:500}
+.ol-rows{list-style:none;margin:0;padding:0}
+.ol-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:6px 14px;padding:10px 0;border-top:1px solid var(--row-c)}
+.ol-row:first-child{border-top:0}
+.ol-main{min-width:0}
+.ol-result{margin:0;overflow-wrap:anywhere}
+.ol-meta{margin:2px 0 0;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.ol-spent{margin-left:6px}
+.ol-act{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px;font-size:12px;color:var(--ink2)}
+.ol-act .btn,.ol-act .primary{text-decoration:none}
+.ol-pill{display:inline-block;white-space:nowrap;font:600 12px var(--mono);padding:2px 10px;border:var(--line-w) solid var(--line-c);border-radius:999px;background:var(--chip);color:var(--ink2)}
+.ol-pill.ok{color:var(--pass);border-color:var(--pass);background:color-mix(in oklch,var(--pass) 12%,transparent)}
+.ol-pill.warn{color:var(--ink);border-color:var(--agent);background:color-mix(in oklch,var(--agent) 18%,transparent)}
+.ol-pill.bad{color:var(--fail);border-color:var(--fail);background:color-mix(in oklch,var(--fail) 12%,transparent)}
+.ol-pill.run{color:var(--mark-ink);border-color:var(--mark-ink)}
+@media (max-width:640px){.ol-row{grid-template-columns:minmax(0,1fr) auto}.ol-main{grid-column:1/-1;grid-row:2}.ol-act{grid-column:2;grid-row:1}}
 a.outcome.run{color:var(--ink);text-decoration:none;background:color-mix(in oklch,var(--mark) 9%,var(--surface));margin:-4px 0 14px}
 a.outcome.run:hover{background:color-mix(in oklch,var(--mark) 15%,var(--surface))}
 @media (prefers-reduced-motion:reduce){
