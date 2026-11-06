@@ -1025,4 +1025,17 @@ ol.attn li>div>div:first-child{color:var(--ink)}
 /* managed */
 .dpage .dep-st{display:inline-flex;align-items:center;gap:8px}
 .ft td[data-label=Deployment],.ft td[data-label=Schedule],.ft td[data-label="Next run"],.ft td[data-label=Time]{white-space:nowrap}
+/* settings: one 760 px column of cards, rows of a label and a muted line, a pill-framed segmented control, key caps as pills */
+.setcol{max-width:760px;display:flex;flex-direction:column;gap:20px}
+.setcol .card{margin:0}.setcol .card h2{font-size:15px}
+.setrow{padding:10px 0}.setrow b{color:var(--ink);font-weight:600}.setrow .note{color:var(--muted);font-size:13px}
+.setrow .segctl{min-width:0;border:var(--line-w) solid var(--line-c);border-radius:8px;padding:3px;gap:2px;background:var(--surface)}
+.setrow .segctl .chip,.setrow .segctl .chip:first-child,.setrow .segctl .chip:last-child{flex:none;border:0;border-radius:7px;padding:6px 12px;margin:0;color:var(--muted);font-weight:500}
+.setrow .segctl .chip[aria-pressed=true]{background:var(--ink);color:var(--page);font-weight:600}
+.setrow .segctl .chip:not([aria-pressed=true]):hover{background:none;color:var(--ink)}
+.keyrows>div{padding:10px 0;color:var(--ink)}
+kbd.keypill{font:500 11px var(--mono);padding:2px 10px;border:var(--line-w) solid var(--line-c);border-radius:999px;color:var(--ink)}
+#set-about .note{color:var(--muted)}
+.setrow>div:first-child{flex:1 1 260px;min-width:0}
+@media (max-width:640px){.setrow .segctl{width:100%}.setrow .segctl .chip.chip.chip{flex:1 1 0}}
 """

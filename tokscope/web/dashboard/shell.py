@@ -36,7 +36,7 @@ PAGE_LEAD = {
     "library": "Your skills, agents and commands, and what each costs to load.",
     "benchmarks": "Runs that compare one setup against another on the same task.",
     "managed": "Managed agents on the Anthropic platform: setup, sessions and cost.",
-    "settings": "Theme, time zone, privacy and the background service.",
+    "settings": "These were in the sidebar. They live here now, because you set them once.",
 }
 
 

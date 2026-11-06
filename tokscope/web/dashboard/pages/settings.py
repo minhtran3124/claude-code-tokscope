@@ -53,14 +53,17 @@ def page_settings(level, svc=None):
                    _seg("set-tz", [("tz", "local", "Local"), ("tz", "utc", "UTC")])))
     data = (_row("set-privacy", "Privacy level", "Names and text follow it. It is set when the server starts: "
                  "<code>tokscope serve --privacy</code>.", f'<span class="pill-static">{html.escape(level)}</span>')
-            + _row("set-version", "Version", "Python standard library only. Works offline.",
-                   f'<span class="pill-static">{html.escape(__version__)}</span>'))
-    keys = "".join(f"<div><span>{what}</span><kbd>{key}</kbd></div>" for key, what in (
+)
+    keys = "".join(f"<div><span>{what}</span><kbd class=\"keypill\">{key}</kbd></div>" for key, what in (
         ("t", "Light or dark theme"), ("g", "Back to the top"),
         ("/", "Filter sessions (Sessions page)"), ("?", "Show this list")))
     svc = service.state() if svc is None else svc
-    return (f'<section class="card" id="set-look"><h2>Appearance</h2><div class="setrows">{look}</div></section>'
+    about = (f'<section class="card" id="set-about"><h2>About</h2><div class="setrows"><div class="setrow"><span>tokscope</span>'
+             f'<span class="note mono">v{html.escape(__version__)} &middot; stdlib Python &middot; offline</span></div></div></section>')
+    return ('<div class="setcol">'
+            f'<section class="card" id="set-look"><h2>Appearance</h2><div class="setrows">{look}</div></section>'
             f'<section class="card" id="set-data"><h2>Data</h2><div class="setrows">{data}</div></section>'
             + _service_card(level, svc) +
             f'<section class="card" id="set-keys"><h2>Keyboard</h2><div class="setrows keyrows">{keys}</div>'
-            '<p><button type="button" class="chip" id="keys-btn">Show shortcuts</button></p></section>')
+            '<p><button type="button" class="chip" id="keys-btn">Show shortcuts</button></p></section>'
+            + about + '</div>')
