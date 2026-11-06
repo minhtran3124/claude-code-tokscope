@@ -267,6 +267,11 @@ class SandboxTest(RunnerBase):
         self.assertEqual(sandbox.stream_load(events, "demo", want), "ok")
         self.assertEqual(sandbox.stream_load(events, "other", want), "not loaded")
 
+    def test_a_system_event_with_a_string_message_does_not_stop_the_load_check(self):
+        denied = {"type": "system", "subtype": "permission_denied", "tool_name": "Bash", "message": "needs approval"}
+        self.assertEqual(sandbox.stream_load([denied, use("Skill", skill="demo")], "demo", "x"), "unconfirmed")
+        self.assertEqual(sandbox.stream_load([denied], "demo", "x"), "not loaded")
+
     def test_no_skill_arm_flags_a_leaked_skill_call(self):
         case, checks, _folder, fixtures = sandbox.load_case("demo", "1")
         with mock.patch.dict(os.environ, {"FAKE_LEAK": "1"}):
