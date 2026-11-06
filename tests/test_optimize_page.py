@@ -649,16 +649,21 @@ class DecideMarkupTest(Fixture):
         (self.run_dir() / "plan.json").write_text(json.dumps(plan))
         self.assertNotIn("thin evidence", self.body(APPLY_RUN))
 
-    def test_a_failed_gate_reads_do_not_apply_first_and_keeps_the_stored_reject(self):
-        path = self.run_dir(REJECT_RUN) / "verdict.json"
+    def test_a_failed_gate_on_an_apply_reads_do_not_apply_first_and_keeps_the_stored_verdict(self):
+        path = self.run_dir(APPLY_RUN) / "verdict.json"
         v = json.loads(path.read_text())
         v["gates"][3]["passed"] = False
         path.write_text(json.dumps(v))
-        body = self.body(REJECT_RUN)
+        body = self.body(APPLY_RUN)
         self.assertIn('<span class="vbadge bad">Do not apply</span>', body)
         self.assertLess(body.index("✕ No regression</li>"), body.index("✓ Valid</li>"))
+        self.assertEqual(json.loads(path.read_text())["verdict"], stats.APPLY)
+
+    def test_a_stored_reject_reads_do_not_apply_and_keeps_approve_off(self):
+        body = self.body(REJECT_RUN)
+        self.assertIn('<span class="vbadge bad">Do not apply</span>', body)
         self.assertIn('disabled data-block="1"', self.approve_button(body))
-        self.assertEqual(json.loads(path.read_text())["verdict"], stats.REJECT)
+        self.assertEqual(json.loads((self.run_dir(REJECT_RUN) / "verdict.json").read_text())["verdict"], stats.REJECT)
 
     def test_no_verdict_still_finds_the_installed_skill_by_the_plan_fingerprint(self):
         (self.run_dir(REJECT_RUN) / "verdict.json").unlink()
