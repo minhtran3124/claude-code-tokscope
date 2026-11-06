@@ -120,7 +120,7 @@ th{white-space:normal}
 html.settled [data-region] :is(.hero,.kpi,.empty,.bar i u){animation:none}
 /* sessions: a dense table. Rows are 44px, the id selector keeps these ahead of the skins' older .srow card rules, and the
    skins add only the look (outline, radius, label case, tray colour). Child sessions keep their indent (--depth) in the title cell. */
-#session-list{--scols:24px 100px minmax(0,1fr) 120px 60px 84px 70px 140px 14px;overflow:clip}
+#session-list{--scols:24px 56px minmax(0,1fr) 100px 64px 76px 64px 92px 14px;overflow:clip}
 #session-list :is(.shead,.srow>summary){display:grid;grid-template-columns:var(--scols);gap:8px;align-items:center;padding:0 10px}
 #session-list .shead{height:32px;font-size:11px;white-space:nowrap}
 #session-list .shead>*{overflow:hidden;text-overflow:ellipsis}
@@ -157,8 +157,8 @@ transition:transform var(--t-layout) var(--ease-expo),opacity var(--t-state) var
 #sessions .pickbar #pick-hint{font-variant-numeric:tabular-nums;white-space:nowrap}
 body.picking .totop{bottom:96px}
 /* a narrower page drops the top skill, then the split bar, so the title column never collapses (checked from 641 to 1200 px) */
-@media (max-width:1200px){#session-list{--scols:24px 100px minmax(0,1fr) 60px 84px 70px 140px 14px}#session-list .sk{display:none}}
-@media (max-width:1040px){#session-list{--scols:24px 100px minmax(0,1fr) 60px 84px 70px 14px}#session-list .track{display:none}}
+@media (max-width:1200px){#session-list{--scols:24px 56px minmax(0,1fr) 64px 76px 64px 100px 14px}#session-list .sk{display:none}}
+@media (max-width:1040px){#session-list{--scols:24px 56px minmax(0,1fr) 64px 76px 64px 14px}#session-list .track{display:none}}
 @media (prefers-reduced-motion:reduce){#sessions .pickbar,#sessions .pickbar.show{transform:none}}
 /* end sessions */
 /* reduced motion: opacity and colour stay, travel and scale go. A keyframes set below replaces the one above, so each
@@ -1038,4 +1038,17 @@ kbd.keypill{font:500 11px var(--mono);padding:2px 10px;border:var(--line-w) soli
 #set-about .note{color:var(--muted)}
 .setrow>div:first-child{flex:1 1 260px;min-width:0}
 @media (max-width:640px){.setrow .segctl{width:100%}.setrow .segctl .chip.chip.chip{flex:1 1 0}}
+
+/* sessions */
+.sgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:0 20px;align-items:start}
+.smain,.srail{min-width:0}
+.srail .card{gap:10px}.srail h2{margin:0;font-size:14px}.srail p.note{margin:0;line-height:1.5}
+.srail .rows>div{display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-top:1px solid var(--grid)}
+.srail .rows>div:first-child{border-top:0}.srail .rows .m{color:var(--ink2);font-size:13px}.srail .rows b{color:var(--ink);font-weight:600}
+.srail .big{font:600 26px/1.2 var(--mono);color:var(--ink)}
+.srail .split{height:8px}
+@media (max-width:1100px){.sgrid{grid-template-columns:minmax(0,1fr)}}
+/* beside the rail the title column is narrow: a live row keeps its title and drops the entry name */
+#session-list .srow>summary .tt{min-width:10ch}
+@media (min-width:1101px) and (max-width:1500px){#session-list .srow .live .where,#session-list .srow>summary .sid8{display:none}}
 """
