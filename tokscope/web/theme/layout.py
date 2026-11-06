@@ -920,6 +920,8 @@ table.mcp td.st{font-family:var(--num-font)}
 .tdot{fill:var(--trace-c);stroke:var(--dot-edge)}
 /* Overview: the page is a main column and a right rail (Needs a look, budgets, cache reuse); one column under 1100 px, rail after Today */
 .ovgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;grid-template-areas:"today rail" "rest rail";gap:0 20px;align-items:start}
+/* the Today card sits flat: its offset shadow overlapped the KPI strip below */
+.ov-today .answer{box-shadow:none;margin:0 0 14px}
 .ov-today{grid-area:today;min-width:0}.ov-rest{grid-area:rest;min-width:0}.ov-rail{grid-area:rail;min-width:0}
 @media (max-width:1100px){.ovgrid{grid-template-columns:minmax(0,1fr);grid-template-areas:"today" "rail" "rest"}}
 ol.attn{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
