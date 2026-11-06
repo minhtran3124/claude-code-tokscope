@@ -914,4 +914,14 @@ ol.attn .note{margin:2px 0 0}
 .pghead{margin:0 0 18px}
 .pghead h1{margin:0 0 4px;font-size:28px;line-height:1.2}
 .pghead .sub{margin:0;color:var(--ink2)}
+/* library */
+.libpage{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:0 20px;align-items:start}
+.lib-main,.lib-rail{min-width:0}
+@media (max-width:1100px){.libpage{grid-template-columns:minmax(0,1fr)}}
+a.sk .skname{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--ink)}
+a.sk .skbar{height:6px;margin-top:2px}.skbar u,.lim .bar-track u{background:var(--mark);display:block;height:100%}
+a.sk p{color:var(--ink)}
+.lim{margin-top:12px}.lim .l{display:flex;justify-content:space-between;font:500 12px var(--mono);color:var(--ink);margin-bottom:4px}
+.lib-rail .card h2{font-size:14px}.lib-rail .attn .k{flex:none;white-space:nowrap;overflow-wrap:normal;width:auto}
+@media (min-width:1101px){.lib-main>.finding{display:none}}
 """

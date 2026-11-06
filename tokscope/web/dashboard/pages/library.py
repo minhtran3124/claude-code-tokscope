@@ -37,7 +37,7 @@ def _verified_map(conn, found):
     return {k["id"]: library.verified(conn, k["dir"], k["folder"], names[k["dir"]] == 1) for k in found}
 
 
-def _skill_card(k, used, lint=None, rng="", state=None, ver=None):
+def _skill_card(k, used, lint=None, rng="", state=None, ver=None, top=1):
     loads, last = used.get(k["id"], (0, None))
     findings = (lint or {}).get(k["folder"] / "SKILL.md")
     meta = (f"{loads:,} load{'s' * (loads != 1)}{rng}" + (f" · last {last[:10]}" if last else "")
@@ -53,10 +53,12 @@ def _skill_card(k, used, lint=None, rng="", state=None, ver=None):
     badge += f'<span class="badge inst" title="{html.escape(k["reason"])}">installed</span>' if k["origin"] == "installed" else ""
     badge += _ver_badge(*(ver or {}).get(k["id"], ("none", None)))
     hide = " hidden" if k["origin"] == "installed" else ""
+    bar = (f'<div class="bar-track skbar" title="Description tokens in every session, against the heaviest skill">'
+           f'<u style="width:{max(2, ntok * 100 // max(top, 1))}%"></u></div>')
     return (f'<a class="sk" href="/library?skill={k["id"]}" data-dir="{html.escape(k["dir"])}" data-origin="{k["origin"]}"{keys} '
             f'data-find="{html.escape((k["name"] + " " + k["description"]).lower())}"{hide}>'
-            f'<b>{html.escape(k["name"])}{badge}</b><p title="{html.escape(k["description"])}">{markdown.inline(k["description"]) or "<i>No description.</i>"}</p>'
-            f'<span class="meta">{meta}</span></a>')
+            f'<b class="skname">{html.escape(k["name"])}{badge}</b><p title="{html.escape(k["description"])}">{markdown.inline(k["description"]) or "<i>No description.</i>"}</p>'
+            f'{bar}<span class="meta">{meta}</span></a>')
 
 
 def _library_list(found, used, lint=None, lint_note="", project="", rng="", state=None, ver=None):
@@ -73,6 +75,7 @@ def _library_list(found, used, lint=None, lint_note="", project="", rng="", stat
              + '<option value="unused">Unused first</option><option value="prefix">Heaviest description</option>'
              + ('<option value="ste">Most STE findings</option>' if lint else "") + '</select></div>')
     n_dead, tok_dead = library.dead_cost(found, state or {})
+    top = max((library.prefix(k)[1] for k in found), default=1)
     finding = (f'<p class="note finding"><b>{n_dead} skill{"s" * (n_dead != 1)} unused for {library.IDLE_DAYS} days</b> add '
                f'<span title="{html.escape(library.PREFIX_METHOD)}">~{tok_dead:,} tokens</span> to every session.</p>' if n_dead else "")
     groups = []
@@ -82,10 +85,26 @@ def _library_list(found, used, lint=None, lint_note="", project="", rng="", stat
         title = "Personal · ~/.claude/skills" if scope == "personal" else f"Project · {scope}"
         groups.append(f'<section class="libgroup"><h2 class="sec">{html.escape(title)} <span class="note">{mine} yours'
                       f'{f", {len(ks) - mine} installed" if len(ks) > mine else ""}</span></h2>'
-                      f'<div class="libgrid">{"".join(_skill_card(k, used, lint, rng, state, ver) for k in ks)}</div></section>')
-    return (f'<p class="note">Skills you wrote, to read. Installed ones (npx skills, a lock file, an installer) are hidden; '
+                      f'<div class="libgrid">{"".join(_skill_card(k, used, lint, rng, state, ver, top) for k in ks)}</div></section>')
+    rail = _rail(found, n_dead, tok_dead, top)
+    return (f'<div class="libpage"><div class="lib-main"><p class="note">Skills you wrote, to read. Installed ones (npx skills, a lock file, an installer) are hidden; '
             f'<code>library.json</code> in the data folder corrects a wrong guess.{lint_note}</p>{finding}{tools}{"".join(groups)}'
-            '<div class="empty" id="lib-none" hidden><b>No skill matches</b>Try another word.</div>')
+            '<div class="empty" id="lib-none" hidden><b>No skill matches</b>Try another word.</div></div>'
+            f'<aside class="lib-rail" aria-label="What needs a look">{rail}</aside></div>')
+
+
+def _rail(found, n_dead, tok_dead, top):
+    """The right rail: what to look at, and the skills' descriptions by weight (the cost every session pays)."""
+    mine = sorted((k for k in found if k["origin"] == "mine"), key=lambda k: -library.prefix(k)[1])
+    note = (f'<li><span class="k">01</span><div><div>{n_dead} skill{"s" * (n_dead != 1)} unused for {library.IDLE_DAYS} days</div>'
+            f'<div class="note">Their descriptions add ~{tok_dead:,} tokens to every session.</div></div></li>' if n_dead else "")
+    look = (f'<section class="card"><h2>Needs a look ({1 if n_dead else 0})</h2>'
+            + (f'<ol class="attn">{note}</ol>' if note else '<p class="note">No skill stands out.</p>') + '</section>')
+    rows = "".join(f'<div class="lim"><div class="l"><span>{html.escape(k["name"])}</span><span>~{library.prefix(k)[1]:,}</span></div>'
+                   f'<div class="bar-track"><u style="width:{max(2, library.prefix(k)[1] * 100 // max(top, 1))}%"></u></div></div>'
+                   for k in mine[:6])
+    cost = (f'<section class="card"><h2>Description cost per session</h2>{rows}</section>' if rows else "")
+    return look + cost
 
 
 def _source(text, pane=""):

@@ -326,6 +326,15 @@ class ServerTest(unittest.TestCase):
         self.assertIn('<a href="/library">Library<span class="cnt"', body)       # the name filter does not follow into the Library
         self.assertIn("catch(_){}", dashboard.LIB_JS)               # a malformed #v- hash leaves the rest of the script running
 
+    def test_the_library_list_has_a_rail_and_a_cost_bar_per_card(self):
+        from tokscope.web.dashboard.pages import library as lib_page
+        k = {"id": "a1", "name": "xia2", "dir": "xia2", "folder": Path("/x/xia2"), "scope": "personal", "origin": "mine",
+             "reason": "", "description": "Does a thing. " * 8}
+        body = lib_page._library_list([k], {}, state={"a1": "never"}, ver={})
+        self.assertIn('class="lib-rail"', body)
+        self.assertIn("Description cost per session", body)
+        self.assertIn('class="bar-track skbar"', body)
+
     def test_a_big_rise_reads_as_a_multiple(self):
         self.assertIn(">×25</span>", overview_page._delta(2500, 100))
         self.assertIn(">+900%</span>", overview_page._delta(1000, 100))
