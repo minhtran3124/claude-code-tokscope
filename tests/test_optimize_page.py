@@ -607,7 +607,7 @@ class DecideMarkupTest(Fixture):
         body = self.body(NOT_ENOUGH_RUN)
         self.assertIn("disabled", self.approve_button(body))
         self.assertNotIn("data-block", self.approve_button(body))  # the page script enables it once a reason is typed
-        self.assertIn("<textarea id=\"opt-reason\" rows=\"2\" required>", body)
+        self.assertIn("<textarea id=\"opt-reason\" rows=\"1\" required>", body)
         self.assertIn("Reason (required to approve)", body)
 
     def test_reject_verdict_has_approve_off_with_its_reason(self):

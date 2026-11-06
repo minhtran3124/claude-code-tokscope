@@ -744,7 +744,7 @@ def _decide_block(conn, d):
             f'{_e(label)}</span></div><p class="vsum">{_e(sentence)}</p>' + _tiles(headline_numbers(d["arms"])) + _chips(d["gates"])
             + few + why_line + _decision_box(d) + block
             + f'<div class="optform" id="decide" data-run="{_e(d["id"])}" data-need="{int(need)}">'
-            + f'<label class="wide">{word}<textarea id="opt-reason" rows="2"{" required" if need else ""}></textarea></label>'
+            + f'<label class="wide">{word}<textarea id="opt-reason" rows="1"{" required" if need else ""}></textarea></label>'
             + f'<p class="acts">{approve}<button type="button" class="btn danger" data-opt-act="reject">Reject</button></p>'
             + f'<p class="note">{_git_note(k)} Reject records your decision and never changes the skill.</p>'
             + '<p class="err" id="opt-err" hidden></p></div></section>')

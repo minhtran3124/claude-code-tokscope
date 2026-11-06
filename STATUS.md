@@ -18,7 +18,7 @@ Owner reviews and merges PR #221 by hand.
 - macOS app (#144-#148) cannot be verified without a Mac.
 
 ## Recent
-- 2026-11-06: Optimize run page (#249): Decide block first (verdict, rule-built sentence, three numbers, gate chips, Approve/Reject), then diff, plain-word gates and two Change tables, then one-line collapsed rows (PR open).
+- 2026-11-06: Optimize run page (#249): Decide block first (verdict, rule-built sentence, three numbers, gate chips, Approve/Reject), then diff, plain-word gates and two Change tables, then one-line collapsed rows; at 375 px Approve and Reject sit in the first screen (PR open).
 - 2026-11-06: Sessions: a Project dropdown next to the filter box lists the projects in the range (with session counts) and filters the list at once (PR #245).
 - 2026-11-06: Added a root `Makefile`: `make deb` (rebuild + install the .deb), `make dev` (run the desktop app from the clone), `make serve`, `make test` (PR open). The page now uses the full window width: the 1180 px and 1460 px caps are gone (PR open). Fixed an optimize preflight crash when a system event had a string message (PR open). Library: a skill with no usable eval suite shows a plain-words card and a Generate button that drafts the suite in the background with one capped `claude -p` call (PR open).
 - 2026-11-06: Library: a clear "Run optimize" button on each of your skill cards and on the skill page (PR open). The desktop `reinstall-deb.sh` restarts the tokscope user service after installing, so a new build is not shown with the old code (PR open); `desktop/scripts/dev.sh` runs the app from the clone with no .deb or sudo (PR open).

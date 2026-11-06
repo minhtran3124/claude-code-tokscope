@@ -892,7 +892,7 @@ table.gtable td.nw{white-space:nowrap}
 .decideblock .optform{margin-top:8px}
 .decideblock .acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 table.gtable td,table.gtable th{text-align:left}
-@media (max-width:640px){.nums{grid-template-columns:1fr;gap:6px}.num{flex-direction:row;justify-content:space-between;align-items:baseline;padding:6px 10px}.num b{font-size:15px;text-align:right}}
+@media (max-width:640px){.nums{gap:6px;margin:6px 0}.num{padding:5px 7px}.num .k{font-size:11px}.num b{font-size:13px;line-height:1.25}.decideblock textarea{min-height:0}}
 a.outcome.run{color:var(--ink);text-decoration:none;background:color-mix(in oklch,var(--mark) 9%,var(--surface));margin:-4px 0 14px}
 a.outcome.run:hover{background:color-mix(in oklch,var(--mark) 15%,var(--surface))}
 @media (prefers-reduced-motion:reduce){
