@@ -100,6 +100,60 @@ class ProjectsTest(unittest.TestCase):
         (self.tmp / "data" / "projects.json").write_text(json.dumps({"ignore": ["no*", "~/nothing/*"]}))
         self.assertEqual([g["name"] for g in projects.discover(self.conn)], ["app", "Temporary folders"])
 
+    def test_hide_adds_the_folder_to_ignore_and_restore_takes_it_out_and_nothing_is_deleted(self):
+        data = self.tmp / "data" / "projects.json"
+        data.parent.mkdir(exist_ok=True)
+        data.write_text(json.dumps({"ignore": ["keep*"], "other": 1}))
+        pattern = projects.hide(self.app)
+        self.assertEqual([g["name"] for g in projects.discover(self.conn)], ["notes", "Temporary folders"])
+        self.assertEqual(json.loads(data.read_text()), {"ignore": ["keep*", pattern], "other": 1})
+        projects.hide(self.app)                                       # twice: one entry
+        self.assertEqual(projects.hidden().count(pattern), 1)
+        self.assertEqual(self.conn.execute("SELECT count(*) FROM sessions").fetchone()[0], 7)   # the stored sessions stay
+        self.assertTrue(self.app.is_dir())
+        projects.unhide(pattern)
+        self.assertEqual([g["name"] for g in projects.discover(self.conn)], ["app", "notes", "Temporary folders"])
+        with self.assertRaises(ValueError):
+            projects.unhide("not-there")
+        with self.assertRaises(ValueError):
+            projects.hide(None)
+
+    def test_a_folder_name_with_glob_characters_hides_only_itself(self):
+        odd = self.home / "work" / "a[1]*"
+        (odd / ".git").mkdir(parents=True)
+        self.conn.execute("INSERT INTO sessions (session_id, project, cwd, title, prompts, last_ts) VALUES ('so','-o',?,'o',1,?)", (str(odd), ts(1)))
+        self.conn.execute("INSERT INTO requests (session_id, request_key, ts, model, prompt_idx, input, output, cache_read, cache_write_5m, "
+                          "cache_write_1h, cost_usd) VALUES ('so','so',?,'claude-opus-5-5',1,1,0,0,0,0,0.1)", (ts(1),))
+        self.conn.commit()
+        projects.hide(odd)
+        self.assertEqual(sorted(g["name"] for g in projects.discover(self.conn)), ["Temporary folders", "app", "notes"])
+
+    def test_the_list_has_both_views_with_the_data_to_filter_and_sort_and_a_remove_for_real_projects(self):
+        page = dashboard.page_projects(self.conn, dashboard.Filters({}), {}, "full")
+        self.assertIn('id="proj-list"', page)
+        self.assertIn('id="proj-cards"', page)
+        self.assertEqual(page.count('class="pcard"'), 3)
+        self.assertIn('data-tokens="', page)
+        self.assertIn('id="proj-find"', page)
+        self.assertEqual(page.count("data-proj-remove="), 4)        # app and notes, in the list and the cards; not the temporary folders
+        self.assertIn("your folders are not deleted", page)
+        projects.hide(self.app)
+        page = dashboard.page_projects(self.conn, dashboard.Filters({}), {}, "full")
+        self.assertIn("Removed from this list (1)", page)
+        self.assertIn("data-proj-restore=", page)
+
+    def test_the_post_routes_hide_and_restore(self):
+        from tokscope.web.dashboard import server
+        db = self.tmp / "t.db"
+        self.conn.commit()
+        gid = self.app_group()["id"]
+        self.assertEqual(server.post(db, f"api/projects/{gid}/hide", {}, "full"), (200, {"ok": True}))
+        self.assertEqual(server.post(db, f"api/projects/{gid}/hide", {}, "full")[0], 404)
+        self.assertEqual(server.post(db, "api/projects/temp0000000/hide", {}, "full")[0], 404)
+        self.assertEqual(server.post(db, "api/projects/unhide", {"pattern": projects.hidden()[0]}, "full"), (200, {"ok": True}))
+        self.assertEqual(server.post(db, "api/projects/unhide", {"pattern": "x"}, "full")[0], 400)
+        self.assertEqual(server.post(db, f"api/projects/{gid}/hide", {}, "redacted")[0], 403)
+
     def test_servers_show_their_source_use_and_shadowing_and_never_a_secret(self):
         rows = {(e["name"], e["source"]): e for e in projects.servers(self.app_group())}
         self.assertEqual(rows[("api", "local")]["calls"], 2)          # local wins over the project's api

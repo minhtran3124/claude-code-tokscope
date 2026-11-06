@@ -1,6 +1,7 @@
 """The Projects page: projects with their tokens, and a project's MCP servers (add, remove, registry)."""
 
 import html
+import re
 import time
 from pathlib import Path
 
@@ -15,18 +16,49 @@ def _mcp_of(g):
     return projects.servers(g, (projects.last_health(g["root"]) or (0, None))[1]) if g["root"] else []
 
 
+def _data(g, mcp, idle):
+    base = g.get("base")
+    return (f'data-name="{html.escape(g["name"].lower())}" data-find="{html.escape((g["name"] + " " + g["path"]).lower())}" '
+            f'data-sessions="{g["sessions"]}" data-tokens="{g["tokens"]}" data-usd="{g["usd"]:.4f}" '
+            f'data-last="{html.escape((g["last"] or "")[:19])}" data-start="{base["median"] if base else 0}"')
+
+
+def _remove_btn(g):
+    if not g["root"]:
+        return ""
+    return (f'<button type="button" class="btn danger" data-proj-remove="{g["id"]}" data-name="{html.escape(g["name"])}" '
+            f'aria-label="Remove {html.escape(g["name"])} from tokscope">Remove</button>')
+
+
+def _pills(mcp):
+    pills = "".join(f'<span class="pill">{html.escape(e["name"])}</span> ' for e in mcp[:3])
+    return pills + (f'<span class="note">+{len(mcp) - 3}</span>' if len(mcp) > 3 else "")
+
+
 def _project_row(g, mcp, idle):
     href = f"/projects?p={g['id']}"
     where = f'<div class="note mono">{html.escape(g["path"])}</div>' if g["path"] else ""
-    pills = "".join(f'<span class="pill">{html.escape(e["name"])}</span> ' for e in mcp[:3])
-    pills += f'<span class="note">+{len(mcp) - 3}</span>' if len(mcp) > 3 else ""
     base = g.get("base")
     start = f'<span class="{"up" if idle else ""}">{_tok(base["median"])}</span>' if base else '<span class="note">–</span>'
-    return (f'<tr><td data-label="Project"><a href="{href}"><b>{html.escape(g["name"])}</b></a>{where}</td>'
+    return (f'<tr class="prow" {_data(g, mcp, idle)}><td data-label="Project"><a href="{href}"><b>{html.escape(g["name"])}</b></a>{where}</td>'
             f'<td data-label="Sessions">{g["sessions"]:,}</td><td data-label="Tokens">{_tok(g["tokens"])}</td>'
             f'<td data-label="API-eq">{_usd(g["usd"])}</td><td data-label="Session start">{start}</td>'
-            f'<td class="l" data-label="MCP servers">{pills or "<span class=note>none</span>"}</td>'
-            f'<td class="go"><a href="{href}" aria-label="Open {html.escape(g["name"])}">›</a></td></tr>')
+            f'<td class="l" data-label="MCP servers">{_pills(mcp) or "<span class=note>none</span>"}</td>'
+            f'<td class="go">{_remove_btn(g)}<a href="{href}" aria-label="Open {html.escape(g["name"])}">›</a></td></tr>')
+
+
+def _project_card(g, mcp, idle):
+    href = f"/projects?p={g['id']}"
+    base = g.get("base")
+    start = f'<span class="{"up" if idle else ""}">{_tok(base["median"])}</span>' if base else "–"
+    last = f' · last {(g["last"] or "")[:10]}' if g["last"] else ""
+    return (f'<article class="pcard" {_data(g, mcp, idle)}><a class="ptitle" href="{href}"><b>{html.escape(g["name"])}</b></a>'
+            f'<div class="note mono">{html.escape(g["path"])}</div>'
+            f'<dl class="pstats"><div><dt>Sessions</dt><dd>{g["sessions"]:,}</dd></div><div><dt>Tokens</dt><dd>{_tok(g["tokens"])}</dd></div>'
+            f'<div><dt>API-eq</dt><dd>{_usd(g["usd"])}</dd></div><div><dt>Session start</dt><dd>{start}</dd></div></dl>'
+            f'<div class="ppills">{_pills(mcp) or "<span class=note>no MCP servers</span>"}</div>'
+            f'<div class="pfoot"><span class="note">{last.removeprefix(" · ")}</span><span class="acts">{_remove_btn(g)}'
+            f'<a class="btn" href="{href}">Open</a></span></div></article>')
 
 
 def _projects_rail(found, idle):
@@ -46,19 +78,47 @@ def _projects_rail(found, idle):
     return card + f'<section class="card"><h2>Session start, by project</h2>{bars}</section>'
 
 
+SORTS = (("tokens", "Most tokens"), ("usd", "Highest API-eq"), ("sessions", "Most sessions"), ("last", "Latest activity"),
+         ("start", "Largest session start"), ("name", "Name A–Z"))
+
+
+def _hidden_panel():
+    items = projects.hidden()
+    if not items:
+        return ""
+    rows = "".join(f'<li><code>{html.escape(projects._tilde(_unglob(p)))}</code> '
+                   f'<button type="button" class="btn" data-proj-restore="{html.escape(p)}">Restore</button></li>' for p in items)
+    return (f'<details class="more" id="proj-hidden"><summary><span class="ttl">Removed from this list ({len(items)})</span>'
+            '<span class="note">Restore shows a folder again</span></summary><ul class="plain hlist">' + rows + '</ul></details>')
+
+
+def _unglob(p):
+    return re.sub(r"\[([*?\[])\]", r"\1", p)
+
+
 def _projects_list(found):
-    if not found:
+    if not found and not projects.hidden():
         return '<div class="empty"><b>No projects yet</b>Run <code>tokscope ingest</code> after a Claude Code session.</div>'
     real = [g for g in found if g["root"]]
     mcp = {g["id"]: _mcp_of(g) for g in found}
     idle = {g["id"]: x for g in found if (x := projects.idle_cost(g, mcp[g["id"]]))}
     rows = "".join(_project_row(g, mcp[g["id"]], g["id"] in idle) for g in found)
-    table = ('<section class="card flat"><div class="scroll"><table class="t plist"><thead><tr><th>Project</th><th>Sessions</th>'
+    cards = "".join(_project_card(g, mcp[g["id"]], g["id"] in idle) for g in found)
+    tools = ('<div class="tools libtools ptools"><input type="search" id="proj-find" placeholder="Find a project" aria-label="Find a project">'
+             '<select id="proj-sort" aria-label="Sort projects">' + "".join(f'<option value="{v}">{t}</option>' for v, t in SORTS) + '</select>'
+             '<span class="seg" role="group" aria-label="View"><button type="button" class="chip on" data-pview="list" aria-pressed="true">List</button>'
+             '<button type="button" class="chip" data-pview="card" aria-pressed="false">Cards</button></span>'
+             '<span class="note" id="proj-count" aria-live="polite"></span></div>'
+             '<p class="err" id="proj-err" hidden></p>')
+    table = ('<section class="card flat" data-pane="list" id="proj-list"><div class="scroll"><table class="t plist"><thead><tr><th>Project</th><th>Sessions</th>'
              '<th title="All time">Tokens</th><th>API-eq</th><th>Session start</th><th>MCP servers</th><th></th></tr></thead>'
-             f'<tbody>{rows}</tbody></table></div></section>')
+             f'<tbody>{rows}</tbody></table></div></section>'
+             f'<div class="pcards" id="proj-cards" hidden>{cards}</div>'
+             '<p class="note" id="proj-none" hidden>No project matches. Clear the search.</p>')
     return (f'<p class="sub">{len(real)} projects from your sessions. Worktrees, eval copies and subfolders count with the repository '
-            'they belong to; benchmark runs are left out.</p>'
-            f'<div class="pgrid"><div class="pmain">{table}</div><aside class="prail" aria-label="Project start sizes">'
+            'they belong to; benchmark runs are left out. Remove only takes a project off this list: your sessions\' stored data '
+            'and your folders are not deleted.</p>'
+            f'<div class="pgrid"><div class="pmain">{tools}{table}{_hidden_panel()}</div><aside class="prail" aria-label="Project start sizes">'
             f'{_projects_rail(found, idle)}</aside></div>')
 
 
