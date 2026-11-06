@@ -868,11 +868,23 @@ def suitegen_state(db, body):
 
 
 def suitegen_approve(db, body):
-    """(HTTP code, JSON) of POST optimize/suite/approve: copy a passing draft to evals.json. Never overwrites one."""
+    """(HTTP code, JSON) of POST optimize/suite/approve: copy a passing draft to evals.json. A suite that passes its checks
+    is never overwritten; one that does not (no machine checks, bad JSON) is, after its text is kept as evals.previous.json."""
     conn = connect(db)
     try:
         k = _skill_of(conn, body)
-        path = suite.approve(k["dir"], str(project_root(k)))
+        root = str(project_root(k))
+        live = suite._folder(k["dir"], root) / "evals" / suite.NAME
+        replace = False
+        if live.exists():
+            try:
+                replace = bool(suite.load(k["dir"], root).problems)
+            except ValueError:
+                replace = True  # not valid JSON, or not an object
+        old = live.read_bytes() if replace else None
+        path = suite.approve(k["dir"], root, force=replace)
+        if old is not None:  # only after the draft passed: a refused approve leaves the old file and any earlier backup alone
+            live.with_name("evals.previous.json").write_bytes(old)
     except suite.Refused as e:
         return 400, {"error": str(e)}
     except ValueError as e:

@@ -67,7 +67,7 @@ function ask(anchor,text,ok='OK'){return new Promise(res=>{document.querySelecto
   const esc=e=>{if(e.key==='Escape')done(false)},done=v=>{box.remove();document.removeEventListener('keydown',esc);res(v)};
   y.addEventListener('click',()=>done(true));n.addEventListener('click',()=>done(false));document.addEventListener('keydown',esc);
   acts.append(y,n);box.append(el('p','',text),acts);anchor.after(box);box.scrollIntoView({block:'nearest'});y.focus()})}
-function busy(b,text){b.dataset.label=b.textContent;b.disabled=true;b.classList.add('busy');b.textContent=text}
+function busy(b,text){if(!b.classList.contains('busy'))b.dataset.label=b.textContent;b.disabled=true;b.classList.add('busy');b.textContent=text}
 function idle(b){b.disabled=false;b.classList.remove('busy');b.textContent=b.dataset.label||b.textContent}
 document.getElementById('mcp-check')?.addEventListener('click',async e=>{const b=e.target,when=document.getElementById('mcp-when');
   b.disabled=true;when.textContent='Checking… this can take a minute.';

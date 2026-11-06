@@ -828,6 +828,25 @@ class LibraryTest(Fixture):
         self.assertIn("budget", out["error"])
         self.assertEqual(server.post(self.db, "optimize/suite/generate", {}, "read")[0], 403)
 
+    def test_approve_replaces_a_suite_that_fails_its_checks_and_keeps_the_old_text(self):
+        old = json.dumps({"evals": [{"id": "a", "prompt": "p"}]})
+        write(self.folder / "evals" / "evals.json", old)
+        good = {"evals": [{"id": "a", "prompt": "p", "checks": [{"type": "answer_regex", "pattern": "ok"}]}], "checks": []}
+        write(self.folder / "evals" / "evals.draft.json", json.dumps(good))
+        code, _ = server.post(self.db, "optimize/suite/approve", {"skill": self.skill_id()}, "full")
+        self.assertEqual(code, 200)
+        self.assertEqual(json.loads((self.folder / "evals" / "evals.json").read_text())["evals"][0]["checks"][0]["pattern"], "ok")
+        self.assertEqual((self.folder / "evals" / "evals.previous.json").read_text(), old)
+
+    def test_approve_never_replaces_a_suite_that_passes(self):
+        keep = json.dumps({"evals": [{"id": "a", "prompt": "p", "checks": [{"type": "answer_regex", "pattern": "keep"}]}]})
+        write(self.folder / "evals" / "evals.json", keep)
+        write(self.folder / "evals" / "evals.draft.json", json.dumps({"evals": [{"id": "b", "prompt": "q", "checks": [{"type": "answer_regex", "pattern": "x"}]}]}))
+        code, out = server.post(self.db, "optimize/suite/approve", {"skill": self.skill_id()}, "full")
+        self.assertEqual(code, 400)
+        self.assertEqual((self.folder / "evals" / "evals.json").read_text(), keep)
+        self.assertFalse((self.folder / "evals" / "evals.previous.json").exists())
+
     def test_status_is_none_before_any_draft_and_approve_refuses_without_one(self):
         self.assertEqual(server.post(self.db, "optimize/suite/status", {"skill": self.skill_id()}, "full")[1]["state"], "none")
         (self.folder / "evals" / "evals.json").unlink(missing_ok=True)
