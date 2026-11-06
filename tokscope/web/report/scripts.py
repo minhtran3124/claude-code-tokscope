@@ -238,7 +238,7 @@ function render(){
   list.replaceChildren(...els);
   if(!rows.length){list.innerHTML=`<div class=empty><b>No sessions match “${esc(q.value)}”</b>Try part of a title, a skill name, a folder or the start of a session id.
     <p><button type=button class=btn id=s-clear>Clear the filter</button></p></div>`;
-    document.getElementById('s-clear').addEventListener('click',()=>{q.value='';render();q.focus()})}
+    document.getElementById('s-clear').addEventListener('click',()=>{q.value='';if(projBox)projBox.value='';render();q.focus()})}
   if(anim){top=list.getBoundingClientRect().top;const vh=innerHeight,seen=y=>y+top>-200&&y+top<vh+200;let k=0;
     // new rows wait for the leaving ones to clear so the two never show text over each other
     const wait=[...before.keys()].some(id=>!keep.has(id)&&seen(before.get(id)))?T_EXIT:0;
