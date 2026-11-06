@@ -124,6 +124,8 @@ html.settled [data-region] :is(.hero,.kpi,.empty,.bar i u){animation:none}
 #session-list :is(.shead,.srow>summary){display:grid;grid-template-columns:var(--scols);gap:8px;align-items:center;padding:0 10px}
 #session-list .shead{height:32px;font-size:11px;white-space:nowrap}
 #session-list .shead>*{overflow:hidden;text-overflow:ellipsis}
+#session-list .shead .r{text-align:right}
+#session-list .srow>summary .sk{color:var(--ink)}
 #session-list .dayhd{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:0 12px;min-height:36px;padding:4px 10px}
 #session-list .srow{margin:0;border-width:0;border-radius:0}
 #session-list .srow.child{margin-left:0}
@@ -136,6 +138,7 @@ html.settled [data-region] :is(.hero,.kpi,.empty,.bar i u){animation:none}
 #session-list .srow>summary .sid8{flex:none;font-size:11px;color:var(--muted)}
 #session-list .srow>summary .from{flex:0 1 auto}
 #session-list .track{display:block;min-width:0}
+#session-list :is(.shead,.srow>summary)>.track{padding-left:8px}
 #session-list .srow>summary .split{height:10px}
 #session-list .srow .body{padding:4px 12px 12px 34px}
 /* an opened session is one panel: the summary line and the body share a tinted ground, a mark-coloured left edge and hairlines above and below */

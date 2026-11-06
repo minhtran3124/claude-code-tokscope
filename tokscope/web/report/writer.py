@@ -22,7 +22,7 @@ from .sections.sessions import _sessions_json
 from .sections.skills import FEW_LOADS, _change_cards, _skill_versions
 from .sections.summary import _hero, _session_start
 from .styles import CSS
-from .widgets import _daily_chart, _more, _tok, _usd, _usd_tile
+from .widgets import _daily_chart, _more, _tok, _usd_tile
 
 
 PRIVACY_NOTE = {
