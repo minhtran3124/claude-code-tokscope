@@ -1,5 +1,14 @@
 # Decisions
 
+## 2026-11-09 · tokscope is ported to Rust (plan: docs/rust-port-plan.md)
+
+| Decision | Why | Rejected |
+| --- | --- | --- |
+| The Python system (`tokscope/`, ~16k LOC) is rewritten as a single Rust binary, in one big-bang effort with one cut-over; the Python tree and its tests stay in the repo as the reference oracle until the cut-over PR. The plan lives in `docs/rust-port-plan.md`. | The hot paths are JSON parsing (ingest, OTel), the long-running `serve` process, and the per-turn `statusline` cold start, where a static Rust binary is 5–50× faster and uses less memory. One cut-over avoids keeping two implementations in step. | An incremental strangler-fig port (safer, but keeps two systems for longer); keeping Python. |
+| The port is drop-in compatible: the exact SQLite schema, `PARSER_VERSION` 24, and every on-disk format (`marks/`, `reports/`, `bench/`, `data/skills/`, `privacy.key`, `pricing.json`, `budgets.json`, `data/otel/`) are kept, so an existing install upgrades without re-ingesting. Skill-version and privacy hashes must match byte-for-byte (plan §6.1). | Users keep their data and the mod keeps working unchanged; a schema redesign would fork the skill-version system and orphan existing history. | Redesigning the schema for cleanliness (rebuilds from transcripts lose OTel/marks). |
+| The Electron desktop app becomes a Tauri app; the macOS build drops the bundled-Python machinery. | Rust consistency, one toolchain, and no `python-build-standalone` fetch; the app is already just a window around the local dashboard. | Keeping Electron (a second language/toolchain); bundling Python again. |
+| `mod/` stays TypeScript. | Claude Code loads only TS/JS plugins; the mod finds the CLI by `TOKSCOPE_CLI`/`PATH`/`~/.local/bin/tokscope`, so it works as long as the binary keeps its name and stdout/exit-code contract. | Rewriting the mod (not possible). |
+
 ## 2026-11-05 · The guide-based Optimize is removed (issue #193)
 
 | Decision | Why | Rejected |
