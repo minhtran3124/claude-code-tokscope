@@ -1,6 +1,6 @@
 # Rust port plan
 
-**Status:** draft for owner review · **Owner:** Minh Tran · **Updated:** 2026-11-09
+**Status:** approved — owner resolved the open questions 2026-11-09 · **Owner:** Minh Tran · **Updated:** 2026-11-09
 
 ## 1. Goal and scope
 
@@ -65,11 +65,12 @@ long-running `serve` process, and cold-start latency. Targets are in §8.
 
 ## 4. Target architecture
 
-One Cargo workspace, two library crates plus the desktop app:
+One Cargo workspace at the **repo root** (owner decision, §13), two library crates plus the desktop app:
 
 ```
-rust/                         (or keep at repo root; see §14 open questions)
+<repo root>/
 ├─ Cargo.toml                 workspace
+├─ rust-toolchain.toml        pinned toolchain
 ├─ crates/
 │  ├─ tokscope-core/          the `core/` layer, no subprocess or network
 │  │  └─ src/{paths,schema,ingest,skills,otel,pricing,privacy,tz,summary,
@@ -81,7 +82,9 @@ rust/                         (or keep at repo root; see §14 open questions)
 │        ├─ integrations/{managed,registry,otel_receiver}.rs
 │        ├─ experiments/{bench,replay,optimize,skillopt/}.rs
 │        └─ web/{dashboard,report,theme}/…
-└─ desktop/                   Tauri app (replaces Electron desktop/)
+├─ desktop/                   Tauri app (replaces Electron desktop/)
+├─ mod/                       unchanged (TypeScript)
+└─ tokscope/, bin/, tests/    the Python tree, kept as the oracle until M7
 ```
 
 The `core`/`web` split enforces the existing layering rule with the compiler (`tokscope-core` has no dependency on the
@@ -97,9 +100,9 @@ web crate), so `tests/test_layout.py` becomes a non-issue.
 | Backup (redacted copy) | `rusqlite` `backup` feature | `sqlite3.backup` | `privacy.redacted_copy` |
 | JSON | `serde` + `serde_json` | stdlib `json` | big ingest/otel win; see §6 for serialization-exactness rules |
 | Regex | `regex` | stdlib `re` | linear-time, no catastrophic backtracking; re-express each `re.compile` |
-| Hashing | `sha1`, `sha2`, `hmac` (RustCrypto) | `hashlib`/`hmac` | must match Python byte-for-byte, see §6 |
+| Hashing | `sha1`, `sha2`, `hmac` (RustCrypto) | `hashlib`/`hmac` | `sha2` confirmed (no `blake3`); must match Python byte-for-byte, see §6 |
 | Time | `chrono` + `chrono-tz` | `zoneinfo` | `local_day`, `midnight`, `utc_bound`; DST handled by `chrono-tz` |
-| HTTP server | `axum` (tokio) | `http.server` | async; SQLite via `spawn_blocking` + a small `r2d2_sqlite` pool, or a writer + reader split |
+| HTTP server | `axum` (tokio) | `http.server` | async; **single writer + an `r2d2_sqlite` reader pool** (owner decision, §13), SQLite calls via `spawn_blocking` |
 | HTTP client | `ureq` | `urllib` | MCP Registry search; blocking, minimal |
 | gzip | `flate2` | `gzip` | OTel receiver decompress |
 | Subprocess | `std::process::Command` | `subprocess` | `claude`, `git`, `ant`, `xcode-select` |
@@ -148,7 +151,7 @@ semantically", and "needs only internal determinism".
 | `body_hash` | `skill_versions.body_hash` | SHA-256 of SKILL.md body (frontmatter block dropped, then `.strip()`), first 12 hex. |
 | `text_hash` | `skill_calls.text_hash` | space-joined `sha256[:12]` hashes from `loaded_text_hash` (body, then each `$ARGUMENTS` placeholder form). Must port `_placeholder_forms` and the `\n\n\nARGUMENTS: ` split exactly. |
 | Privacy alias | `numbers`-level reports | `hmac_sha256(key = privacy.key bytes, msg = "{kind}\0{value}")` hex, first 6 chars, prefixed `"{kind}-"`. Same `BUILTIN_AGENTS`/`BUILTIN_TOOLS`/phase/`mcp__` special cases as `privacy.name`. |
-| Session signature | `sessions.signature` | `f"v{PARSER_VERSION}:{n_files}:{sum_sizes}:{max_mtime_ns}"` — keep `PARSER_VERSION = 24` (or bump deliberately; see §6.4). |
+| Session signature | `sessions.signature` | `f"v{PARSER_VERSION}:{n_files}:{sum_sizes}:{max_mtime_ns}"` — the approved bump in §6.4 (24 → 25) re-parses every session once at cut-over. |
 
 Getting any of the first three wrong silently forks the skill-version system: a Rust build would treat every existing
 skill as "changed", duplicate version rows, and break `optimize`/`bench` pinning and the report's versions card. These
@@ -178,9 +181,10 @@ are the highest-risk items and get dedicated golden tests (§9).
 ### 6.4 Schema
 
 Keep `SCHEMA` in `core/ingest.py` and the migration path in `connect()` verbatim: same table names, columns, primary
-keys, indexes, and `ALTER TABLE` back-fills. Keep `PARSER_VERSION = 24` so unchanged transcripts are not re-parsed
-after cut-over. If the port needs a new parser version, treat that as a deliberate, documented change with its own
-`DECISIONS.md` entry.
+keys, indexes, and `ALTER TABLE` back-fills. **Owner decision: bump `PARSER_VERSION` 24 → 25 at cut-over**, so every
+transcript is re-parsed once. This is deliberate — it catches any ingest bug the port introduced on real data instead
+of leaving stale Python-parsed rows in place — and it is the *only* reason an existing install re-ingests. The schema
+stays byte-compatible otherwise. Record the bump in the cut-over `DECISIONS.md` entry.
 
 ### 6.5 On-disk formats (unchanged)
 
@@ -227,7 +231,7 @@ oracle (and keep passing in CI) until M6.
 
 ### M0 — Workspace, fixtures, and the parity harness
 
-- Scaffold the Cargo workspace (`tokscope-core`, `tokscope`, `desktop/` stub).
+- Scaffold the repo-root Cargo workspace (`tokscope-core`, `tokscope`, `desktop/` stub, `rust-toolchain.toml`).
 - Extract the existing `tests/` fixture transcripts and any stored expected DBs into a shared `tests/fixtures/` that
   both languages read.
 - Build the **differential harness**: run `python tokscope …` and `rust tokscope …` on the same fixtures (and a real,
@@ -344,16 +348,16 @@ The Electron app is a thin window around the local dashboard, plus service manag
 | Lenient transcript parsing | Medium — crashes where Python tolerated junk | Port the `json.JSONDecodeError`/`except` skip paths; invariant tests on malformed lines |
 | Big-bang: long period with no shippable state | High — schedule risk | Milestones M0–M6 each end in a green, diffed increment; cut-over is the only user-visible change |
 | Tauri packaging/signing story | Medium | Personal, unsigned builds as today; document `cargo-tauri` build on the Mac |
-| Existing-data upgrade surprises | Medium | §6.4 no-`PARSER_VERSION`-bump rule + a pre-cut-over dry run against a copy of a real data dir |
+| Existing-data upgrade surprises | Medium | §6.4 approved `PARSER_VERSION` bump forces one re-parse; pre-cut-over dry run against a copy of a real data dir, then compare row counts and totals |
 
-## 13. Open questions for the owner
+## 13. Resolved decisions (owner, 2026-11-09)
 
-1. **Workspace location**: put `Cargo.toml` at the repo root (with the Python tree living beside it until M7), or keep
-   the Rust tree under a `rust/` subfolder and move it up at cut-over? (Recommend: repo root, `rust-toolchain.toml` pinned.)
-2. **`serve` concurrency model**: single writer + `r2d2` reader pool vs. one connection per request (current behavior).
-   Recommend the pool.
-3. **Skill folder hash crate**: `sha2` (portable, matches today) — confirm no desire to switch to `blake3` (which
-   would break §6.1 compatibility; not recommended).
-4. **A `PARSER_VERSION` bump** to force one full re-parse at cut-over is a cheap way to catch any ingest bug on real
-   data — acceptable, or must it stay 24?
-5. **Timeline/ownership**: who drives M0–M7, and is there a hard date for cut-over?
+| # | Question | Decision |
+| --- | --- | --- |
+| 1 | Workspace location | **Repo root** — `Cargo.toml` + `rust-toolchain.toml` at the root, `crates/…` beside the Python tree until M7. |
+| 2 | `serve` concurrency model | **Single writer + an `r2d2_sqlite` reader pool** (the recommendation). |
+| 3 | Skill folder hash crate | **`sha2`** — keep matching today; no `blake3`. |
+| 4 | `PARSER_VERSION` bump | **Approved** — bump 24 → 25 at cut-over to force one full re-parse on real data. |
+| 5 | Timeline / ownership | **ASAP.** Ownership of M0–M7 is the owner's unless delegated. |
+
+With these settled there are no blocking questions; M0 can start.
