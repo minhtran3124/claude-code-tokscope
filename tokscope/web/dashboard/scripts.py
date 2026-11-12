@@ -6,8 +6,6 @@
 DASH_CSS = """
 .cols2{gap:22px}
 .libtools input[type=search]{padding:6px 12px;border:var(--line-w) solid var(--line-c);border-radius:var(--r-ctl)}
-a.sk{transition:transform var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease)}
-a.sk:hover{border-color:var(--on-line);box-shadow:0 8px 30px var(--shadow)}
 .seg .chip:is(:hover,.on) b{color:inherit}
 .sk.reg:hover{box-shadow:none}
 .ask{border:var(--line-w) solid var(--on-line)}
@@ -29,8 +27,8 @@ table.sbs th{font:600 11px/1.45 var(--sans)}
 .libtools input[type=search]{font-size:13px;font-weight:400}
 /* optimize page: tables scroll in their own wrapper, long evidence wraps, a failed check reads as one */
 ul.plain li.bad{color:var(--fail)}
-.badge.ver.ok{color:var(--pass)}
-.badge.ver.warn{color:var(--warn)}
+.badge.ver.ok{color:var(--pass);background:var(--ok-bg)}
+.badge.ver.warn{color:var(--warn);background:var(--warn-bg)}
 a.badge.ver{text-decoration:none}
 .card pre.src{max-height:240px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
 .card li,.card dd{overflow-wrap:anywhere}
@@ -40,18 +38,17 @@ a.badge.ver{text-decoration:none}
 
 LIB_JS = """
 // library: find by name or description, show installed skills on request, rendered or source view
-document.querySelectorAll('.runopt').forEach(b=>{const go=e=>{e.preventDefault();e.stopPropagation();location.href=b.dataset.go};
-  b.addEventListener('click',go);b.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')go(e)})});
 const libFind=document.getElementById('lib-find'),libInst=document.getElementById('lib-inst'),libDead=document.getElementById('lib-dead');
 function libFilter(){const q=(libFind?.value||'').trim().toLowerCase(),all=libInst?.checked;let shown=0;
-  document.querySelectorAll('a.sk').forEach(a=>{const ok=(all||a.dataset.origin==='mine')&&(!libDead?.checked||a.dataset.unused==='1')&&(!q||a.dataset.find.includes(q));a.hidden=!ok;shown+=ok});
-  document.querySelectorAll('.libgroup').forEach(g=>g.hidden=!g.querySelector('a.sk:not([hidden])'));
+  document.querySelectorAll('tr.sk').forEach(a=>{const ok=(all||a.dataset.origin==='mine')&&(!libDead?.checked||a.dataset.unused==='1')&&(!q||a.dataset.find.includes(q));a.hidden=!ok;shown+=ok});
+  document.querySelectorAll('.libgroup').forEach(g=>g.hidden=!g.querySelector('tr.sk:not([hidden])'));
   const none=document.getElementById('lib-none');if(none)none.hidden=shown>0}
-let vHash=null;try{vHash=location.hash.startsWith('#v-')&&document.querySelector(`a.sk[data-dir="${CSS.escape(decodeURIComponent(location.hash.slice(3)))}"]`)}catch(_){}  // a malformed hash: stay on the list
+let vHash=null;try{vHash=location.hash.startsWith('#v-')&&document.querySelector(`tr.sk[data-dir="${CSS.escape(decodeURIComponent(location.hash.slice(3)))}"] .skn a`)}catch(_){}  // a malformed hash: stay on the list
 if(vHash)location.replace(vHash.href+location.hash);
 libFind?.addEventListener('input',libFilter);libInst?.addEventListener('change',libFilter);libDead?.addEventListener('change',libFilter);if(libFind)libFilter();
+// sort the rows inside each folder's tbody; its band row stays first
 document.getElementById('lib-sort')?.addEventListener('change',e=>{const by=e.target.value;
-  document.querySelectorAll('.libgrid').forEach(g=>[...g.children].sort((a,b)=>by?(+b.dataset[by])-(+a.dataset[by])||a.dataset.find.localeCompare(b.dataset.find)
+  document.querySelectorAll('tbody.libgroup').forEach(g=>[...g.querySelectorAll('tr.sk')].sort((a,b)=>by?(+b.dataset[by])-(+a.dataset[by])||a.dataset.find.localeCompare(b.dataset.find)
     :a.dataset.find.localeCompare(b.dataset.find)).forEach(a=>g.append(a)))});
 document.getElementById('ste-adv')?.addEventListener('change',e=>document.querySelectorAll('ol.ste li.adv').forEach(li=>li.hidden=!e.target.checked));
 document.querySelectorAll('[data-goto]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();
