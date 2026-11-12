@@ -2,7 +2,7 @@
 state: active         # active | paused | blocked | done
 progress: 44          # rough estimate, 0-100
 priority: medium     # high | medium | low
-updated: 2026-11-06
+updated: 2026-11-12
 updated_by: claude   # claude | manual
 ---
 
@@ -18,6 +18,7 @@ Owner reviews and merges PR #221 by hand.
 - macOS app (#144-#148) cannot be verified without a Mac.
 
 ## Recent
+- 2026-11-12: Subagent rows with no `description` in `meta.json` (SDK/bridge sessions) now take the title from the parent's Agent call input; parser version 25 re-reads old sessions (PR open).
 - 2026-11-06: Projects page: List/Cards toggle, find box, sort (tokens, cost, sessions, latest activity, session start, name) and Remove, which only hides the folder in projects.json after a question; "Removed from this list" restores it (PR open).
 - 2026-11-06: Optimize list (#252): decision-first page with a top card (runs needing a decision, Review newest), filter links, runs grouped by skill then decision need, verdict pills, one result line and relative time; the Decision column is gone (PR open).
 - 2026-11-06: Sessions: a Project dropdown next to the filter box lists the projects in the range (with session counts) and filters the list at once (PR #245). Optimize run page (#249): Decide block first (verdict, rule-built sentence, three numbers, gate chips, Approve/Reject), then diff, plain-word gates and two Change tables, then one-line collapsed rows; at 375 px Approve and Reject sit in the first screen (PR open). The dashboard no longer prints a traceback when a browser drops the connection mid-page (BrokenPipeError; PR open).
