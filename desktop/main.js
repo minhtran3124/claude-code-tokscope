@@ -128,7 +128,7 @@ function showCover(message, spin = true) {
     cover.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     cover.webContents.on("will-navigate", (e) => e.preventDefault());  // the page has no links; keep it that way
   }
-  cover.setBackgroundColor(dark ? "#1d1a15" : "#f2efe7");  // the colour before the page paints, in the current theme
+  cover.setBackgroundColor(dark ? "#12121C" : "#F5F5FA");  // the colour before the page paints, in the current theme
   if (!coverShown) { win.contentView.addChildView(cover); coverShown = true; }  // added last: it is on top
   cover.setBounds(coverBounds());
   cover.webContents.loadURL(statusPage(dark, message, spin)).catch(() => {});
@@ -141,7 +141,7 @@ function hideCover() {
 function createWindow() {
   const dark = nativeTheme.shouldUseDarkColors;
   // backgroundColor is what shows before anything is painted, so the window never flashes white
-  win = new BrowserWindow({ width: 1440, height: 900, title: "tokscope", autoHideMenuBar: true, backgroundColor: dark ? "#1d1a15" : "#f2efe7" });
+  win = new BrowserWindow({ width: 1440, height: 900, title: "tokscope", autoHideMenuBar: true, backgroundColor: dark ? "#12121C" : "#F5F5FA" });
   // anything that is not the local dashboard opens in the real browser
   win.webContents.setWindowOpenHandler(({ url: u }) => { openExternal(u); return { action: "deny" }; });
   // a server redirect must not move the window off the dashboard either

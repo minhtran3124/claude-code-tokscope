@@ -6,8 +6,8 @@ const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };
 
 function statusPage(dark, message, spin = true) {
   const c = dark
-    ? { page: "#1d1a15", surface: "#27231c", ink: "#f2efe7", muted: "#b0a796", mark: "#76a0e2", agent: "#f4b829", shadow: "#0c0b09" }
-    : { page: "#f2efe7", surface: "#fbf9f4", ink: "#231e16", muted: "#665e51", mark: "#76a0e2", agent: "#f4b829", shadow: "#231e16" };
+    ? { page: "#12121C", surface: "#1B1B29", ink: "#E9E9F6", muted: "#9A9AB5", mark: "#8B8EF5", agent: "#4CC9AE", shadow: "#0A0A12" }
+    : { page: "#F5F5FA", surface: "#FFFFFF", ink: "#1B1B2F", muted: "#66667F", mark: "#4B4FD8", agent: "#1E9C86", shadow: "#D2D2E2" };
   const text = String(message).replace(/[&<>"]/g, (ch) => ESC[ch]);
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>tokscope</title><style>
@@ -15,7 +15,7 @@ function statusPage(dark, message, spin = true) {
 html,body{height:100%;margin:0;background:var(--page);color:var(--ink);font:15px/1.4 system-ui,"Segoe UI",sans-serif}
 body{display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}
 .card{position:relative;display:flex;flex-direction:column;align-items:center;gap:18px;min-width:240px;padding:34px 40px 28px;
-  background:var(--surface);border:2.5px solid var(--ink);border-radius:14px;box-shadow:10px 12px 0 var(--shadow);
+  background:var(--surface);border:1px solid var(--shadow);border-radius:12px;box-shadow:0 8px 30px rgba(27,27,47,.14);
   animation:rise .6s cubic-bezier(.16,1,.3,1) both}
 .gauge{width:96px;height:96px}
 .gauge .arc{fill:none;stroke:var(--ink);stroke-width:3.6;stroke-linecap:round}
