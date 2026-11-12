@@ -67,7 +67,7 @@ def _skill_row(k, used, lint=None, state=None, ver=None, top=1):
             f'data-find="{html.escape((k["name"] + " " + k["description"]).lower())}"{hide}>'
             f'<td class="skn"><a href="{href}">{skill_chip(k["name"])}</a>'
             f'<div class="note desc" title="{html.escape(k["description"])}">{markdown.inline(k["description"]) or "<i>No description.</i>"}</div></td>'
-            f'<td class="ver">{badge}</td><td class="r">{len(library.files(k["folder"])):,}</td>'
+            f'<td class="ver">{badge}</td>'
             f'<td class="r">{loads:,}' + (f'<div class="note">last {last[:10]}</div>' if last else "") + '</td>'
             f'<td class="r"><span title="{html.escape(library.PREFIX_METHOD)}">~{ntok:,} tok</span> <span class="note">({nbytes:,} B)</span>'
             f'{bar}</td><td>{_ste_cell(findings)}</td><td class="r">{run}</td></tr>')
@@ -95,11 +95,11 @@ def _library_list(found, used, lint=None, lint_note="", project="", rng="", stat
         ks = [k for k in found if k["scope"] == scope]
         mine = sum(k["origin"] == "mine" for k in ks)
         title = "Personal · ~/.claude/skills" if scope == "personal" else f"Project · {scope}"
-        groups.append(f'<tbody class="libgroup"><tr class="grp"><th colspan="7" scope="rowgroup">{html.escape(title)} <span class="note">{mine} yours'
+        groups.append(f'<tbody class="libgroup"><tr class="grp"><th colspan="6" scope="rowgroup">{html.escape(title)} <span class="note">{mine} yours'
                       f'{f", {len(ks) - mine} installed" if len(ks) > mine else ""}</span></th></tr>'
                       f'{"".join(_skill_row(k, used, lint, state, ver, top) for k in ks)}</tbody>')
     table = ('<section class="card flat libtable"><div class="scroll"><table class="t libt"><thead><tr><th>Skill</th><th>Status</th>'
-             f'<th class="r">Files</th><th class="r">Loads{html.escape(rng)}</th>'
+             f'<th class="r">Loads{html.escape(rng)}</th>'
              f'<th class="r" title="{html.escape(library.PREFIX_METHOD)}">Every session</th><th>STE check</th><th></th></tr></thead>'
              f'{"".join(groups)}</table></div></section>')
     rail = _rail(found, n_dead, tok_dead, top)

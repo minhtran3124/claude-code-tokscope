@@ -140,8 +140,8 @@ def _project_view(g):
                       f"{'' if Path(c).exists() else ' · <span class=note>gone</span>'}</li>" for c, n in sorted(g["folders"], key=lambda f: -f[1]))
     keys = sorted(k for k in g["keys"] if k)
     base = g.get("base")
-    start = (f'<dt>Session start</dt><dd>{_start_line(base)}</dd>' if base
-             else '<dt>Session start</dt><dd class="note">No sessions in this range.</dd>' if "base" in g else "")
+    # with sessions the Session start card beside this one shows it; the facts keep only the "none" note
+    start = '<dt>Session start</dt><dd class="note">No sessions in this range.</dd>' if not base and "base" in g else ""
     sessions_link = (f' · <a href="/sessions?range=all&amp;project={html.escape(keys[0])}">its sessions</a>' if len(keys) == 1 else "")
     title = (f'<div class="pghead"><p class="crumb"><a href="/projects">Projects</a> / {html.escape(g["name"])}</p>'
              f'<h1>{html.escape(g["name"])}</h1><p class="sub">{g["sessions"]:,} session{"s" * (g["sessions"] != 1)} · '
@@ -154,7 +154,7 @@ def _project_view(g):
                 if len(g["folders"]) > 1 else "") + "</section>")
     big = (f'<section class="card pjstart"><h2>Session start</h2><p class="big" title="{html.escape(START_METHOD)}">~{_tok(base["median"])}</p>'
            '<p class="note">Tokens before you type anything: system prompt, tools, MCP servers, skills and CLAUDE.md.</p>'
-           f'<p>{start_detail(base)}</p></section>' if base else "")
+           f'<p>{_start_line(base)}</p><p>{start_detail(base)}</p></section>' if base else "")
 
     def page(main):  # the facts beside the session start, then the MCP cards at full width (the server table is wide)
         return (f'{title}<div class="pjgrid"><div class="pjmain">{about}</div>'
