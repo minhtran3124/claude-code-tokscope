@@ -378,7 +378,7 @@ svg .vmark{cursor:default}
 .setrow .svcctl{display:flex;gap:8px;align-items:center}
 .keyrows>div{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--row-c)}
 .keyrows>div:first-child{border-top:0}
-.pill-static{font:500 12px var(--num-font);padding:2px 10px;border:var(--line-w) solid var(--line-c);border-radius:var(--r-btn)}
+.pill-static{font:600 12px var(--num-font);padding:2px 10px;border-radius:999px;background:var(--chip);color:var(--ink2)}
 .segctl{display:flex}
 .segctl .chip{flex:1;justify-content:center;border-radius:0;padding:5px 8px}
 .segctl .chip+.chip{margin-left:calc(-1*var(--line-w,1px))}
@@ -889,22 +889,22 @@ p.warn{color:var(--warn);font-size:13px}
 .outcome{display:flex;flex-direction:column;gap:4px;margin:12px 0 6px;padding:12px 14px;border:var(--line-w) solid var(--line-c);border-radius:var(--r-tile);animation:reveal var(--t-layout) var(--ease) both}
 .outcome b{font-size:15px}
 .outcome span{overflow-wrap:anywhere}
-.outcome.ok{background:color-mix(in oklch,var(--pass) 12%,transparent)}
-.outcome.bad{background:color-mix(in oklch,var(--fail) 12%,transparent)}
+.outcome.ok{background:var(--ok-bg);border-color:transparent}
+.outcome.bad{background:var(--bad-bg);border-color:transparent}
 .outcome.off{background:var(--chip)}
 .vhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
-.vbadge{font:700 15px var(--num-font);padding:3px 14px;border:var(--line-w) solid var(--line-c);border-radius:var(--r-tile);white-space:nowrap;background:var(--chip)}
-.vbadge.ok{color:var(--pass);border-color:var(--pass);background:color-mix(in oklch,var(--pass) 12%,transparent)}
-.vbadge.bad{color:var(--fail);border-color:var(--fail);background:color-mix(in oklch,var(--fail) 12%,transparent)}
+.vbadge{font:700 14px var(--num-font);padding:4px 14px;border-radius:999px;white-space:nowrap;background:var(--chip);color:var(--ink2)}
+.vbadge.ok{color:var(--pass);background:var(--ok-bg)}
+.vbadge.bad{color:var(--fail);background:var(--bad-bg)}
 .vsum{font-size:16px;font-weight:600;margin:10px 0;overflow-wrap:anywhere}
-.nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0}
-.num{border:var(--line-w) solid var(--line-c);border-radius:var(--r-tile);padding:10px 12px;display:flex;flex-direction:column;gap:2px}
-.num .k{font-size:12px;color:var(--muted)}
-.num b{font-size:18px;overflow-wrap:anywhere}
+.nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0}
+.num{background:var(--surface);border:var(--line-w) solid var(--line-c);border-radius:var(--r-tile);padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.num .k{font-size:13px;color:var(--muted)}
+.num b{font:700 21px/1.3 var(--num-font);overflow-wrap:anywhere}
 .gchips{display:flex;flex-wrap:wrap;gap:6px;list-style:none;padding:0;margin:8px 0}
-.gchip{white-space:nowrap;font:500 12px var(--num-font);padding:2px 10px;border:var(--line-w) solid var(--line-c);border-radius:999px;background:var(--chip);color:var(--ink2)}
-.gchip.ok{color:var(--pass);border-color:var(--pass)}
-.gchip.bad{color:var(--fail);border-color:var(--fail);font-weight:700}
+.gchip{white-space:nowrap;font:600 12px var(--num-font);padding:2px 10px;border-radius:999px;background:var(--chip);color:var(--ink2)}
+.gchip.ok{color:var(--pass);background:var(--ok-bg)}
+.gchip.bad{color:var(--fail);background:var(--bad-bg);font-weight:700}
 .runrows{padding-top:4px;padding-bottom:4px}
 .runrows>details.more{border:0;border-radius:0;margin:0;padding:12px 0;background:none}
 .runrows>details.more+details.more{border-top:1px solid var(--row-c)}
@@ -935,11 +935,11 @@ table.gtable td,table.gtable th{text-align:left}
 .ol-spent{margin-left:6px}
 .ol-act{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px;font-size:12px;color:var(--ink2)}
 .ol-act .btn,.ol-act .primary{text-decoration:none}
-.ol-pill{display:inline-block;white-space:nowrap;font:600 12px var(--num-font);padding:2px 10px;border:var(--line-w) solid var(--line-c);border-radius:999px;background:var(--chip);color:var(--ink2)}
-.ol-pill.ok{color:var(--pass);border-color:var(--pass);background:color-mix(in oklch,var(--pass) 12%,transparent)}
-.ol-pill.warn{color:var(--ink);border-color:var(--agent);background:color-mix(in oklch,var(--agent) 18%,transparent)}
-.ol-pill.bad{color:var(--fail);border-color:var(--fail);background:color-mix(in oklch,var(--fail) 12%,transparent)}
-.ol-pill.run{color:var(--mark-ink);border-color:var(--mark-ink)}
+.ol-pill{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font:600 12px var(--num-font);padding:2px 10px;border-radius:999px;background:var(--chip);color:var(--ink2)}
+.ol-pill.ok{color:var(--pass);background:var(--ok-bg)}
+.ol-pill.warn{color:var(--warn);background:var(--warn-bg)}
+.ol-pill.bad{color:var(--fail);background:var(--bad-bg)}
+.ol-pill.run{color:var(--on-fg);background:var(--on-bg)}
 @media (max-width:640px){.ol-row{grid-template-columns:minmax(0,1fr) auto}.ol-main{grid-column:1/-1;grid-row:2}.ol-act{grid-column:2;grid-row:1}}
 a.outcome.run{color:var(--ink);text-decoration:none;background:color-mix(in oklch,var(--mark) 9%,var(--surface));margin:-4px 0 14px}
 a.outcome.run:hover{background:color-mix(in oklch,var(--mark) 15%,var(--surface))}
@@ -1111,8 +1111,8 @@ table.ft{width:100%;border-collapse:collapse;font-size:13px}
 .ft td{flex-wrap:wrap}.ft td:first-child>.note{flex-basis:100%;text-align:left}
 .ft td .note{margin:2px 0 0;font-family:var(--sans)}
 .ft td .note code{font-size:11px}
-.dpill{display:inline-block;font:500 11px var(--num-font);border:1px solid var(--grid);border-radius:999px;padding:2px 10px;white-space:nowrap;color:var(--ink2)}
-.dpill.ok{color:var(--pass);border-color:var(--pass)}.dpill.warn{color:var(--warn);border-color:var(--warn)}.dpill.bad{color:var(--fail);border-color:var(--fail)}
+.dpill{display:inline-block;font:600 11px var(--num-font);border-radius:999px;padding:2px 10px;white-space:nowrap;background:var(--chip);color:var(--ink2)}
+.dpill.ok{color:var(--pass);background:var(--ok-bg)}.dpill.warn{color:var(--warn);background:var(--warn-bg)}.dpill.bad{color:var(--fail);background:var(--bad-bg)}
 .chg-dn{color:var(--pass)}.chg-up{color:var(--fail)}.chg-0{color:var(--muted)}
 .ft td .chg-dn,.ft td .chg-up,.ft td .chg-0{font:500 13px var(--num-font)}
 .drail .card{gap:10px}
@@ -1120,18 +1120,12 @@ table.ft{width:100%;border-collapse:collapse;font-size:13px}
 .drail p.note{line-height:1.5}
 ol.attn{margin-top:0}ol.attn .k{flex:none;white-space:nowrap}
 ol.attn li>div>div:first-child{color:var(--ink)}
-/* benchmarks */
-.bgrid{margin-top:6px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px}
-.bgrid .lab{font:500 11px var(--num-font);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
-.bgrid .big{font:600 26px/1.2 var(--num-font);color:var(--ink)}.bgrid .big.good{color:var(--pass)}.bgrid .big.bad{color:var(--fail)}
-.bgrid .split{margin-top:8px;height:8px;border-radius:4px;background:var(--track);overflow:hidden}
-.bgrid .split u{display:block;height:100%;background:var(--mark);text-decoration:none;border-radius:4px}
 /* managed */
 .dpage .dep-st{display:inline-flex;align-items:center;gap:8px}
 .ft td[data-label=Deployment],.ft td[data-label=Schedule],.ft td[data-label="Next run"],.ft td[data-label=Time]{white-space:nowrap}
 /* settings: one 760 px column of cards, rows of a label and a muted line, a pill-framed segmented control, key caps as pills */
 .setcol{max-width:760px;display:flex;flex-direction:column;gap:20px}
-.setcol .card{margin:0}.setcol .card h2{font-size:15px}
+.setcol .card{margin:0}.setcol .card h2{font-size:17px}
 .setrow{padding:10px 0}.setrow b{color:var(--ink);font-weight:600}.setrow .note{color:var(--muted);font-size:13px}
 .setrow .segctl{min-width:0;border:var(--line-w) solid var(--line-c);border-radius:8px;padding:3px;gap:2px;background:var(--surface)}
 .setrow .segctl .chip,.setrow .segctl .chip:first-child,.setrow .segctl .chip:last-child{flex:none;border:0;border-radius:7px;padding:6px 12px;margin:0;color:var(--muted);font-weight:500}
@@ -1162,4 +1156,36 @@ kbd.keypill{font:500 11px var(--mono);padding:2px 10px;border:var(--line-w) soli
 /* beside the rail the title column is narrow: a live row keeps its title and drops the entry name */
 #session-list .srow>summary .tt{min-width:10ch}
 @media (min-width:1101px) and (max-width:1500px){#session-list .srow .live .where,#session-list .srow>summary .sid8{display:none}}
+/* Indigo step 4: Optimize, Benchmarks, Managed, Settings */
+/* optimize list: the skill as its chip, a live dot on Running, a short bar of the budget spent */
+.ol-skill .skc{font-size:13px;line-height:1.7;padding:0 10px}
+.ol-pill.run::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+[data-page=optimize] .card h2.sec{font-size:17px}
+.ol-meta .ol-when,.ol-meta time{font-family:var(--mono);font-size:11.5px}
+.ol-row>.ol-pill{justify-self:start}
+@media (min-width:641px){.ol-row{grid-template-columns:150px minmax(0,1fr) auto}}
+/* a link styled as a button: its text centred whatever height a phone gives it */
+.ol-act>a,.ol-top>a.primary{display:inline-flex;align-items:center;justify-content:center}
+.ol-spent{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.ol-bar{display:inline-block;width:64px;height:6px;border-radius:999px;background:var(--track);overflow:hidden}
+.ol-bar i{display:block;height:100%;border-radius:999px;background:var(--mark)}.ol-bar.full i{background:var(--fail)}
+/* optimize run: a crumb above the title, gate results as pills */
+.runhead .crumb{margin:0 0 5px;font-size:13px;color:var(--muted)}.runhead .crumb a{text-decoration:none}.runhead .crumb code{font-size:12px}
+.runhead h1{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;overflow-wrap:anywhere}.runhead h1 .state{font-size:12px;font-weight:600}
+table.gtable .pill{font-size:11px}
+/* benchmarks: one card per task, a row per variant with the median as a dot on the range of its runs */
+.btask .cardh{justify-content:flex-start;margin:0 0 6px}.btask .cardh h2{font:600 15px var(--mono);overflow-wrap:anywhere}
+.btask .cardh .dpill{margin-left:auto}
+.btask>p.note{margin:0 0 6px}
+.armrow{display:grid;grid-template-columns:minmax(90px,180px) minmax(0,1fr) 72px;gap:12px;align-items:center;margin:8px 0;font-size:13px}
+.armrow b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.armrow .v{text-align:right;font:600 13px var(--num-font);font-variant-numeric:tabular-nums}
+.ci{position:relative;height:18px}
+.ci .rng{position:absolute;top:8px;height:3px;min-width:3px;border-radius:2px;background:color-mix(in oklch,var(--muted) 40%,transparent)}
+.ci .pt{position:absolute;top:3px;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:var(--mark);border:2px solid var(--surface)}
+.ci .pt.s{background:var(--agent)}
+.bfoot{margin:8px 0 0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px}
+@media (max-width:640px){.armrow{grid-template-columns:minmax(0,1fr) 64px}.armrow b{grid-column:1/-1}.armrow .ci{grid-column:1}}
+/* managed: the empty state's icon */
+.empty>.ic{display:block;margin:0 auto 12px;color:var(--muted)}
 """
