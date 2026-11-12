@@ -143,7 +143,7 @@ html.settled [data-region] :is(.hero,.kpi,.empty,.bar i u){animation:none}
 #session-list .srow .body{padding:4px 12px 12px 34px}
 /* an opened session is one panel: the summary line and the body share a tinted ground, a mark-coloured left edge and hairlines above and below */
 #session-list .srow[open],#session-list .srow[open]:hover{background:var(--tint);box-shadow:inset 4px 0 0 var(--mark),inset 0 1px 0 var(--edge),inset 0 -1px 0 var(--edge)}
-/* opened and picked for compare: the same panel with a wider edge and a deeper tint; explicit selectors, so the skins' hover and .picked rules (1,2,0) lose in any file order */
+/* opened and picked for compare: the same panel with a wider edge and the shared selected-state tint (--on-bg); explicit selectors, so the skins' hover and .picked rules (1,2,0) lose in any file order */
 #session-list .srow.picked[open],#session-list .srow.picked[open]:hover{background:var(--on-bg);box-shadow:inset 6px 0 0 var(--mark),inset 0 1px 0 var(--edge),inset 0 -1px 0 var(--edge)}
 #session-list .btn.kids-more{margin:6px 10px 6px calc(34px + var(--depth)*20px)}
 #sessions .tools .seg{flex:none}
@@ -530,12 +530,14 @@ ol.attn .k{flex:none}
 #   --bar-h 10px | 8px           height of a share or split bar;  --key-s 12px | 10px: legend swatch
 #   --pad-sel / --pad-in / --pad-chip / --pad-btn: padding of a select, a text input, a chip, a small button
 #   --in-bg surface | page       background of an input
-#   --num-font mono | sans       font of labels, numbers and controls
+#   --num-font sans              font of labels, numbers and controls (tabular figures come from body)
 #   --lab-case uppercase | none, --lab-track .08em | normal, --lab-size 11px | 12px, --lab-w 600 | 400, --lab-c muted | ink2:
 #                                a label (KPI caption, column head, filter label)
 #   --cell-size 13px | 1em       number cells;  --btn-w 500 | 400: button weight;  --ctl-size 12px | 13px: control text
 #   --seg-ring 1px ink ring | none   ring around a stacked-bar segment;  --trace-c mark-ink | mark: sparkline and line colour
 #   --dot-edge ink | surface     edge of a chart dot
+#   --ok-bg / --warn-bg / --bad-bg   soft fill of an ok, warn or bad pill or icon square (text: --pass, --warn, --fail)
+#   --k0 ... --k4 with --k0-ink ... --k4-ink   the five skill-chip tints and their text; widgets.hue picks one per name
 #   Motion tokens (--t-fast, --t-state, --t-layout, --ease-exit) are the same in both skins and are set below.
 
 LAYOUT_TOKEN_CSS = """
@@ -760,9 +762,9 @@ td.l,td.lm,td.calls,.md td{font-family:var(--sans)}
 /* the project wraps to its own line; the title's 0 basis keeps everything else on the first line, so a long title still
    ellipsises instead of pushing a tag down */
 #session-list .srow>summary .t:has(>.pj){flex-wrap:wrap;row-gap:0}
-#session-list .srow>summary .t:has(>.pj)>.tt{flex:1 1 0}
+#session-list .srow>summary .t:has(>.pj)>.tt:not(:empty){flex:1 1 0}
 #session-list .srow>summary .pj{order:9;flex:0 0 100%;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:12px;line-height:1.4;color:var(--muted)}
-#session-list .srow>summary .d{font-family:var(--mono);font-size:13px;color:var(--muted)}
+#session-list .srow>summary .d{font-family:var(--mono);color:var(--muted)}
 #session-list .srow .body .ids{background:var(--track);border-color:transparent}
 #session-list .srow .body .ids .code{background:var(--surface)}
 .ids .cp{flex:none;white-space:nowrap}  /* a narrow screen broke "Copy" letter by letter */
@@ -780,7 +782,7 @@ main a{color:var(--mark-ink);text-underline-offset:2px}
 .kpi{background:var(--surface);border:var(--line-w) solid var(--line-c);border-radius:var(--r-tile);padding:10px 14px;min-width:120px;position:relative;overflow:hidden;animation:rise-in var(--t-layout) var(--ease-expo) backwards;animation-delay:calc(120ms + var(--i,0)*70ms)}
 .kpi .dl{display:block;font-size:11px;color:var(--muted);margin-top:2px}
 .kpi .dl .trend{display:inline-block;font-size:11px;padding:0 6px}
-.spark polyline{fill:none;stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round}
+.spark polyline{fill:none;stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
 .cols2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr)}
 .cols3 table{width:100%;table-layout:fixed}
 .cols3 th:nth-child(2),.cols3 td:nth-child(2){width:130px}

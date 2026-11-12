@@ -17,7 +17,7 @@ table.sbs td.gap{background:var(--chip)}
 .btn.danger{border-color:var(--fail)}
 .btn.danger:hover{background:color-mix(in oklch,var(--fail) 13%,var(--surface));border-color:var(--fail)}
 table.sbs th{font:600 11px/1.45 var(--sans)}
-/* overview: look only (the layout is in layout.py, between "overview" and "end overview") */
+/* overview: look only (the layout is in layout.py: between "overview" and "end overview", and the "overview: six stat tiles" block) */
 .answer{margin:0 0 14px}
 .tband{fill:color-mix(in oklch,var(--mark) 16%,transparent)}
 .privacy b{font:600 11px var(--sans);letter-spacing:.06em}

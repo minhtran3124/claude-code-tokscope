@@ -22,6 +22,7 @@ class IconsTest(unittest.TestCase):
         self.assertEqual([hue(n) for n in ("factory", "code-review", "xia2", "Explore", "ünï😀")], [0, 2, 1, 3, 2])
         self.assertIn("0x811c9dc5", JS_SESSIONS)
         self.assertIn("0x01000193", JS_SESSIONS)
+        self.assertEqual(hue("bad\ud800name"), 1)                          # a lone surrogate hashes as in the script (node: 1)
         self.assertEqual(skill_chip("a<b"), '<span class="skc t%d" title="a&lt;b">a&lt;b</span>' % hue("a<b"))
 
 

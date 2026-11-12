@@ -577,7 +577,7 @@ console.log(JSON.stringify([before,after,old,turn.match(S[2]),turn.whyOf(S[2]),J
         self.assertIn("#session-list .srow.has-why>summary .t{flex-wrap:wrap", LAYOUT_TOKEN_CSS)
         self.assertNotRegex(LAYOUT_TOKEN_CSS + LAYOUT_DASH_CSS, r"#session-list \.srow>summary \.t\{[^}]*flex-wrap")  # every other row keeps one ellipsised line
         # the project line wraps below, and the title's 0 basis keeps the rest on the first line
-        self.assertIn("#session-list .srow>summary .t:has(>.pj)>.tt{flex:1 1 0}", LAYOUT_TOKEN_CSS)
+        self.assertIn("#session-list .srow>summary .t:has(>.pj)>.tt:not(:empty){flex:1 1 0}", LAYOUT_TOKEN_CSS)
         self.assertIn("el.classList.toggle('has-why',!!why)", JS_SESSIONS)
         # a row without a chip keeps its ellipsis: the title and its cell clip, so a long unbroken title cannot push the tokens
         self.assertIn(".srow>summary .tt{overflow:hidden;text-overflow:ellipsis;min-width:0}", LAYOUT_CSS)
