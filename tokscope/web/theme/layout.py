@@ -402,7 +402,7 @@ body .chip{box-sizing:border-box}
 .layout{display:block}
 .layout>.side{position:sticky;top:0;height:52px;padding:0 6px 0 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;
 overflow:visible;border-right:0;border-bottom:1px solid var(--edge);z-index:40}
-.layout .brand{display:flex;margin:0}
+.layout .brand{display:flex;margin:0;padding:0}
 body .menu-btn{display:inline-flex;align-items:center;gap:8px;min-height:44px;min-width:44px;padding:0 16px;font-size:14px}
 .menu-i{display:block;width:16px;height:12px;background:linear-gradient(currentColor 0 0) 0 0/100% 2px no-repeat,linear-gradient(currentColor 0 0) 0 50%/100% 2px no-repeat,linear-gradient(currentColor 0 0) 0 100%/100% 2px no-repeat}
 .menu-btn[aria-expanded=true] .menu-i{background:linear-gradient(currentColor 0 0) 0 50%/100% 2px no-repeat}
