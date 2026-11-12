@@ -72,7 +72,7 @@ class MotionTokensTest(unittest.TestCase):
         self.assertIn(".dot.ring{animation:ring 600ms var(--ease) 1}", LAYOUT_DASH_CSS)
         self.assertIn(".fresh.stale .dot,body.offline h2>.dot{background:transparent", LAYOUT_DASH_CSS)   # offline: hollow
         for name in ("look-dash",):
-            self.assertNotIn("stale .dot", SHEETS[name], name)             # a skin rule would win over the layout one
+            self.assertNotIn("stale .dot", SHEETS[name], name)             # a look rule would win over the layout one
 
     def test_every_keyframes_set_that_moves_something_has_a_reduced_motion_answer(self):
         # an opacity-only twin in the layout sheet, or (spin, slide, drift) a rule that switches it off, tested below

@@ -6,7 +6,7 @@ since #257 (it replaced Ink). Fill in the two bracketed lines and paste the whol
 - The colours below are the live palette: the `:root` and DARK blocks of `CSS` in `tokscope/web/report/styles.py`.
 - The dashboard and the report share one stylesheet. A design applies to both.
 - Contrast (WCAG, measured 2026-11-12 from the tokens): muted text is at least 4.8:1 on page, card and sunken grounds in
-  both themes; every chip tint and pill fill keeps its text at 4.5:1 or more.
+  both themes; the five chip tints and the ok / warn / bad pill fills keep their text at 4.5:1 or more.
 
 ```text
 Design [SCREEN, e.g. "the Overview page" | "the Sessions page" | "the HTML report"] for tokscope in its "Indigo" style.
@@ -27,7 +27,7 @@ show as redacted placeholders.
 Light:  page #F5F5FA · card #FFFFFF · sunken #EEEEF6 (hover, notes, bar tracks) · text #1B1B2F
         muted #66667F · line #E2E2EE / strong line #D2D2E2 · accent #4B4FD8 (text on accent #FFFFFF)
         accent soft #E9E9FC / accent line #C9CAF5 (the selected state)
-Dark:   page #12121C · card #1B1B29 · sunken #151522 · text #E9E9F6 · muted #9A9AB5
+Dark:   page #12121C · card #1B1B29 · sunken #262638 (bar tracks; hover and chips #2B2B3E) · text #E9E9F6 · muted #9A9AB5
         line #2D2D42 / #3A3A55 · accent #8B8EF5 (text on accent #12122A) · accent soft #25264A / #3C3E7A
 Status (text / fill), status only, never decoration:
         ok #1C7C54 / #E6F6EE (dark #5DD3A0 / #163428) · warn #9A6212 / #FDF4E3 (dark #E8B45C / #3A2D12)
@@ -43,9 +43,9 @@ Theme: light, dark and System via html[data-theme] and prefers-color-scheme. Eve
 Type
 - Sans = Hanken Grotesk (--sans, 400-800): interface text, labels, numbers (tabular figures from `body`).
 - Mono = DM Mono (--mono, 400 and 500 only; IBM Plex Mono covers Vietnamese): ids, code, model names, times in tables.
-- Base 15px, line height 1.5. h1 1.6rem, card h2 17px, h3 1rem, weight 700.
+- Base 15px, line height 1.5. page h1 28px (22px in the report), card h2 17px, h3 1rem, weight 700.
 - Table heads and group labels: 11px, uppercase, letter-spacing .06em, muted. Stat-tile labels are sentence case, 13px, muted.
-- The main number of a block is its largest text (stat tile 24px, 700). Table numbers right-aligned.
+- The main number of a block is its largest text (stat tile 19px, 24px on the Overview, weight 700). Table numbers right-aligned.
 
 Shapes
 - Radius: 8px buttons, inputs, menu items; 12px cards and tables; 99px pills; 6px chips.
