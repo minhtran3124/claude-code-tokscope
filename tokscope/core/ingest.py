@@ -119,11 +119,11 @@ CREATE INDEX IF NOT EXISTS idx_snapshots_session ON statusline_snapshots (sessio
 """
 TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "turn_events", "headless_calls", "mcp_defs", "ingest_state", "sessions")
 # bump when the parser records something new, so unchanged transcripts are parsed again once
-PARSER_VERSION = 24
+PARSER_VERSION = 25
 TAIL_BYTES = 4096  # the bytes before a stored offset that must be unchanged for a file to count as appended to
 # what a resumed parse restores: the parser's state after the last complete line of every file
 STATE_KEYS = ("requests", "subagents", "skill_calls", "prompts", "tool_ctx", "tool_calls", "result_chars",
-              "skill_texts", "skill_args", "headless", "mcp_defs", "meta", "files", "tool_err", "seen_calls", "events", "cur_req")
+              "skill_texts", "skill_args", "agent_desc", "headless", "mcp_defs", "meta", "files", "tool_err", "seen_calls", "events", "cur_req")
 ARGS_RE = re.compile(r"<command-args>(.*?)</command-args>", re.S)
 PROMPT_CHARS = 160
 # a Bash command that starts a headless Claude Code session
@@ -268,6 +268,7 @@ class SessionParser:
         self.cur_req = {}  # file -> [request_key, its tool_use ids] of the last request seen in it: its lines are contiguous
         self.skill_texts = {}  # Skill tool_use_id -> the SKILL.md text it loaded, where a request blob kept it
         self.skill_args = {}  # Skill tool_use_id -> the args the call passed
+        self.agent_desc = {}  # Agent/Task tool_use_id -> the description its input passed; a title when meta.json has none
         self.headless = {}  # Bash tool_use_id that ran `claude -p` -> {cwd, start_ts, end_ts, child_ids}
         self.mcp_defs = None  # server -> [tools, chars] of the MCP tool definitions in the first main-thread shape; None: no shape yet
         self.meta = {"title": None, "version": None, "cwd": None, "first_ts": None, "last_ts": None, "prompts": 0,
@@ -325,7 +326,7 @@ class SessionParser:
             else:
                 prompt_idx, skill, phase, parent = self.tool_ctx.get(meta.get("toolUseId"), (None, None, None, None))
                 self.subagents.append({
-                    "agent_id": agent_id, "agent_type": agent_type, "description": meta.get("description"),
+                    "agent_id": agent_id, "agent_type": agent_type, "description": meta.get("description") or self.agent_desc.get(meta.get("toolUseId")),
                     "tool_use_id": meta.get("toolUseId"), "spawn_depth": depth, "parent_agent_id": parent,
                     "prompt_idx": prompt_idx, "skill": skill, "phase": phase,
                 })
@@ -553,6 +554,8 @@ class SessionParser:
                 self.tool_calls[block.get("id")] = (state["prompt_idx"], agent_id, block.get("name"), state["skill"],
                                                     state["phase"], rec.get("timestamp"), int(key in self.seen_calls), msg.get("model"))
                 self.seen_calls[key] = 1
+            if block.get("name") in ("Agent", "Task") and (block.get("input") or {}).get("description"):
+                self.agent_desc[block.get("id")] = block["input"]["description"]
             command = (block.get("input") or {}).get("command")
             if block.get("name") == "Bash" and isinstance(command, str) and is_headless(command):
                 self.headless[block.get("id")] = {"cwds": command_dirs(command, rec.get("cwd") or self.meta["cwd"]),

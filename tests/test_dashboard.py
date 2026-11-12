@@ -262,9 +262,9 @@ class ServerTest(unittest.TestCase):
 
     def test_fonts_are_served_from_the_package_and_nothing_else_is(self):
         _, page = self.get("/overview")
-        self.assertIn("url(/fonts/BeVietnamPro-400-latin.woff2)", page)
+        self.assertIn("url(/fonts/HankenGrotesk-var-latin.woff2)", page)
         self.assertNotIn("fonts.googleapis", page)
-        with urllib.request.urlopen(f"http://127.0.0.1:{self.port}/fonts/BeVietnamPro-400-latin.woff2") as r:
+        with urllib.request.urlopen(f"http://127.0.0.1:{self.port}/fonts/HankenGrotesk-var-latin.woff2") as r:
             self.assertEqual((r.status, r.headers["Content-Type"]), (200, "font/woff2"))
             self.assertEqual(r.read()[:4], b"wOF2")
         for bad in ("/fonts/../cli.py", "/fonts/x.woff2", "/fonts/..%2Fcli.py"):
@@ -333,7 +333,7 @@ class ServerTest(unittest.TestCase):
         _, body = self.get("/library?skill=xia2")                  # a skill name, not an id: the list, with the bar
         self.assertIn('<form class="filters"', body)
         _, body = self.get("/overview?skill=xia2")
-        self.assertIn('<a href="/library">Library<span class="cnt"', body)       # the name filter does not follow into the Library
+        self.assertRegex(body, r'<a href="/library"><svg class="ic"[^>]*><path [^>]*/></svg>Library<span class="cnt"')       # the name filter does not follow into the Library
         self.assertIn("catch(_){}", dashboard.LIB_JS)               # a malformed #v- hash leaves the rest of the script running
 
     def test_the_library_list_has_a_rail_and_a_cost_bar_per_card(self):
@@ -453,7 +453,7 @@ class SessionsTableTest(unittest.TestCase):
         self.assertIn("#session-list{border:var(--line-w) solid var(--line-c);border-radius:var(--r-box)", layout)
         self.assertIn("text-transform:var(--lab-case)", layout)
         self.assertIn("--lab-case:uppercase", CSS)
-        self.assertIn("border-radius:999px", CSS + dashboard.DASH_CSS)  # the Ink tray is a filled ink pill
+        self.assertIn("#sessions .pickbar{background:var(--bar);color:var(--bar-ink);border-radius:12px", CSS)  # the compare tray is a dark bar
 
     def test_a_hostile_session_id_is_escaped_everywhere_the_script_writes_html(self):
         js = JS_SESSIONS

@@ -3,7 +3,8 @@ Copyright 2026 Minh Tran
 
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 
-tokscope/assets/fonts/ holds subsets (latin and vietnamese) of two typefaces, both under the SIL Open Font License 1.1
+tokscope/assets/fonts/ holds subsets (latin and vietnamese) of three typefaces, all under the SIL Open Font License 1.1
 (https://openfontlicense.org):
-- Be Vietnam Pro, Copyright 2018 The Be Vietnam Pro Project Authors (https://github.com/bettergui/BeVietnamPro)
-- IBM Plex Mono, Copyright 2017 IBM Corp. (https://github.com/IBM/plex)
+- Hanken Grotesk, Copyright 2021 The Hanken Grotesk Project Authors (https://github.com/marcologous/hanken-grotesk)
+- DM Mono, Copyright 2020 The DM Mono Project Authors (https://github.com/googlefonts/dm-mono)
+- IBM Plex Mono (vietnamese subset only), Copyright 2017 IBM Corp. (https://github.com/IBM/plex)
