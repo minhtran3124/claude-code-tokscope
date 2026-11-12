@@ -5,31 +5,32 @@
 
 DASH_CSS = """
 .cols2{gap:22px}
-.libtools input[type=search]{padding:6px 14px;border:var(--line-w) solid var(--ink);border-radius:999px}
+.libtools input[type=search]{padding:6px 12px;border:var(--line-w) solid var(--line-c);border-radius:var(--r-ctl)}
 a.sk{transition:transform var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease)}
-a.sk:hover{transform:translate(-2px,-2px);box-shadow:5px 6px 0 var(--shadow)}
+a.sk:hover{border-color:var(--on-line);box-shadow:0 8px 30px var(--shadow)}
 .seg .chip:is(:hover,.on) b{color:inherit}
 .sk.reg:hover{box-shadow:none}
-.ask{border:var(--line-w) solid var(--ink)}
+.ask{border:var(--line-w) solid var(--on-line)}
 table.sbs th{font:600 12px var(--sans)}
 table.sbs td.gap{background:var(--chip)}
-.decide{border:var(--line-w) solid var(--ink)}
-.btn.danger:hover{background:var(--ink);color:var(--page)}
-table.sbs th{font:500 11px/1.45 var(--mono)}
+.decide{border:var(--line-w) solid var(--on-line)}
+.btn.danger{color:var(--fail);border-color:var(--fail)}
+.btn.danger:hover{background:color-mix(in oklch,var(--fail) 13%,var(--surface));border-color:var(--fail)}
+table.sbs th{font:600 11px/1.45 var(--sans)}
 /* overview: look only (the layout is in layout.py, between "overview" and "end overview") */
-.answer{box-shadow:10px 12px 0 var(--shadow);margin:0 10px 14px 0}
-.tband{fill:color-mix(in oklch,var(--mark) 24%,transparent)}
-.privacy b{font:600 11px var(--mono);letter-spacing:.08em}
+.answer{margin:0 0 14px}
+.tband{fill:color-mix(in oklch,var(--mark) 16%,transparent)}
+.privacy b{font:600 11px var(--sans);letter-spacing:.06em}
 .segctl{border-radius:var(--r-btn)}
 /* end overview */
 .state{font-size:11px}
 .st .pill,.state{font-weight:500}
 .movers th{font-weight:500}
-.libtools input[type=search]{font-family:var(--mono);font-size:12px;font-weight:400}
+.libtools input[type=search]{font-size:13px;font-weight:400}
 /* optimize page: tables scroll in their own wrapper, long evidence wraps, a failed check reads as one */
 ul.plain li.bad{color:var(--fail)}
 .badge.ver.ok{color:var(--pass)}
-.badge.ver.warn{color:var(--agent-ink)}
+.badge.ver.warn{color:var(--warn)}
 a.badge.ver{text-decoration:none}
 .card pre.src{max-height:240px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
 .card li,.card dd{overflow-wrap:anywhere}

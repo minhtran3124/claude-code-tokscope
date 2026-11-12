@@ -82,7 +82,7 @@ def write_report(db_path, out_path, where="", params=(), tasks_dir=None, level="
 <title>tokscope report{"" if level == "full" else f" ({level})"}</title>{favicon_link()}<script>document.documentElement.classList.add('js');
 try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElement.dataset.theme=t}}catch(_){{}}</script>
 <style>{fonts.face_css(True)}</style><style id="layout">{LAYOUT_CSS}{LAYOUT_TOKEN_CSS}</style><style id="skin-ink">{CSS}</style></head><body><div id="progress"></div><div class="layout">
-<aside class="side" aria-label="Sections"><div class="brand">{MARK}tokscope</div><nav class="toc">
+<aside class="side" aria-label="Sections"><div class="brand"><span class="logo-sq">{MARK}</span>tokscope</div><nav class="toc">
 <a href="#overview">Overview</a>
 <a href="#sessions">Sessions<span class="cnt">{n_sess:,}</span></a>
 <a href="#benchmarks">Benchmarks</a>
