@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tokscope.experiments.skillopt import suite, suite_gen
+from tokscope.experiments.skillopt import suite_gen
 
 
 def fake(result, code=0, is_error=False):
