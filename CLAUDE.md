@@ -29,7 +29,7 @@ only `cli` and `web` import `web` (`tests/test_layout.py`). Why: [docs/research-
   number and never review. Report findings; fix them only when the owner asks (the screenshot rule above is the one exception).
 - Models: the `model:` and `effort:` lines in `.claude/agents/*.md` apply; review roles are chosen per review.
 - More: [DECISIONS.md](DECISIONS.md) (why), [REVIEW.md](REVIEW.md) (what reviewers check),
-  [docs/design-prompt.md](docs/design-prompt.md) (ink style), [factory](.claude/skills/factory/SKILL.md) (`/factory`).
+  [docs/design-prompt.md](docs/design-prompt.md) (Indigo style), [factory](.claude/skills/factory/SKILL.md) (`/factory`).
 
 ## STATUS.md (Claude Bot Local)
 
