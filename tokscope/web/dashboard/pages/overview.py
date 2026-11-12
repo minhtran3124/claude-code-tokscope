@@ -10,8 +10,10 @@ from ... import charts
 from ....features.changes import list_changes
 from ....core.pricing import API_EQ_NOTE, unpriced, unpriced_text
 from ...report.common import TOKENS
+from ...report.sections.breakdowns import token_split
 from ...report.sections.cost_check import cost_check
-from ...report.widgets import _start_line, _table, _tok, _usd, _usd_tile
+from ...report.widgets import _start_line, _table, _tok, _usd, _usd_tile, skill_chip
+from ...theme.icons import icon
 from ..common import Filters, _iso, _q
 
 
@@ -28,12 +30,15 @@ def _with_only(t, only):
             (t[3] or 0) + only["output"], t[4], (t[5] or 0) + only["cache_read"])
 
 
-def _spark(values, w=96, h=22):
+def _spark(values, w=96, h=22, area=False):
+    """A small line of the values; area=True also fills the space under it (the stat tiles)."""
     if len(values) < 2 or not max(values):
         return ""
     top = max(values)
     pts = " ".join(f"{w * i / (len(values) - 1):.1f},{h - 2 - (h - 4) * v / top:.1f}" for i, v in enumerate(values))
-    return f'<svg class="spark" viewBox="0 0 {w} {h}" width="{w}" height="{h}" aria-hidden="true"><polyline points="{pts}"/></svg>'
+    fill = f'<polygon class="area" points="0,{h} {pts} {w},{h}"/>' if area else ""
+    return (f'<svg class="spark" viewBox="0 0 {w} {h}" width="{w}" height="{h}" preserveAspectRatio="none" aria-hidden="true">'
+            f'{fill}<polyline points="{pts}"/></svg>')
 
 
 def start_detail(base):
@@ -146,8 +151,8 @@ def _kpis(conn, f):
         chip = ""
         if cmp:
             chip = _delta(cache(now), cache(before)) if idx is None else _delta(per_day(rows, idx, cmp["now"]), per_day(before_rows, idx, cmp["before"]))
-        out.append(f'<div class="kpi" style="--i:{i}"{title}><span>{label}</span>'
-                   f'<b data-count="{raw}" data-kind="{kind}" data-key="{key}">{text}</b>{_spark(series)}{chip}</div>')
+        out.append(f'<div class="kpi k-{key}" style="--i:{i}"{title}><span>{label}</span>'
+                   f'<b data-count="{raw}" data-kind="{kind}" data-key="{key}">{text}</b>{_spark(series, 120, 32, area=True)}{chip}</div>')
     n = int(cmp["before"]) if cmp else 0
     note = (f'<p class="note strip-note">Change = average per day in this range against the {n} day{"" if n == 1 else "s"} before it. '
             f'From cache compares its share of all tokens, not a per-day average.</p>' if cmp else "")
@@ -337,7 +342,8 @@ def _movers(conn, f, cmp):
     else:
         cause = (f'<p class="cause">Tokens per day {"rose" if up else "fell"}{pct}, mostly main-thread tokens that no skill or '
                  f'subagent type accounts for.</p>')
-    body = "".join(f'<tr><td title="{html.escape(k)}">{html.escape(k)}</td><td class="tagc"><span class="tag">{kind}</span></td>'
+    name = lambda k, kind: skill_chip(k) if kind == "skill" else f'<span class="skc" title="{html.escape(k)}">{html.escape(k)}</span>'  # noqa: E731
+    body = "".join(f'<tr><td>{name(k, kind)}</td><td class="tagc">{kind}</td>'
                    f'<td>{_tok(b) if b else "–"}</td><td>{_tok(a) if a else "–"}</td><td>{charts.change_text(b, a)}</td></tr>'
                    for k, kind, b, a in rows)
     return (f'{cause}<table class="movers"><tr><th>Name</th><th>Kind</th><th>Before / day</th><th>Now / day</th><th>Change</th></tr>'
@@ -536,7 +542,7 @@ def _attention(conn, f, cmp):
         now, before = _totals(conn, cond, params)[0] or 0, _totals(conn, pcond, pparams)[0] or 0
         if before and (now / cmp["now"]) / (before / cmp["before"]) >= 1.5:
             rise = (now / cmp["now"]) / (before / cmp["before"]) - 1
-            items.append(("Token use jumped", f"+{rise:.0%} per day against the window before", f.link("overview") + "#changed"))
+            items.append(("Token use jumped", f"+{rise:.0%} per day against the window before", f.link("overview") + "#changed", "warn", "chart"))
     try:
         found = budgets.load()
         result = budgets.check(conn, found) if found is not None else {"items": []}
@@ -544,19 +550,21 @@ def _attention(conn, f, cmp):
         result = {"items": []}
     for i in result["items"]:
         if i["state"] in ("near", "over"):
-            items.append((f'{i["label"]} {"is over" if i["state"] == "over" else "is near"} its limit', i["text"], f.link("overview") + "#budgets"))
+            items.append((f'{i["label"]} {"is over" if i["state"] == "over" else "is near"} its limit', i["text"], f.link("overview") + "#budgets",
+                          "bad" if i["state"] == "over" else "warn", "gauge"))
     cond, params = f.cond()
     since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     reqs, misses = cache.scan(conn, f"{cond} AND r.ts >= ?" if cond else "WHERE r.ts >= ?", (*params, since))
     if misses:
         t = cache.totals(reqs, misses)
         items.append(("Prompt cache missed", f'{t["misses"]:,} likely miss{"es" if t["misses"] != 1 else ""}, {_usd(t["recache_usd"])} re-cached in 7 days, top cause: {t["top_cause"]}',
-                      f.link("breakdowns") + "#cache"))
+                      f.link("breakdowns") + "#cache", "warn", "refresh"))
     if not items:
         return '<section class="card attention"><h2>Needs a look</h2><p class="note">Nothing needs a look.</p></section>'
-    rows = "".join(f'<li><span class="k">{n:02d}</span><div><a href="{html.escape(href)}">{html.escape(title)}</a>'
-                   f'<div class="note">{html.escape(text)}</div></div></li>' for n, (title, text, href) in enumerate(items[:3], 1))
-    return f'<section class="card attention"><h2>Needs a look ({len(items[:3])})</h2><ol class="plain attn">{rows}</ol></section>'
+    rows = "".join(f'<li><span class="ai {kind}">{icon(ic, 15)}</span><div><a href="{html.escape(href)}">{html.escape(title)}</a>'
+                   f'<div class="note">{html.escape(text)}</div></div></li>' for title, text, href, kind, ic in items[:3])
+    return (f'<section class="card attention"><h2>Needs a look <span class="pill warn" aria-label="{len(items[:3])} items">{len(items[:3])}</span></h2>'
+            f'<ol class="plain attn">{rows}</ol></section>')
 
 
 def _cache_reuse(conn, f):
@@ -598,6 +606,7 @@ def page_overview(conn, f):
     rail = "".join([
         f'<div data-region="cache">{_cache_reuse(conn, f)}</div>',
         f'<div data-region="attention">{_attention(conn, f, cmp)}</div>',
+        f'<div data-region="share">{token_split(conn, *f.cond())}</div>',
         f'<div data-region="budgets" id="budgets">{_budgets(conn)}</div>',
     ])
     return f'<div class="ovgrid"><div class="ov-today">{today}</div><aside class="ov-rail" aria-label="What needs attention">{rail}</aside><div class="ov-rest">{rest}</div></div>'

@@ -29,7 +29,9 @@ def _rail(rows):
     big = max(rows, key=lambda r: r["tokens"])
     title = big["title"] or f"session {big['id'][:8]}"
     day = (big["start"] or "")[:10]
-    body = f'<p class="note">{html.escape(title)}{", " + day if day else ""}</p><div class="big">{_tok(big["tokens"])}</div>'
+    where = " · ".join(x for x in (big.get("project") or "", day) if x)
+    body = (f'<p class="bt">{html.escape(title)}</p>' + (f'<p class="note">{html.escape(where)}</p>' if where else "")
+            + f'<div class="big">{_tok(big["tokens"])}</div>')
     if big["tokens"] and not big.get("only"):
         share = round(100 * big["agents"] / big["tokens"])
         names = {k: v for k, v in big["owners"].items() if k != "main thread"}

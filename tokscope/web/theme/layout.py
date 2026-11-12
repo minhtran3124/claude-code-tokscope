@@ -93,8 +93,7 @@ svg .guide{stroke:var(--ink2);stroke-width:1;stroke-dasharray:2 3;opacity:0;tran
 svg:hover .guide{opacity:.6}
 @keyframes pop-in{from{opacity:0;transform:translateY(8px) scale(.97)}}
 dialog.keys dl{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;margin:10px 0 0}
-/* breakdown charts: categorical slots in both modes (cobalt, mustard, blush, dark ink tint, mid ink tint); --c0 is "Other",
-the palest tint; neighbours in the share bar differ by at least 1.5:1 in luminance */
+/* breakdown charts: categorical slots in both modes (indigo, teal, pink, orange, grey); --c0 is "Other", the palest tint */
 .viz{margin:4px 0 16px}
 .viz svg{display:block;overflow:visible}
 .viz svg text.ax,.viz svg text.name{fill:var(--ink2)}
@@ -145,7 +144,7 @@ html.settled [data-region] :is(.hero,.kpi,.empty,.bar i u){animation:none}
 /* an opened session is one panel: the summary line and the body share a tinted ground, a mark-coloured left edge and hairlines above and below */
 #session-list .srow[open],#session-list .srow[open]:hover{background:var(--tint);box-shadow:inset 4px 0 0 var(--mark),inset 0 1px 0 var(--edge),inset 0 -1px 0 var(--edge)}
 /* opened and picked for compare: the same panel with a wider edge and a deeper tint; explicit selectors, so the skins' hover and .picked rules (1,2,0) lose in any file order */
-#session-list .srow.picked[open],#session-list .srow.picked[open]:hover{background:color-mix(in oklch,var(--mark) 12%,var(--tint));box-shadow:inset 6px 0 0 var(--mark),inset 0 1px 0 var(--edge),inset 0 -1px 0 var(--edge)}
+#session-list .srow.picked[open],#session-list .srow.picked[open]:hover{background:var(--on-bg);box-shadow:inset 6px 0 0 var(--mark),inset 0 1px 0 var(--edge),inset 0 -1px 0 var(--edge)}
 #session-list .btn.kids-more{margin:6px 10px 6px calc(34px + var(--depth)*20px)}
 #sessions .tools .seg{flex:none}
 #sessions .tools input[type=search]{min-width:min(340px,100%)}
@@ -236,7 +235,7 @@ ul.plain{list-style:none;margin:0;padding:0}
 .libgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:12px}
 .libview{display:grid;grid-template-columns:minmax(150px,230px) minmax(0,1fr);gap:14px;align-items:start}
 .viewer{overflow:visible}
-.viewer .path{font:600 13px var(--mono);margin:0 0 8px;overflow-wrap:anywhere}
+.viewer .path{font:500 13px var(--mono);margin:0 0 8px;overflow-wrap:anywhere}
 .viewbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin:0 0 10px}
 .seg{display:inline-flex;gap:4px}
 .md h1{font-size:20px}
@@ -325,7 +324,7 @@ pointer-events:none;animation:chip-in var(--t-state) var(--ease) both}
 .strip .kpi b{order:1}
 .strip .kpi .dl{order:2;margin:0}
 .strip .kpi .spark{order:3;margin-top:auto;padding-top:6px;width:100%;max-width:140px;height:auto}
-/* the number shrinks to its tile (7 mono characters at 0.6em), so a narrow tile never cuts it off */
+/* the number shrinks to its tile (about 7 characters at 0.6em), so a narrow tile never cuts it off */
 .strip .kpi b{font-size:min(22px,calc(100cqw/4.4))}
 .strip .kpi:first-child b{font-size:min(28px,calc(100cqw/4.4))}
 .strip .kpi:first-child .spark{max-width:220px}
@@ -514,8 +513,8 @@ details.finding-sec .empty code{overflow-wrap:anywhere}
 .bd-flat>details.more>summary .mini{flex:none;margin:0;width:120px;height:8px;border-radius:4px}
 .bd-flat>details.more>summary .pill{flex:none}
 .bd-flat>details.more>summary .ttl{min-width:9em}
-.pill{font:500 11px var(--num-font);border:1px solid var(--line-c);border-radius:999px;padding:2px 10px;white-space:nowrap}
-.pill.ok{color:var(--pass);border-color:var(--pass)}.pill.warn{color:var(--warn);border-color:var(--warn)}.pill.bad{color:var(--fail);border-color:currentColor}
+.pill{font:600 11px var(--num-font);border:1px solid transparent;border-radius:999px;padding:2px 10px;white-space:nowrap;background:var(--chip);color:var(--ink2)}
+.pill.ok{color:var(--pass);background:var(--ok-bg)}.pill.warn{color:var(--warn);background:var(--warn-bg)}.pill.bad{color:var(--fail);background:var(--bad-bg)}
 @media (max-width:640px){
  .bd-flat>details.more>summary{flex-wrap:wrap}.bd-flat>details.more>summary .note.finding{flex-basis:100%;flex-wrap:wrap}
  .bd-flat>details.more>summary .mini{width:min(100%,160px)}.bd-flat>details.more>summary .ttl{min-width:0}}
@@ -693,7 +692,7 @@ tr.runs-row td{border-top:0;padding-top:0}
 .side-foot{display:flex;gap:6px;margin:18px 0 0 4px}
 .chip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);padding:var(--pad-chip);border:var(--line-w) solid var(--line-c);border-radius:var(--r-ctl)}
 .chip:focus-visible{outline:2px solid var(--focus-c);outline-offset:2px}
-.chip kbd,.keys kbd{font:600 11px var(--mono);padding:1px 6px;border-radius:5px;border:1px solid var(--edge);border-bottom-width:2px;background:var(--surface);color:var(--ink)}
+.chip kbd,.keys kbd{font:500 11px var(--mono);padding:1px 6px;border-radius:5px;border:1px solid var(--edge);border-bottom-width:2px;background:var(--surface);color:var(--ink)}
 ::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
 /* chart: 7-day average draws itself in; a guide follows the pointer */
 svg .ma{fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:0}
@@ -740,7 +739,7 @@ table:has(td[data-label]:nth-child(5)) td:empty{display:none}}
 #session-list .dayhd b{color:var(--ink);font-weight:600}
 #session-list .shead+.dayhd{border-top:0}
 #session-list .srow>summary{box-shadow:inset 0 -1px 0 var(--row-c)}
-/* type. --num-font: labels, numbers and controls (mono in Ink, sans in Classic). --lab-*: size, weight, case, tracking and
+/* type. --num-font: labels, numbers and controls (the sans face; tabular figures come from body). --lab-*: size, weight, case, tracking and
    colour of a label. --cell-size: a number cell. --btn-w: a button's weight. --ctl-size: the text of a control. */
 .kpi>span:first-child,.ids dt,th{font-size:var(--lab-size)}
 .kpi>span:first-child,.today-nums span,.ck,.ids dt,.fm dt,th{font-family:var(--num-font);text-transform:var(--lab-case);letter-spacing:var(--lab-track)}
@@ -752,6 +751,22 @@ td.l,td.lm,td.calls,.md td{font-family:var(--sans)}
 .today-nums b,.pnums b{font-weight:600}
 .btn,.chip{font-weight:var(--btn-w)}
 .bar i u,.key i,.split u,.share i{box-shadow:var(--seg-ring)}
+/* chips: a skill name in one of five soft tints (widgets.hue, the same tint on every page); a subagent type is the neutral chip */
+.skc{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle;padding:0 8px;border-radius:6px;font:600 12px/1.6 var(--sans);background:var(--chip);color:var(--ink2)}
+.skc.t0{background:var(--k0);color:var(--k0-ink)}.skc.t1{background:var(--k1);color:var(--k1-ink)}.skc.t2{background:var(--k2);color:var(--k2-ink)}
+.skc.t3{background:var(--k3);color:var(--k3-ink)}.skc.t4{background:var(--k4);color:var(--k4-ink)}
+/* session rows: the project under the title, the time in mono */
+#session-list .srow>summary{height:auto;min-height:52px;padding-top:6px;padding-bottom:6px}
+/* the project wraps to its own line; the title's 0 basis keeps everything else on the first line, so a long title still
+   ellipsises instead of pushing a tag down */
+#session-list .srow>summary .t:has(>.pj){flex-wrap:wrap;row-gap:0}
+#session-list .srow>summary .t:has(>.pj)>.tt{flex:1 1 0}
+#session-list .srow>summary .pj{order:9;flex:0 0 100%;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:12px;line-height:1.4;color:var(--muted)}
+#session-list .srow>summary .d{font-family:var(--mono);font-size:13px;color:var(--muted)}
+#session-list .srow .body .ids{background:var(--track);border-color:transparent}
+#session-list .srow .body .ids .code{background:var(--surface)}
+.ids .cp{flex:none;white-space:nowrap}  /* a narrow screen broke "Copy" letter by letter */
+#session-list .srow .body td.lm .skc{margin-right:4px}
 """
 
 LAYOUT_TOKEN_DASH_CSS = """
@@ -798,7 +813,7 @@ a.sk .meta{margin-top:auto;font-size:11.5px;color:var(--muted)}
 .files{position:sticky;top:12px;padding:8px;max-height:calc(100vh - 24px);overflow:auto}
 .files a{display:block;padding:4px 8px;border-radius:6px;font:12px/1.4 var(--mono);color:var(--ink2);overflow-wrap:anywhere;text-decoration:none}
 .files a:hover{color:var(--mark-ink)}
-.files a.on{background:var(--tint);color:var(--mark-ink)}
+.files a.on{background:var(--on-bg);color:var(--on-fg)}
 .viewbar .note{margin:0}
 .md{font-size:14px;line-height:1.6;max-width:84ch;overflow-wrap:anywhere}
 .md>:first-child{margin-top:0}
@@ -983,25 +998,36 @@ table.mcp td.st{font-family:var(--num-font)}
 @media (max-width:1100px){.ovgrid{grid-template-columns:minmax(0,1fr);grid-template-areas:"today" "rail" "rest"}}
 ol.attn{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
 ol.attn li{display:flex;gap:10px;align-items:flex-start}ol.attn .k{font:500 11px var(--mono);color:var(--muted);padding-top:3px}
+/* Overview's Needs a look: a tinted icon square per item, a line between items */
+.attention ol.attn{gap:0}.attention ol.attn li{padding:10px 0;border-top:1px solid var(--grid)}.attention ol.attn li:first-child{border-top:0;padding-top:2px}
+.ai{flex:none;display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--on-bg);color:var(--on-fg)}
+.ai.warn{background:var(--warn-bg);color:var(--warn)}.ai.bad{background:var(--bad-bg);color:var(--fail)}
+.card h2 .pill{margin-left:8px;font-size:11px;padding:1px 8px}
 ol.attn .note{margin:2px 0 0}
-.reuse-n{font:600 28px var(--num-font);color:var(--pass)}
+.reuse-n{font:700 30px var(--num-font);color:var(--pass);margin:2px 0 6px}
 .bar-track{height:var(--bar-h);background:var(--track);border-radius:var(--r-bar);overflow:hidden}.bar-track u{display:block;height:100%;background:var(--pass);text-decoration:none}
-/* overview */
-.ov-rest .kpis.strip{grid-template-columns:repeat(6,minmax(0,1fr))}
-.ov-rest .strip .kpi b,.ov-rest .strip .kpi:first-child b{font-size:min(26px,calc(100cqw/4.4));color:var(--ink)}
+/* overview: six stat tiles as separate cards, 3 a row (2 on a phone), sentence-case labels, a filled sparkline */
+.ov-rest .kpis.strip{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;background:none;border:0;border-radius:0;overflow:visible}
+.ov-rest .strip .kpi{border:var(--line-w) solid var(--line-c);border-radius:var(--r-tile);padding:13px 15px 12px}
+.ov-rest .kpi>span:first-child,.ov-today .today-nums span{font-family:var(--sans);font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)}
+.ov-rest .strip .kpi b,.ov-rest .strip .kpi:first-child b{font-size:min(24px,calc(100cqw/4.4));font-weight:700;color:var(--ink)}
 .ov-rest .strip .kpi:last-child b{color:var(--pass)}
-.ov-rest .strip .kpi:first-child .spark{max-width:140px}
+.ov-rest .strip .kpi .spark,.ov-rest .strip .kpi:first-child .spark{max-width:none;width:100%;height:34px;padding-top:8px}
+.spark .area{fill:color-mix(in oklch,var(--trace-c) 12%,transparent);stroke:none}
+.ov-rest .k-runs .spark{--trace-c:var(--agent)}
+.ov-today .today-nums b{font-weight:700}
+/* Daily tokens: the legend sits on the heading row */
+#trend{position:relative}
+@media (min-width:700px){#trend .legend{position:absolute;top:18px;right:20px;margin:0}}
 .ovpair{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:0 20px;align-items:stretch}
 .ovpair>*{min-width:0;display:flex;flex-direction:column}.ovpair>*>.card{flex:1}
 .ov-rest .kpis.strip{margin-bottom:14px}
 .ov-rail{display:flex;flex-direction:column}
-.ov-rail .card h2{font-size:15px}
+.ov-rail .card h2{font-size:17px}
 ol.attn a{color:var(--ink);text-decoration:none;font-weight:500}ol.attn a:hover{text-decoration:underline}
 .models td a,.spenders td a{color:var(--ink);text-decoration:none}.models td a:hover,.spenders td a:hover{text-decoration:underline}
 .models td:first-child{font-family:var(--mono)}
-.card.cache-reuse .reuse-n{font-size:26px}
-@media (max-width:1200px){.ov-rest .kpis.strip{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media (max-width:640px){.ov-rest .kpis.strip{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.ov-rest .kpis.strip{grid-template-columns:repeat(2,minmax(0,1fr))}.ov-rest .strip .kpi:is(:first-child,:last-child){grid-column:auto}}
 /* page header: a slim bar (name, range tabs, filters, dates), then the big title and one line in the body */
 .dash-head{align-items:center;gap:10px 14px;margin:0 0 22px;padding:0 0 14px;border-bottom:1px solid var(--grid)}
 .dash-head .ptitle{font:600 15px var(--num-font);color:var(--ink)}
@@ -1019,7 +1045,7 @@ ol.attn a{color:var(--ink);text-decoration:none;font-weight:500}ol.attn a:hover{
 .libpage{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:0 20px;align-items:start}
 .lib-main,.lib-rail{min-width:0}
 @media (max-width:1100px){.libpage{grid-template-columns:minmax(0,1fr)}}
-a.sk .skname{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--ink)}
+a.sk .skname{font-family:var(--mono);font-size:14px;font-weight:500;color:var(--ink)}
 a.sk .skbar{height:6px;margin-top:2px}.skbar u,.lim .bar-track u{background:var(--mark);display:block;height:100%}
 a.sk p{color:var(--ink)}
 .lim{margin-top:12px}.lim .l{display:flex;justify-content:space-between;font:500 12px var(--num-font);color:var(--ink);margin-bottom:4px}
@@ -1036,7 +1062,7 @@ p.sub{margin:0 0 14px;color:var(--ink2);font-size:13px}
 .plist td:first-child b{color:var(--ink);font-size:14px}.plist td:first-child a{text-decoration:none;color:var(--ink)}
 .plist td:first-child .note{margin:2px 0 0;font-weight:400}
 .plist td:not(:first-child){color:var(--ink)}.plist td.l,.plist th:nth-child(6){text-align:left;white-space:normal}
-.plist .pill{display:inline-block;padding:1px 8px;border:var(--line-w) solid var(--line-c);border-radius:999px;font:500 11.5px var(--num-font);color:var(--ink2);margin:0 2px 2px 0}
+.plist .pill{display:inline-block;padding:1px 8px;border:var(--line-w) solid var(--line-c);border-radius:999px;font:500 11.5px var(--mono);color:var(--ink2);margin:0 2px 2px 0}
 .plist .up{color:var(--fail);font-weight:600}
 .plist td.go{width:24px;padding-left:0}.plist td.go a{color:var(--muted);text-decoration:none;font-size:18px}
 .prail .lim{margin-top:10px}.prail .lim .l{display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink2);margin-bottom:4px}
@@ -1051,7 +1077,7 @@ p.sub{margin:0 0 14px;color:var(--ink2);font-size:13px}
 .pstats{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin:2px 0}.pstats div{min-width:0}
 .pstats dt{color:var(--lab-c);font-size:var(--lab-size);text-transform:var(--lab-case);letter-spacing:var(--lab-track)}
 .pstats dd{margin:0;font-family:var(--num-font);color:var(--ink);font-size:15px}.pstats .up{color:var(--fail);font-weight:600}
-.ppills .pill{display:inline-block;padding:1px 8px;border:var(--line-w) solid var(--line-c);border-radius:999px;font:500 11.5px var(--num-font);color:var(--ink2);margin:0 2px 2px 0}
+.ppills .pill{display:inline-block;padding:1px 8px;border:var(--line-w) solid var(--line-c);border-radius:999px;font:500 11.5px var(--mono);color:var(--ink2);margin:0 2px 2px 0}
 .pfoot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:auto}.pfoot .acts{display:flex;gap:8px}
 .pfoot .btn,a.btn{text-decoration:none}
 .hlist li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--grid)}.hlist code{overflow-wrap:anywhere}
@@ -1117,12 +1143,19 @@ kbd.keypill{font:500 11px var(--mono);padding:2px 10px;border:var(--line-w) soli
 /* sessions */
 .sgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:0 20px;align-items:start}
 .smain,.srail{min-width:0}
-.srail .card{gap:10px}.srail h2{margin:0;font-size:14px}.srail p.note{margin:0;line-height:1.5}
+.srail .card{gap:10px}.srail h2{margin:0;font-size:17px}.srail p.note{margin:0;line-height:1.5}.srail .bt{margin:0;font-weight:600;color:var(--ink)}
 .srail .rows>div{display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-top:1px solid var(--grid)}
 .srail .rows>div:first-child{border-top:0}.srail .rows .m{color:var(--ink2);font-size:13px}.srail .rows b{color:var(--ink);font-weight:600}
-.srail .big{font:600 26px/1.2 var(--num-font);color:var(--ink)}
+.srail .big{font:700 30px/1.2 var(--num-font);color:var(--ink)}
 .srail .split{height:8px}
 @media (max-width:1100px){.sgrid{grid-template-columns:minmax(0,1fr)}}
+/* the list is not a card: the tools and the legend sit on the page, the table is the box */
+.smain #sessions{background:none;border:0;padding:0;box-shadow:none}
+#sessions .tools .seg{gap:0}
+#sessions .tools .seg .chip{border-radius:0}
+#sessions .tools .seg .chip+.chip{margin-left:calc(-1*var(--line-w,1px))}
+#sessions .tools .seg .chip:first-child{border-radius:var(--r-btn) 0 0 var(--r-btn)}
+#sessions .tools .seg .chip:last-child{border-radius:0 var(--r-btn) var(--r-btn) 0}
 /* beside the rail the title column is narrow: a live row keeps its title and drops the entry name */
 #session-list .srow>summary .tt{min-width:10ch}
 @media (min-width:1101px) and (max-width:1500px){#session-list .srow .live .where,#session-list .srow>summary .sid8{display:none}}
