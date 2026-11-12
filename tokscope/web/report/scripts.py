@@ -97,7 +97,7 @@ const isRoot=s=>{const seen=new Set([s.id]);for(let p=byId.get(s.parent);p;p=byI
 const hl=(text,needle)=>{if(!needle)return esc(text);const lo=text.toLowerCase(),n=needle.toLowerCase();let out='',pos=0,at;
   while((at=lo.indexOf(n,pos))>-1){out+=esc(text.slice(pos,at))+'<mark>'+esc(text.slice(at,at+n.length))+'</mark>';pos=at+n.length}
   return out+esc(text.slice(pos))};
-// the bar fills its cell and shows the share of the session's tokens in the main thread (blue) and in subagents (mustard);
+// the bar fills its cell and shows the share of the session's tokens in the main thread (indigo) and in subagents (teal);
 // the size of the session is the number next to it, so a small session is as easy to read as a huge one
 function split(main,ag){const t=Math.max(main+ag,1);
   return `<span class=track><span class=split title="main ${fmt(main)} · subagents ${fmt(ag)}"><u style="width:${(100*main/t).toFixed(1)}%"></u>${ag?`<u class=a style="width:${(100*ag/t).toFixed(1)}%"></u>`:''}</span></span>`}

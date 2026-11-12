@@ -81,7 +81,7 @@ def write_report(db_path, out_path, where="", params=(), tasks_dir=None, level="
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>tokscope report{"" if level == "full" else f" ({level})"}</title>{favicon_link()}<script>document.documentElement.classList.add('js');
 try{{const t=localStorage.getItem('tokscope-theme');if(t)document.documentElement.dataset.theme=t}}catch(_){{}}</script>
-<style>{fonts.face_css(True)}</style><style id="layout">{LAYOUT_CSS}{LAYOUT_TOKEN_CSS}</style><style id="skin-ink">{CSS}</style></head><body><div id="progress"></div><div class="layout">
+<style>{fonts.face_css(True)}</style><style id="layout">{LAYOUT_CSS}{LAYOUT_TOKEN_CSS}</style><style id="look">{CSS}</style></head><body><div id="progress"></div><div class="layout">
 <aside class="side" aria-label="Sections"><div class="brand"><span class="logo-sq">{MARK}</span>tokscope</div><nav class="toc">
 <a href="#overview">Overview</a>
 <a href="#sessions">Sessions<span class="cnt">{n_sess:,}</span></a>
@@ -124,7 +124,7 @@ Sessions do different work, so a comparison describes them; for a controlled bef
 {bench_head}
 {_more("Benchmark details", "per-variant spread, main vs subagent tokens, every answer", bench_detail)}</section>
 
-{_more("Daily trend", f"tokens per day in {tz.label()}; the mustard line is the 7-day average; a dashed line marks a config change", _daily_chart(days, changes), "trend")}
+{_more("Daily trend", f"tokens per day in {tz.label()}; the amber line is the 7-day average; a dashed line marks a config change", _daily_chart(days, changes), "trend")}
 {_more("Config changes", f"{len(changes)} recorded; before/after medians per run", _change_cards(conn, changes), "changes")}
 {_more("Skill versions", f"{n_changed} skill{'' if n_changed == 1 else 's'} changed. A version is a hash of the skill's folder; each row is the median tokens of one "
        f"prompt's requests while that version was loaded. Few loads = fewer than {FEW_LOADS}: watch, do not judge. "

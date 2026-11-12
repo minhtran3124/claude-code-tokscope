@@ -1,16 +1,16 @@
 """The layout: grid, sizes, spacing and structure, as one stylesheet (<style id="layout">). There is one look (report/styles.py).
 
-Each page loads it once, before the Ink sheet (report/styles.py and dashboard/scripts.py: the :root tokens plus a short look block).
+Each page loads it once, before the look sheet (report/styles.py and dashboard/scripts.py: the :root tokens plus a short look block).
 A rule that is layout lives here and reads a token (`border:var(--line-w) solid var(--line-c)`). The tokens are listed above LAYOUT_TOKEN_CSS. Order of the sheets: LAYOUT_CSS, LAYOUT_DASH_CSS, LAYOUT_TOKEN_CSS (rules that
 came from report.CSS), LAYOUT_TOKEN_DASH_CSS (from DASH_CSS); the report page loads LAYOUT_CSS and LAYOUT_TOKEN_CSS only.
-The Ink sheet loads after this one and wins at equal specificity, so once a rule here reads a token, the Ink sheet must not set
+The look sheet loads after this one and wins at equal specificity, so once a rule here reads a token, the look sheet must not set
 the same property for that element too. New markup gets its rules here first and reads tokens."""
 
 LAYOUT_CSS = """
-/* motion tokens, shared by both skins. --t-fast: press, hover colour. --t-state: toggles, segments, tooltips, delta chip.
+/* motion tokens. --t-fast: press, hover colour. --t-state: toggles, segments, tooltips, delta chip.
    --t-layout: row open, sheet, toast, first-paint entrances. An exit is 0.7 times its entrance (calc(var(--t-state)*.7)).
    Not tokens, on purpose: the stagger delays (a step per item, not a duration), the endless spinner and run bar (they
-   show that work is going on), the one-ring live dot (600 ms, #125 Pulse) and the Classic hero glow (ambient). */
+   show that work is going on), the one-ring live dot (600 ms, #125 Pulse) */
 :root{--t-fast:120ms;--t-state:200ms;--t-layout:320ms;--ease-exit:cubic-bezier(.55,.06,.68,.19)}
 b,strong{font-weight:600}
 .kpi b,.hero .big em,.delta{font-family:var(--num-font)}
@@ -116,10 +116,10 @@ th{white-space:normal}
 #toast{transition:opacity calc(var(--t-state)*.7) var(--ease-exit),transform calc(var(--t-layout)*.7) var(--ease-exit)}
 #toast.on{transition:opacity var(--t-state) var(--ease),transform var(--t-layout) var(--ease-expo)}
 /* first paint only: <html> gets .settled once the entrances are done (and before the first poll swaps a region), and a
-   region that a poll swaps in never plays an entrance again. The ids and classes beat the skin rules by specificity. */
+   region that a poll swaps in never plays an entrance again. The ids and classes beat the look rules by specificity. */
 html.settled [data-region] :is(.hero,.kpi,.empty,.bar i u){animation:none}
-/* sessions: a dense table. Rows are 44px, the id selector keeps these ahead of the skins' older .srow card rules, and the
-   skins add only the look (outline, radius, label case, tray colour). Child sessions keep their indent (--depth) in the title cell. */
+/* sessions: a dense table. Rows are 44px, the id selector keeps these ahead of the look sheet's older .srow card rules, and the
+   look sheet adds only the look (outline, radius, label case, tray colour). Child sessions keep their indent (--depth) in the title cell. */
 #session-list{--scols:24px 56px minmax(0,1fr) 100px 64px 76px 64px 92px 14px;overflow:clip}
 #session-list :is(.shead,.srow>summary){display:grid;grid-template-columns:var(--scols);gap:8px;align-items:center;padding:0 10px}
 #session-list .shead{height:32px;font-size:11px;white-space:nowrap}
@@ -143,7 +143,7 @@ html.settled [data-region] :is(.hero,.kpi,.empty,.bar i u){animation:none}
 #session-list .srow .body{padding:4px 12px 12px 34px}
 /* an opened session is one panel: the summary line and the body share a tinted ground, a mark-coloured left edge and hairlines above and below */
 #session-list .srow[open],#session-list .srow[open]:hover{background:var(--tint);box-shadow:inset 4px 0 0 var(--mark),inset 0 1px 0 var(--edge),inset 0 -1px 0 var(--edge)}
-/* opened and picked for compare: the same panel with a wider edge and the shared selected-state tint (--on-bg); explicit selectors, so the skins' hover and .picked rules (1,2,0) lose in any file order */
+/* opened and picked for compare: the same panel with a wider edge and the shared selected-state tint (--on-bg); explicit selectors, so the look sheet's hover and .picked rules (1,2,0) lose in any file order */
 #session-list .srow.picked[open],#session-list .srow.picked[open]:hover{background:var(--on-bg);box-shadow:inset 6px 0 0 var(--mark),inset 0 1px 0 var(--edge),inset 0 -1px 0 var(--edge)}
 #session-list .btn.kids-more{margin:6px 10px 6px calc(34px + var(--depth)*20px)}
 #sessions .tools .seg{flex:none}
@@ -165,7 +165,7 @@ body.picking .totop{bottom:96px}
 /* end sessions */
 /* reduced motion: opacity and colour stay, travel and scale go. A keyframes set below replaces the one above, so each
    entrance still fades in and an update still shows; transitions lose their transform and keep colour and opacity.
-   Selectors start with `html` to beat the skin rules that load after this sheet. */
+   Selectors start with `html` to beat the look rules that load after this sheet. */
 @media (prefers-reduced-motion:reduce){
 html{scroll-behavior:auto}
 @keyframes reveal{from{opacity:.4}}
@@ -388,9 +388,9 @@ svg .vmark{cursor:default}
 /* phone */
 /* Under 640 px (max-width:639px, the same in the script) the sidebar is a 52 px top bar. Its Menu button, or the filter pill, opens a full sheet with the pages, the
    filters, the theme controls and the privacy note (script in DASH_JS). On a wider screen the sheet is display:contents, so the
-   sidebar looks as before, and the phone-only parts (button, pill, second filter form, note) stay hidden. The skin sheets load
-   after this one and `.chip` resets everything (all:unset), so rules on a chip or a skin-styled part start with `body` or
-   `.layout` to win on specificity. Sizes are layout; colours and outlines read tokens, and Classic restyles only the look. */
+   sidebar looks as before, and the phone-only parts (button, pill, second filter form, note) stay hidden. The look sheets load
+   after this one and `.chip` resets everything (all:unset), so rules on a chip or a part the look sheet styles start with `body` or
+   `.layout` to win on specificity. Sizes are layout; colours and outlines read tokens. */
 body .menu-btn,body .pill-btn,.sheet-filters,.sheet-priv,.menu-i,.pill-i{display:none}
 .sheet{display:contents}
 #trend svg.narrow{display:none}
@@ -521,23 +521,23 @@ ol.attn .k{flex:none}
 /* end breakdowns */
 """
 
-# The skin tokens (set in the :root rule of both skins; the dark rules only change colours and the line weight and shadow tokens). Ink value | Classic value.
-#   --line-w 1px | 1px           outline width of a card, control or tray
-#   --line-c ink | edge          outline colour;  --focus-c ink | mark: focus ring;  --row-c grid | edge: row and day rules
-#   --r-card 14px | 12px         radius of a card;  --r-tile 12px | 10px: tile, row, KPI;  --r-box 12px | 8px: panel, list
-#   --r-ctl 999px | 8px          radius of an input, select, chip;  --r-btn 999px | 6px: small button;  --r-bar 5px | 4px: bar track
-#   --bar-h 10px | 8px           height of a share or split bar;  --key-s 12px | 10px: legend swatch
+# The look tokens (set in the :root rule of report/styles.py; the dark rules change only colours and the shadow). Value now:
+#   --line-w 1px                 outline width of a card, control or tray
+#   --line-c grid                outline colour;  --focus-c mark: focus ring;  --row-c grid: row and day rules
+#   --r-card 12px                radius of a card;  --r-tile 12px: tile, row, KPI;  --r-box 8px: panel, list
+#   --r-ctl 8px                  radius of an input, select, chip;  --r-btn 8px: small button;  --r-bar 99px: bar track
+#   --bar-h 10px                 height of a share or split bar;  --key-s 10px: legend swatch
 #   --pad-sel / --pad-in / --pad-chip / --pad-btn: padding of a select, a text input, a chip, a small button
-#   --in-bg surface | page       background of an input
+#   --in-bg surface              background of an input
 #   --num-font sans              font of labels, numbers and controls (tabular figures come from body)
-#   --lab-case uppercase | none, --lab-track .08em | normal, --lab-size 11px | 12px, --lab-w 600 | 400, --lab-c muted | ink2:
+#   --lab-case uppercase, --lab-track .06em, --lab-size 11px, --lab-w 600, --lab-c muted:
 #                                a label (KPI caption, column head, filter label)
-#   --cell-size 13px | 1em       number cells;  --btn-w 500 | 400: button weight;  --ctl-size 12px | 13px: control text
-#   --seg-ring 1px ink ring | none   ring around a stacked-bar segment;  --trace-c mark-ink | mark: sparkline and line colour
-#   --dot-edge ink | surface     edge of a chart dot
+#   --cell-size 14px             number cells;  --btn-w 600: button weight;  --ctl-size 13px: control text
+#   --seg-ring inset on-line ring   ring around a stacked-bar segment;  --trace-c mark-ink: sparkline and line colour
+#   --dot-edge surface           edge of a chart dot
 #   --ok-bg / --warn-bg / --bad-bg   soft fill of an ok, warn or bad pill or icon square (text: --pass, --warn, --fail)
 #   --k0 ... --k4 with --k0-ink ... --k4-ink   the five skill-chip tints and their text; widgets.hue picks one per name
-#   Motion tokens (--t-fast, --t-state, --t-layout, --ease-exit) are the same in both skins and are set below.
+#   Motion tokens (--t-fast, --t-state, --t-layout, --ease-exit) are set at the top of LAYOUT_CSS.
 
 LAYOUT_TOKEN_CSS = """
 body{margin:0;background:var(--page);color:var(--ink);font:15px/1.5 var(--sans);accent-color:var(--mark)}
