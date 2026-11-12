@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-11-12 · The Indigo look replaces Ink (issue #257)
+
+| Decision | Why | Rejected |
+| --- | --- | --- |
+| The look changes from Ink (warm paper, ink outlines, mono labels) to Indigo: cool white surfaces, one indigo accent, a left menu with line icons. Step 1 changes the token values, the fonts, the menu and the shared controls; the token names (`--page`, `--ink`, `--mark` ...) stay until the pages are done (step 5 of #257). | The owner approved a prototype of the new look for every main page. Keeping the token names lets one PR recolour every page without touching 1100 layout rules. | A second skin beside Ink (two looks to keep in step, see 2026-11-05); renaming the tokens first (a large diff with no visible change). |
+| Fonts: Hanken Grotesk (a variable font, one file per subset) for the interface and for numbers, with `tabular-nums`; DM Mono for ids, paths and code. DM Mono has no Vietnamese letters, so the IBM Plex Mono vietnamese subset stays as its fallback for that range. All files ship in `tokscope/assets/fonts/`. | The pages must work offline, and session titles and paths can hold Vietnamese text. The font files went from 195 KB to 84 KB. | Loading the fonts from a font service (needs the network); mono text without Vietnamese letters (a system font would show in the middle of a word). |
+| Main thread is the accent (indigo), subagents are teal, the 7-day average is amber. Warnings read `--warn` (amber), not the subagent colour. | Under Ink the subagent colour was amber, so warnings shared it. With teal subagents a warning in teal would read as "ok". | One colour for subagents and warnings. |
+
 ## 2026-11-05 · The guide-based Optimize is removed (issue #193)
 
 | Decision | Why | Rejected |
