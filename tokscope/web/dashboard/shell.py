@@ -35,6 +35,7 @@ PAGE_LEAD = {
     "breakdowns": "Where the tokens went, by phase, skill, tool and subagent.",
     "projects": "Token use by project and the MCP servers each one loads.",
     "library": "Your skills, agents and commands, and what each costs to load.",
+    "optimize": "Measured runs of tokscope optimize run. Each run shows its evidence, before and after, and Approve or Reject.",
     "benchmarks": "Runs that compare one setup against another on the same task.",
     "managed": "Managed agents on the Anthropic platform: setup, sessions and cost.",
     "settings": "These were in the sidebar. They live here now, because you set them once.",

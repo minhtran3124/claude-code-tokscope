@@ -21,5 +21,5 @@ def page_breakdowns(conn, f, qs):
                            "before/after medians per run", _change_cards(conn, changes), "changes"))
     return ('<div class="bdgrid"><div class="bd-main">'
             + summary_view(conn, cond, params, by, f.query(), lambda b: f.link("breakdowns", by=b) + "#summary")
-            + f'<h2 class="bd-h">Sections, most important first</h2><div id="breakdowns" class="bd-flat">{sections}</div></div>'
+            + f'<section class="card bd-secs"><h2>Sections, most important first</h2><div id="breakdowns" class="bd-flat">{sections}</div></section></div>'
             + f'<aside class="bd-rail" aria-label="What needs attention">{rail}</aside></div>')

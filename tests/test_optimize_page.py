@@ -20,6 +20,7 @@ from tokscope.features import postship
 from tokscope.experiments.skillopt import apply, stats, store
 from tokscope.web.dashboard import server, shell
 from tokscope.web.dashboard.pages import optimize as page
+from tokscope.web.report.widgets import skill_chip
 from tests.test_skillopt_loop import CFG, FAKE, IDS
 
 APPLY_RUN, NOT_ENOUGH_RUN, REJECT_RUN = "demo-20260101T000000Z", "demo-20260102T000000Z", "demo-20260103T000000Z"
@@ -335,7 +336,7 @@ class RenderTest(Fixture):
         self.assertIn("1 run needs your decision", body)
         self.assertIn(f'<a class="primary" href="/optimize?run={APPLY_RUN}">Review newest</a>', body)
         self.assertIn("3 runs · $4.08 spent · 1 skill", body)
-        self.assertEqual(body.count('<h3 class="ol-skill">demo</h3>'), 1)
+        self.assertEqual(body.count(f'<h3 class="ol-skill">{skill_chip("demo")}</h3>'), 1)
         self.assertNotIn("<th>Decision</th>", body)
         self.assertNotIn("<table", body.split('class="card ol-top"')[1])
         self.assertNotIn("<script", page._runs_list(page.runs()))  # server-side links, no page script

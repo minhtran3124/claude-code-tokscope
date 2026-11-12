@@ -6,9 +6,11 @@ import time
 from pathlib import Path
 
 from ....core.baseline import DEF_METHOD
+from ....core.baseline import METHOD as START_METHOD
 from ....core.context import METHOD
 from ....features import projects
-from ...report.widgets import _start_line, _tok, _usd
+from ...report.widgets import _start_line, _tok, _usd, hue
+from ...theme.icons import icon
 from .overview import start_detail
 
 
@@ -35,12 +37,19 @@ def _pills(mcp):
     return pills + (f'<span class="note">+{len(mcp) - 3}</span>' if len(mcp) > 3 else "")
 
 
+def _square(name):
+    """The project's initials on a coloured square; the colour comes from the name (widgets.hue), as a skill chip's does."""
+    letters = "".join(w[0] for w in re.split(r"[-_.\s]+", name) if w)[:2].upper() or "?"
+    return f'<span class="psq t{hue(name)}" aria-hidden="true">{html.escape(letters)}</span>'
+
+
 def _project_row(g, mcp, idle):
     href = f"/projects?p={g['id']}"
     where = f'<div class="note mono">{html.escape(g["path"])}</div>' if g["path"] else ""
     base = g.get("base")
     start = f'<span class="{"up" if idle else ""}">{_tok(base["median"])}</span>' if base else '<span class="note">–</span>'
-    return (f'<tr class="prow" {_data(g, mcp, idle)}><td data-label="Project"><a href="{href}"><b>{html.escape(g["name"])}</b></a>{where}</td>'
+    return (f'<tr class="prow" {_data(g, mcp, idle)}><td data-label="Project"><div class="pname">{_square(g["name"])}<div>'
+            f'<a href="{href}"><b>{html.escape(g["name"])}</b></a>{where}</div></div></td>'
             f'<td data-label="Sessions">{g["sessions"]:,}</td><td data-label="Tokens">{_tok(g["tokens"])}</td>'
             f'<td data-label="API-eq">{_usd(g["usd"])}</td><td data-label="Session start">{start}</td>'
             f'<td class="l" data-label="MCP servers">{_pills(mcp) or "<span class=note>none</span>"}</td>'
@@ -52,8 +61,9 @@ def _project_card(g, mcp, idle):
     base = g.get("base")
     start = f'<span class="{"up" if idle else ""}">{_tok(base["median"])}</span>' if base else "–"
     last = f' · last {(g["last"] or "")[:10]}' if g["last"] else ""
-    return (f'<article class="pcard" {_data(g, mcp, idle)}><a class="ptitle" href="{href}"><b>{html.escape(g["name"])}</b></a>'
-            f'<div class="note mono">{html.escape(g["path"])}</div>'
+    return (f'<article class="pcard" {_data(g, mcp, idle)}><div class="pname">{_square(g["name"])}<div>'
+            f'<a class="ptitle" href="{href}"><b>{html.escape(g["name"])}</b></a>'
+            f'<div class="note mono">{html.escape(g["path"])}</div></div></div>'
             f'<dl class="pstats"><div><dt>Sessions</dt><dd>{g["sessions"]:,}</dd></div><div><dt>Tokens</dt><dd>{_tok(g["tokens"])}</dd></div>'
             f'<div><dt>API-eq</dt><dd>{_usd(g["usd"])}</dd></div><div><dt>Session start</dt><dd>{start}</dd></div></dl>'
             f'<div class="ppills">{_pills(mcp) or "<span class=note>no MCP servers</span>"}</div>'
@@ -63,10 +73,11 @@ def _project_card(g, mcp, idle):
 
 def _projects_rail(found, idle):
     looks = [(g, idle[g["id"]]) for g in found if g["id"] in idle and g.get("base")]
-    attn = "".join(f'<li><span class="k">{n:02d}</span><div><a href="/projects?p={g["id"]}">{html.escape(g["name"])} starts at '
+    attn = "".join(f'<li><span class="ai warn">{icon("gauge", 15)}</span><div><a href="/projects?p={g["id"]}">{html.escape(g["name"])} starts at '
                    f'{_tok(g["base"]["median"])}</a><div class="note">{i[0]} unused MCP server{"s" * (i[0] != 1)} add ~{_tok(i[1])} '
-                   f'before the first prompt</div></div></li>' for n, (g, i) in enumerate(looks[:3], 1))
-    card = (f'<section class="card attention"><h2>Needs a look ({len(looks[:3])})</h2><ol class="plain attn">{attn}</ol></section>' if looks else
+                   f'before the first prompt</div></div></li>' for g, i in looks[:3])
+    card = (f'<section class="card attention"><h2>Needs a look <span class="pill warn" aria-label="{len(looks[:3])} items">{len(looks[:3])}</span></h2>'
+            f'<ol class="plain attn">{attn}</ol></section>' if looks else
             '<section class="card attention"><h2>Needs a look</h2><p class="note">Nothing needs a look.</p></section>')
     starts = sorted((g for g in found if g.get("base")), key=lambda g: -g["base"]["median"])
     if not starts:
@@ -106,8 +117,8 @@ def _projects_list(found):
     cards = "".join(_project_card(g, mcp[g["id"]], g["id"] in idle) for g in found)
     tools = ('<div class="tools libtools ptools"><input type="search" id="proj-find" placeholder="Find a project" aria-label="Find a project">'
              '<select id="proj-sort" aria-label="Sort projects">' + "".join(f'<option value="{v}">{t}</option>' for v, t in SORTS) + '</select>'
-             '<span class="seg" role="group" aria-label="View"><button type="button" class="chip on" data-pview="list" aria-pressed="true">List</button>'
-             '<button type="button" class="chip" data-pview="card" aria-pressed="false">Cards</button></span>'
+             f'<span class="seg" role="group" aria-label="View"><button type="button" class="chip on" data-pview="list" aria-pressed="true">{icon("list", 14)}List</button>'
+             f'<button type="button" class="chip" data-pview="card" aria-pressed="false">{icon("gallery", 14)}Cards</button></span>'
              '<span class="note" id="proj-count" aria-live="polite"></span></div>'
              '<p class="err" id="proj-err" hidden></p>')
     table = ('<section class="card flat" data-pane="list" id="proj-list"><div class="scroll"><table class="t plist"><thead><tr><th>Project</th><th>Sessions</th>'
@@ -129,20 +140,30 @@ def _project_view(g):
                       f"{'' if Path(c).exists() else ' · <span class=note>gone</span>'}</li>" for c, n in sorted(g["folders"], key=lambda f: -f[1]))
     keys = sorted(k for k in g["keys"] if k)
     base = g.get("base")
-    start = (f'<dt>Session start</dt><dd>{_start_line(base)}</dd><dt>Start trend</dt><dd>{start_detail(base)}</dd>' if base
-             else '<dt>Session start</dt><dd class="note">No sessions in this range.</dd>' if "base" in g else "")
+    # with sessions the Session start card beside this one shows it; the facts keep only the "none" note
+    start = '<dt>Session start</dt><dd class="note">No sessions in this range.</dd>' if not base and "base" in g else ""
     sessions_link = (f' · <a href="/sessions?range=all&amp;project={html.escape(keys[0])}">its sessions</a>' if len(keys) == 1 else "")
-    head = ('<p><a href="/projects">← All projects</a></p>'
-            f'<section class="card libhead"><h2 class="sec">{html.escape(g["name"])}</h2><dl class="ids">'
-            f'<dt>Where</dt><dd><code>{html.escape(g["path"])}</code></dd>'
-            f'<dt>Sessions</dt><dd>{g["sessions"]:,}, {(g["first"] or "")[:10]} to {(g["last"] or "")[:10]}{sessions_link}</dd>'
-            f'<dt>Tokens</dt><dd>{_tok(g["recent"])} in the last 30 days · {_tok(g["tokens"])} all time · {_usd(g["usd"])} API-eq</dd>{start}</dl>'
-            + (f'<details class="folders"><summary>{len(g["folders"])} folders</summary><ul class="plain">{folders}</ul></details>'
-               if len(g["folders"]) > 1 else "") + "</section>")
+    title = (f'<div class="pghead"><p class="crumb"><a href="/projects">Projects</a> / {html.escape(g["name"])}</p>'
+             f'<h1>{html.escape(g["name"])}</h1><p class="sub">{g["sessions"]:,} session{"s" * (g["sessions"] != 1)} · '
+             f'{_tok(g["tokens"])} tokens</p></div>')
+    about = ('<section class="card libhead"><h2>About</h2><dl class="ids">'
+             f'<dt>Where</dt><dd><code>{html.escape(g["path"])}</code></dd>'
+             f'<dt>Sessions</dt><dd>{g["sessions"]:,}, {(g["first"] or "")[:10]} to {(g["last"] or "")[:10]}{sessions_link}</dd>'
+             f'<dt>Tokens</dt><dd>{_tok(g["recent"])} in the last 30 days · {_tok(g["tokens"])} all time · {_usd(g["usd"])} API-eq</dd>{start}</dl>'
+             + (f'<details class="folders"><summary>{len(g["folders"])} folders</summary><ul class="plain">{folders}</ul></details>'
+                if len(g["folders"]) > 1 else "") + "</section>")
+    big = (f'<section class="card pjstart"><h2>Session start</h2><p class="big" title="{html.escape(START_METHOD)}">~{_tok(base["median"])}</p>'
+           '<p class="note">Tokens before you type anything: system prompt, tools, MCP servers, skills and CLAUDE.md.</p>'
+           f'<p>{_start_line(base)}</p><p>{start_detail(base)}</p></section>' if base else "")
+
+    def page(main):  # the facts beside the session start, then the MCP cards at full width (the server table is wide)
+        return (f'{title}<div class="pjgrid"><div class="pjmain">{about}</div>'
+                f'<aside class="pjrail" aria-label="Session start">{big}</aside></div>{main}')
+
     if g["root"] is None:
-        return head
+        return page("")
     if not g["root"].exists():
-        return head + '<p class="note">This folder is gone, so its MCP configuration cannot be read.</p>'
+        return page('<p class="note">This folder is gone, so its MCP configuration cannot be read.</p>')
     body = []
     for e in rows:
         status = e.get("status") or ("disabled" if e["disabled"] else "")
@@ -194,7 +215,7 @@ def _project_view(g):
              '<p class="err" id="opt-err" hidden></p>'
              '<table class="mcp"><thead><tr><th>Server</th><th>Source</th><th>Runs as</th><th>Calls</th><th>≈Result tokens</th>'
              f'<th title="{html.escape(METHOD)}">≈p95 result</th><th title="{html.escape(DEF_METHOD)}">≈Definition tokens</th><th>Last session</th><th>Status</th><th>Change</th></tr></thead><tbody>{"".join(body)}</tbody></table></section>')
-    return head + table + _registry_panel() + _mcp_form()
+    return page(table + _registry_panel() + _mcp_form())
 
 
 def _registry_panel():

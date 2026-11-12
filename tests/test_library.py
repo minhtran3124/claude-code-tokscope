@@ -132,7 +132,7 @@ class LibraryTest(unittest.TestCase):
     def test_the_page_names_the_range_its_load_counts_cover(self):
         for qs, label in (({}, "last 30 days"), ({"range": ["all"]}, "all time")):
             page = dashboard.page_library(self.conn, dashboard.Filters(qs), {}, "full")
-            self.assertIn(f"0 loads in {label}", page)
+            self.assertIn(f">Loads in {label}</th>", page)   # the list is a table: its Loads column names the range
 
     def test_api_library_counts_loads_by_skill_id(self):
         from tokscope.web.dashboard import server
@@ -156,10 +156,10 @@ class LibraryTest(unittest.TestCase):
 
     def test_the_page_lists_yours_and_hides_installed_ones(self):
         page = dashboard.page_library(self.conn, dashboard.Filters({}), {}, "full")
-        mine = re.findall(r'<a class="sk"[^>]*data-origin="mine"[^>]*>', page)
+        mine = re.findall(r'<tr class="sk"[^>]*data-origin="mine"[^>]*>', page)
         self.assertEqual(len(mine), 2)
         self.assertFalse(any("hidden" in a for a in mine))
-        self.assertRegex(page, r'<a class="sk"[^>]*data-origin="installed"[^>]*hidden>')
+        self.assertRegex(page, r'<tr class="sk"[^>]*data-origin="installed"[^>]*hidden>')
         self.assertIn("Show installed (3)", page)
 
     def test_the_badge_counts_same_named_skills_in_every_project_not_only_the_filtered_one(self):
@@ -173,7 +173,7 @@ class LibraryTest(unittest.TestCase):
                           ("r1", "dup", "approve", "old", "gone", None, "Apply", None, "2026-01-01T00:00:00+00:00"))
         self.conn.commit()
         page = dashboard.page_library(self.conn, dashboard.Filters({"project": ["-p"]}), {}, "full")
-        card = re.search(r'<a class="sk"[^>]*data-dir="dup".*?</a>', page, re.S).group(0)
+        card = re.search(r'<tr class="sk"[^>]*data-dir="dup".*?</tr>', page, re.S).group(0)
         self.assertNotIn("Edited after run", card)   # two folders share the name, so an approve cannot say which was edited
 
     def test_a_skill_page_renders_skill_md_and_links_its_files(self):
