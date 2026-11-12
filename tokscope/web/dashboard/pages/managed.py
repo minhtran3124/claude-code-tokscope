@@ -7,6 +7,7 @@ from urllib.parse import quote
 
 from ....integrations import managed
 from ...report.widgets import _tok, _usd
+from ...theme.icons import icon
 from ..common import _dur
 from ._flat import card_head, flat_table, needs_look, pill
 
@@ -93,7 +94,7 @@ def _agent_view(a, head):
 
 def page_managed(qs, level):
     if level != "full":
-        return (f'<div class="empty"><b>Managed agents are hidden</b>This page reads your Claude Developer Platform account '
+        return (f'<div class="empty">{icon("cloud", 34)}<b>Managed agents are hidden</b>This page reads your Claude Developer Platform account '
                 f'through the ant CLI, so it shows at the full level only (now {level}).</div>')
     data = managed.read()
     pick = (qs.get("agent") or [""])[0]
@@ -102,7 +103,7 @@ def page_managed(qs, level):
     head = (f'<p class="note">Read through <code>ant</code> at {read_at}; kept {managed.CACHE_S:g} s. '
             f'<a href="{refresh}">Refresh</a></p>')
     if "error" in data:
-        return (head + '<div class="empty"><b>ant could not read your account</b>Install the ant CLI and sign in with '
+        return (head + f'<div class="empty">{icon("cloud", 34)}<b>ant could not read your account</b>Install the ant CLI and sign in with '
                 f'<code>ant auth login</code>, then refresh. ant said: {html.escape(data["error"])}</div>')
     agents = data["agents"]
     if pick:

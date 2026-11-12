@@ -23,7 +23,7 @@ from ....core import skills
 from ....core.ingest import connect
 from ....experiments.skillopt import apply, loop, sandbox, stats, store, suite
 from ....features import library, postship
-from ...report.widgets import _tok, _usd
+from ...report.widgets import _tok, _usd, skill_chip
 from .library import _side_by_side
 
 ARMS = (("baseline", "current"), ("baseline", "none"), ("confirm", "current"), ("confirm", "draft"))
@@ -443,10 +443,18 @@ def _action(r, now=None):
     return f'<a class="{"primary" if r["bucket"] == "needs" else "btn"}" href="{href}">{"Review" if r["bucket"] == "needs" else "Open"}</a>'
 
 
+def _meter(spent, budget):
+    """A short bar of the share of the budget spent, red once all of it is spent; nothing without a budget."""
+    if not budget or spent is None:
+        return ""
+    share = min(max(spent / budget, 0), 1)
+    return f'<span class="ol-bar{" full" if share >= 1 else ""}" aria-hidden="true"><i style="width:{share * 100:.0f}%"></i></span>'
+
+
 def _orow(r, now=None):
     result = f'<p class="ol-result">{_e(r["result"])}</p>' if r["result"] else ""
     return (f'<li class="ol-row">{_pill(r)}<div class="ol-main">{result}<p class="ol-meta">{_stamp(r["created"], now)}'
-            f' <span class="ol-spent">{_usd(r["spent"])} of {_usd(r["budget"])}</span></p></div>'
+            f' <span class="ol-spent">{_meter(r["spent"], r["budget"])}{_usd(r["spent"])} of {_usd(r["budget"])}</span></p></div>'
             f'<div class="ol-act">{_action(r, now)}</div></li>')
 
 
@@ -512,7 +520,7 @@ def _runs_list(found, notice="", qs=None, now=None):
                 subs.append(f'<h4 class="ol-sub">{title} <span>{len(rs)}</span></h4><ul class="ol-rows">'
                             + "".join(_orow(r, now) for r in rs) + "</ul>")
         if subs:
-            groups.append(f'<section class="card ol-group"><h3 class="ol-skill">{_e(name)}</h3>{"".join(subs)}</section>')
+            groups.append(f'<section class="card ol-group"><h3 class="ol-skill">{skill_chip(name)}</h3>{"".join(subs)}</section>')
     body = "".join(groups) or '<div class="empty"><b>No runs match</b>Clear a filter above to see the others.</div>'
     return f'{notice}{head}{_chips_row(found, flt, skill)}{body}'
 
@@ -572,11 +580,16 @@ def _gate_rule(g):
     return _plain(th)
 
 
+def _gate_pill(passed):
+    return ('<span class="pill">not run</span>' if passed is None else '<span class="pill ok">pass</span>' if passed
+            else '<span class="pill bad">FAIL</span>')
+
+
 def _gates_section(d):
     if not d["gates"]:
         return ""
     rows = "".join(f'<tr><td class="nw">{_e(g.get("name"))}</td>'
-                   f'<td>{"not run" if g.get("passed") is None else "pass" if g.get("passed") else "FAIL"}</td>'
+                   f'<td>{_gate_pill(g.get("passed"))}</td>'
                    f'<td>{_e(_gate_found(g))}</td><td>{_e(_gate_rule(g))}</td></tr>' for g in d["gates"])
     return ('<section class="card" id="gates"><h2 class="sec">Gates</h2><div class="scroll"><table class="gtable"><thead><tr>'
             f'<th>Gate</th><th>Result</th><th>What it found</th><th>Rule</th></tr></thead><tbody>{rows}</tbody></table></div></section>')
@@ -749,8 +762,8 @@ def _post_ship_section(conn, d):
 
 def _report(d, decide, post=""):
     s = d["summary"]
-    head = (f'<p><a href="/optimize">← All runs</a></p><section class="card libhead"><h2 class="sec">{_e(d["plan"].get("skill") or d["id"])} · '
-            f'{_state(s["state"])}</h2><p class="note">Run <code>{_e(d["id"])}</code></p></section>')
+    head = (f'<div class="pghead runhead"><p class="crumb"><a href="/optimize">Optimize</a> / <code>{_e(d["id"])}</code></p>'
+            f'<h1>{_e(d["plan"].get("skill") or d["id"])} {_state(s["state"])}</h1></div>')
     return (head + decide + _diff_section(d) + _gates_section(d)
             + _change_section(d, "Draft vs current", "draftvs", ("confirm", "current"), ("confirm", "draft"), ("Current", "Draft"))
             + _change_section(d, "Skill vs no skill", "skillvs", ("baseline", "none"), ("baseline", "current"), ("No skill", "Skill"))
