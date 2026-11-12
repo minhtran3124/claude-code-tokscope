@@ -239,7 +239,7 @@ class ServerTest(unittest.TestCase):
 
     def test_pages_carry_one_skin_and_no_design_switch(self):
         _, page = self.get("/overview")
-        self.assertIn('<style id="skin-ink">', page)
+        self.assertIn('<style id="look">', page)
         self.assertNotIn("skin-classic", page)
         _, settings = self.get("/settings")
         self.assertNotIn("data-set-skin", settings)               # Classic is retired: no Design row
@@ -422,7 +422,7 @@ class SessionsTableTest(unittest.TestCase):
         self.assertIn("inset 4px 0 0 var(--mark)", rule.group(1))
         self.assertNotRegex(rule.group(1), r"#[0-9a-fA-F]{3,8}\b")             # theme tokens only, no raw colour
         # one place defines the open-row look: no rule outside the layout sheet's panel rules styles an [open] row's ground
-        for name, sheet in (("ink", CSS), ("layout", LAYOUT_CSS.replace(block, ""))):
+        for name, sheet in (("look", CSS), ("layout", LAYOUT_CSS.replace(block, ""))):
             for sel, body in re.findall(r"([^{}]*\.srow[^{},]*\[open\][^{}]*)\{([^}]*)\}", sheet):
                 self.assertNotRegex(body, r"(?:^|;)\s*(?:background|box-shadow|border-color)\s*:", f"{name}: {sel.strip()}")
         # opened and picked: explicit selectors (1,3,0 and 1,4,0) so hover and the skins' .picked rule lose in any file order
@@ -620,7 +620,7 @@ class SkinSwitchReportTest(unittest.TestCase):
             from tokscope.web.report import write_report
             write_report(db, out, tasks_dir=Path(d))
             page = out.read_text()
-        self.assertIn('<style id="skin-ink">', page)
+        self.assertIn('<style id="look">', page)
         self.assertNotIn("skin-classic", page)
         self.assertNotIn('id="skin"', page)
 
@@ -634,7 +634,7 @@ class SkinSwitchReportTest(unittest.TestCase):
             out = Path(d) / "r.html"
             write_report(db, out, tasks_dir=Path(d))
             page = out.read_text()
-        self.assertLess(page.index('<style id="layout">'), page.index('<style id="skin-ink">'))
+        self.assertLess(page.index('<style id="layout">'), page.index('<style id="look">'))
         self.assertEqual(page.count('<style id="layout">'), 1)
         rule = ".changes{display:grid;"
         self.assertIn(rule, LAYOUT_CSS)                   # a rule both skins share is written once, not in each skin

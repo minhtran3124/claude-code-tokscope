@@ -6,7 +6,7 @@ from tokscope.web.report.scripts import JS_CORE
 from tokscope.web.theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS
 from tokscope.web.report.styles import CSS
 
-SHEETS = {"layout": LAYOUT_CSS, "layout-dash": LAYOUT_DASH_CSS, "ink": CSS, "ink-dash": dashboard.DASH_CSS}
+SHEETS = {"layout": LAYOUT_CSS, "layout-dash": LAYOUT_DASH_CSS, "look": CSS, "look-dash": dashboard.DASH_CSS}
 DURATION = re.compile(r"(?<![\w.#-])(\d*\.\d+|\d+)m?s(?![\w-])")
 
 
@@ -56,7 +56,7 @@ class MotionTokensTest(unittest.TestCase):
             self.assertNotIn(".flash", css, name)
 
     def test_session_rows_do_not_lift_on_hover(self):
-        for name in ("ink",):
+        for name in ("look",):
             self.assertIsNone(re.search(r"\.srow:hover\{[^}]*transform", SHEETS[name]), name)
 
     def test_a_swapped_region_never_replays_an_entrance(self):
@@ -71,8 +71,8 @@ class MotionTokensTest(unittest.TestCase):
         self.assertIn("[data-count]:not([data-key])", JS_CORE)   # no count-up on live values
         self.assertIn(".dot.ring{animation:ring 600ms var(--ease) 1}", LAYOUT_DASH_CSS)
         self.assertIn(".fresh.stale .dot,body.offline h2>.dot{background:transparent", LAYOUT_DASH_CSS)   # offline: hollow
-        for name in ("ink-dash",):
-            self.assertNotIn("stale .dot", SHEETS[name], name)             # a skin rule would win over the layout one
+        for name in ("look-dash",):
+            self.assertNotIn("stale .dot", SHEETS[name], name)             # a look rule would win over the layout one
 
     def test_every_keyframes_set_that_moves_something_has_a_reduced_motion_answer(self):
         # an opacity-only twin in the layout sheet, or (spin, slide, drift) a rule that switches it off, tested below

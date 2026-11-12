@@ -423,7 +423,7 @@ def _version_marks(conn, f, first, last):
 
 def _daily_stacked(rows, changes, versions):
     """Tokens per day, main thread under subagents in each bar; a dashed line marks a skill version change (or a recorded
-    config change), the mustard line is the 7-day average of the day's total. A second copy of the chart, the last 14 days
+    config change), the amber line is the 7-day average of the day's total. A second copy of the chart, the last 14 days
     on a narrow canvas with 4 day labels, is what a phone shows (layout.py /* phone */ swaps the two)."""
     if not rows:
         return "<p class='note'>No data.</p>"

@@ -1,4 +1,4 @@
-"""A skin is tokens plus a short look block (layout.py). These checks keep it that way."""
+"""The look sheet is tokens plus a short look block (layout is in layout.py). These checks keep it that way."""
 import re
 import unittest
 
@@ -33,7 +33,7 @@ def rules(css):
 
 
 LAYOUT = layout.LAYOUT_CSS + layout.LAYOUT_DASH_CSS + layout.LAYOUT_TOKEN_CSS + layout.LAYOUT_TOKEN_DASH_CSS
-SKINS = {"Ink": report_styles.CSS + dashboard.DASH_CSS}
+SKINS = {"look": report_styles.CSS + dashboard.DASH_CSS}
 
 
 def root_tokens(css):
@@ -53,13 +53,13 @@ class SkinTokensTest(unittest.TestCase):
         for name, css in SKINS.items():
             self.assertLess(len(rules(css)), 140, f"{name} grew back: move a rule that differs only in value into layout.py and read a token")
 
-    def test_every_look_token_is_defined_in_ink(self):
-        ink = root_tokens(report_styles.CSS)
+    def test_every_look_token_is_defined_in_the_look_root(self):
+        defined = root_tokens(report_styles.CSS)
         used = set(re.findall(r"var\((--[\w-]+)\)", layout.LAYOUT_TOKEN_CSS + layout.LAYOUT_TOKEN_DASH_CSS))
         # tokens the layout sheet defines itself (motion, per-element values set inline or by a rule)
         own = {"--t-fast", "--t-state", "--t-layout", "--ease-exit", "--i", "--d", "--depth", "--n", "--mx", "--my", "--scols", "--tok-accent"}
         for tok in sorted(used - own):
-            self.assertIn(tok, ink, f"{tok} is missing from the Ink :root")
+            self.assertIn(tok, defined, f"{tok} is missing from the look :root")
 
     def test_the_dark_theme_leaves_the_shape_tokens_alone(self):
         # the look tokens sit in the light :root and hold in dark too: the dark rules must not need to repeat them

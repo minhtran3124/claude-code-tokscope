@@ -1,22 +1,21 @@
-# Design prompt: the ink style for tokscope
+# Design prompt: the Indigo style for tokscope
 
-A reusable prompt for designing a tokscope screen (dashboard page or the HTML report) in the "ink" style. It is adapted from the ink prompt of Claude Bot Local (claude-bot-projects `docs/design-prompt.md`), which follows [colorfigures](https://colorfigures.vercel.app/#washer). Fill in the two bracketed lines and paste the whole block.
+A reusable prompt for designing a tokscope screen (dashboard page or the HTML report) in the "Indigo" style, the only look
+since #257 (it replaced Ink). Fill in the two bracketed lines and paste the whole block.
 
-- Kept from the source: paper, sheet, ink and rule colours, ink outlines, pill buttons, the flat navy shadow, mono labels, and the two bundled faces (tokscope already ships them in `tokscope/assets/fonts/`).
-- Changed on purpose: Claude Bot Local's swatches mean a project's state. tokscope has no states; its colours mean data. So the swatches are remapped to series and results below, and "no accent that isn't a state" becomes "no accent that isn't data".
-- Changed on purpose: tokscope pages are dense tables and numbers. Shadows go on one card per page, not every card, and tables keep thin rules.
-- Text colours were checked for WCAG AA on paper, sheet and chip in both themes (contrast in brackets, the lowest). Light-theme swatch fills are below 3:1 on sheet, so every filled mark carries an ink outline.
-- The colours below are the live palette: the `:root` and DARK blocks of `CSS` in `tokscope/web/report/styles.py` (since #6).
-- The dashboard and the report share one stylesheet (`CSS` in `tokscope/web/report/styles.py`). A design applies to both.
+- The colours below are the live palette: the `:root` and DARK blocks of `CSS` in `tokscope/web/report/styles.py`.
+- The dashboard and the report share one stylesheet. A design applies to both.
+- Contrast (WCAG, measured 2026-11-12 from the tokens): muted text is at least 4.8:1 on page, card and sunken grounds in
+  both themes; the five chip tints and the ok / warn / bad pill fills keep their text at 4.5:1 or more.
 
 ```text
-Design [SCREEN, e.g. "the Overview page" | "the Sessions page" | "the HTML report"] for tokscope in its "ink" style.
+Design [SCREEN, e.g. "the Overview page" | "the Sessions page" | "the HTML report"] for tokscope in its "Indigo" style.
 Output: [mockup on a design canvas | CSS and markup changes in tokscope/web/report/ and tokscope/web/dashboard/].
 
 ## Product
 tokscope measures the tokens Claude Code uses: per session, skill, subagent and phase. It reads
 ~/.claude/projects transcripts into local SQLite and shows them in a live local dashboard
-(`tokscope serve`: Overview, Projects, Sessions, Skills, Library, Benchmarks, Breakdowns) and
+(`tokscope serve`: Overview, Sessions, Breakdowns, Projects, Library, Optimize, Benchmarks, Managed, Settings) and
 a one-file HTML report (`tokscope report`). Python stdlib only, inline CSS and JS, no build step,
 bundled fonts, no CDN, works offline. The owner opens it to answer, in order:
 1) How much did I use today, and is that normal?  2) What changed, and why (which skill,
@@ -24,59 +23,47 @@ subagent or session)?  3) Where do the tokens go overall? Every screen puts the 
 main question first. Use real-looking data; screenshots use `--privacy redacted`, so names may
 show as redacted placeholders.
 
-## Style: hand-inked catalogue (after colorfigures.vercel.app)
-Light:  paper #f2efe7 (page) · sheet #fbf9f4 (cards) · ink #231e16 (text, outlines)
-        muted #665e51 (5.1) · rule #ddd6c8 · shadow #41538f
-Dark:   paper #1d1a15 · sheet #27231c · ink #f2efe7 · muted #b0a796 (5.7) · rule #3b3529
-        shadow #41538f (same as light)
-Data colours, one meaning each, never decoration (fill · text light · text dark):
-        main thread  = cobalt  #76a0e2 · #2f5aa8 (5.4) · #8fb3ec (6.3)
-        subagents    = mustard #f4b829 · #8a5a00 (4.8) · #f4b829 (7.5)
-        pass / down  = mint    #93d3b0 · #1a6934 (5.4) · #93d3b0 (7.8)
-        fail / up    = tomato  #ef6a4c · #a33a23 (5.3) · #f08a70 (5.5)
-        more series  = blush #d9708c (dark #c4607d), then a dark and a mid ink tint;
-                       "Other" is the palest tint; never more than 5 in one chart.
-                       Neighbouring series differ by at least 1.5:1 in luminance.
-Theme: light, dark and System via html[data-theme] and prefers-color-scheme (the :root and
-DARK blocks in tokscope/web/report/styles.py). Every colour has both values and passes WCAG AA.
+## Style: Indigo (cool white surfaces, one indigo accent, soft tinted chips)
+Light:  page #F5F5FA · card #FFFFFF · sunken #EEEEF6 (hover, notes, bar tracks) · text #1B1B2F
+        muted #66667F · line #E2E2EE / strong line #D2D2E2 · accent #4B4FD8 (text on accent #FFFFFF)
+        accent soft #E9E9FC / accent line #C9CAF5 (the selected state)
+Dark:   page #12121C · card #1B1B29 · sunken #262638 (bar tracks; hover and chips #2B2B3E) · text #E9E9F6 · muted #9A9AB5
+        line #2D2D42 / #3A3A55 · accent #8B8EF5 (text on accent #12122A) · accent soft #25264A / #3C3E7A
+Status (text / fill), status only, never decoration:
+        ok #1C7C54 / #E6F6EE (dark #5DD3A0 / #163428) · warn #9A6212 / #FDF4E3 (dark #E8B45C / #3A2D12)
+        bad #B8344A / #FBE3E7 (dark #F08196 / #3E1D26)
+Data series, one meaning each:
+        main thread = accent indigo · subagents = teal #1E9C86 (dark #4CC9AE) · 7-day average = amber #845411 (dark #F0C47A)
+        more series = pink #C9479B, orange #D9702A, grey #7A7A92; "Other" is the palest; never more than 5 in one chart.
+Chips: five soft tint pairs (--k0 ... --k4 with --k0-ink ... --k4-ink). A skill name always gets the same tint
+        (`widgets.hue`, 32-bit FNV-1a over the name, mod 5; the page script has the same `hue`). A subagent type is the
+        neutral chip.
+Theme: light, dark and System via html[data-theme] and prefers-color-scheme. Every colour has both values.
 
 Type
-- Mono = IBM Plex Mono (--mono): numbers, KPI values, token counts, costs, session ids,
-  labels, buttons, dates, code; skill and subagent names only outside tables (meta lines).
-- Sans = Be Vietnam Pro (--sans): sentences: subtitles, notes, empty states, help.
-- Labels: mono 11px, uppercase, letter-spacing .08em, muted.
-- The main number of a block is its largest text (KPI 22-28px mono 600); weights stay
-  400 text, 500 table heads, 600 labels, emphasis and big mono numbers; 700 only for sans (mono ships 400-600).
-- Table numbers right-aligned with tabular figures, in mono 13px; text cells (names, prompts, notes,
-  subagent run lines) stay sans, and headers that hold content (compare titles, markdown) keep their case.
-- Buttons, pills, selects and search boxes: mono 12px, weight 400-500. Sentences inside a tile (the "history starts" line) stay sans.
+- Sans = Hanken Grotesk (--sans, 400-800): interface text, labels, numbers (tabular figures from `body`).
+- Mono = DM Mono (--mono, 400 and 500 only; IBM Plex Mono covers Vietnamese): ids, code, model names, times in tables.
+- Base 15px, line height 1.5. page h1 28px (22px in the report), card h2 17px, h3 1rem, weight 700.
+- Table heads and group labels: 11px, uppercase, letter-spacing .06em, muted. Stat-tile labels are sentence case, 13px, muted.
+- The main number of a block is its largest text (stat tile 19px, 24px on the Overview, weight 700). Table numbers right-aligned.
 
 Shapes
-- Outlines: 1.5px solid ink on cards, tiles and pills; tables use 1px rule lines inside.
-- Cards radius 14px, tiles 12px, buttons and filters are 999px pills.
-- Flat offset shadow, no blur, one per page: the card that answers the page's main question
-  (Overview: Today) gets 10px 12px. Hover on a clickable card: shift -2px, 5px 6px shadow.
-  Plain cards and tiles: outline only.
-- Pills: outline + paper fill; hover or selected = filled ink with paper text.
-- Chart marks: bars, legend swatches, share segments and columns get a 1px ink edge, dots a
-  1.5px one; a hollow dot (paper fill) marks the earlier value. Thin bars are at least 10px
-  tall. Lines (sparkline, 7-day average) use the text-safe tokens (--mark-ink, --agent-ink).
-- Selection (picked row) = 2px ink outline, never a ring of tint. Primary button is a filled pill
-  that inverts to paper on hover. Session rows do not lift on hover (colour only). Diff gap cells are flat chip colour.
+- Radius: 8px buttons, inputs, menu items; 12px cards and tables; 99px pills; 6px chips.
+- Cards at rest: 1px line, no shadow. Shadow (0 8px 30px rgba(27,27,47,.14)) only on popovers, dialogs, the compare
+  tray and card hover.
+- Selected state (menu item, segment, picked row): accent soft background, accent text (--on-bg, --on-fg, --on-line).
+- Segmented controls are joined (one outline, the selected segment filled). Primary button is filled accent.
+- Status pills are soft fills (ok / warn / bad), not outlines. Icons: the 24px stroke set in
+  `tokscope/web/theme/icons.py` (2px stroke, round caps, currentColor), inline SVG.
+- Charts: stacked bars main (indigo) under subagents (teal); sparklines are a 1.5px line with a light fill under it.
 
-Tokens (write a new rule once, in `tokscope/web/theme/layout.py`; Classic is retired, Ink is the only look)
-- Ink is tokens plus a short look block. A rule reads a token, never a literal outline, radius or font.
+Tokens (write a new rule once, in `tokscope/web/theme/layout.py`)
+- The look is tokens plus a short look block in `report/styles.py`. A rule reads a token, never a literal colour.
   The full list sits above `LAYOUT_TOKEN_CSS` in `layout.py`.
-- Outline: `border:var(--line-w) solid var(--line-c)` (1px edge). Focus ring: `outline:2px solid var(--focus-c)`.
-  Row and day rules: `var(--row-c)`.
-- Radius: `--r-card` (cards, 10), `--r-tile` (rows, KPIs, 8), `--r-box` (panels, 8), `--r-ctl` (inputs, selects, chips,
-  8), `--r-btn` (small buttons), `--r-bar` (bar tracks).
-- Controls: `--pad-sel`, `--pad-in`, `--pad-chip`, `--pad-btn` (padding), `--in-bg` (input background), `--ctl-size` (text size),
-  `--btn-w` (weight).
-- Type: `font-family:var(--num-font)` for labels, numbers and controls (mono). A label reads `--lab-case`, `--lab-track`,
-  `--lab-size`, `--lab-w` and `--lab-c`. A number cell reads `--cell-size`.
-- Charts: `--seg-ring` (ring round a segment), `--trace-c` (line and sparkline colour), `--dot-edge` (edge of a dot), `--bar-h`, `--key-s`.
-- Only what differs in kind goes in the look block: the answer-card emphasis (flat navy shadow), hover and pressed looks, delta style. Add a token only when two or more rules need it.
+- Outline: `border:var(--line-w) solid var(--line-c)`. Focus ring: `outline:2px solid var(--focus-c)` (accent).
+- Radius: `--r-card`, `--r-tile`, `--r-box`, `--r-ctl`, `--r-btn`, `--r-bar`. Controls: `--pad-*`, `--in-bg`, `--ctl-size`, `--btn-w`.
+- Labels read `--lab-case`, `--lab-track`, `--lab-size`, `--lab-w`, `--lab-c`; numbers `--num-font` (sans).
+- Add a token only when two or more rules need it.
 
 Motion (working tool: state changes are fast, nothing loops)
 - Three durations, as CSS tokens in the layout sheet (`tokscope/web/theme/layout.py`): --t-fast 120ms (press, hover colour),
@@ -98,30 +85,23 @@ Motion (working tool: state changes are fast, nothing loops)
   (static, no shine), #144 Split screen and #057 Tabs (compare).
 
 Content rules
-- Up and down are an arrow plus a number ("▲ 59.8×", "▼ 8%"), never colour alone. Up in
-  tokens is tomato (more spend), down is mint.
+- Up and down are an arrow plus a number ("▲ 59.8×", "▼ 8%"), never colour alone.
 - Main thread vs subagent is always named in a legend or column head, not colour alone.
 - Hide what doesn't vary: no 0 rows, no "new" column when nothing is new, no repeated units.
-- Show the time window and freshness where numbers can mislead: "last 30 days against the
-  range before", "live · updated just now", "history starts 2026-09-21: too short to compare".
-- Benchmarks and replays that run Claude say they use quota where they are started; nothing
-  calls Claude by itself.
-- Empty states say what would appear and how to get it ("No sessions in this range: widen
-  the range or run `tokscope ingest`").
+- Show the time window and freshness where numbers can mislead.
+- Benchmarks and replays that run Claude say they use quota where they are started; nothing calls Claude by itself.
+- Empty states say what would appear and how to get it.
 
 Layout
-- Order: today / the answer → what changed → breakdowns → history and raw tables (folded).
-- Sidebar navigation stays; the theme toggle and help stay in it. The brand mark is ink only.
-- KPI tiles: auto-fill grid, min 160px; cards: auto-fill, min 400px, 22px gaps; one column
-  under 640px. Wide tables scroll inside their card, never the page.
-- Touch targets at least 32px tall; everything reachable by keyboard with a visible focus
-  ring; aria-pressed on toggles; reduced motion removes travel and scale and keeps opacity and colour (see Motion).
+- Left menu 248px with icons and group labels (Usage, Workspace, Connect, System); below 640px it becomes a top bar
+  with a Menu button. Page head: h1, a muted subtitle, actions on the right; filters (range segments, Project, Model, Skill).
+- Two-column pages: main column plus a 300px side column; one column below 1100px.
+- Stat tiles: separate cards, 3 a row, 2 on a phone. Wide tables scroll inside their box, never the page.
+- Touch targets at least 44px on a phone; everything reachable by keyboard with a visible focus ring; aria-pressed on toggles.
 
 Don't
-- No gradients, glows, emoji or blurred shadows (this removes the report hero's radial
-  gradients and the blurred hover shadows on session rows). No fonts beyond the two bundled
-  faces, no CDNs.
-- No monospace paragraphs. No accent colour that isn't data.
+- No gradients, glows or emoji. No fonts beyond the bundled faces, no CDNs.
+- No colour that is not the accent, a status or a data series.
 - Don't change layout or behaviour beyond the ask; say so if you think it should change.
 
 Deliver
@@ -129,4 +109,4 @@ Deliver
 - A short list of every choice not covered above, so this prompt can be updated.
 ```
 
-Brand (owner's choice, 2026-10-21): the mark and favicon (`tokscope/web/theme/brand.py`) are drawn in ink only, no blue or amber. The sidebar mark uses `currentColor` (the theme's ink); the favicon is an ink gauge on a paper square with an ink outline, so it reads on light and dark tab bars.
+Brand: the mark and favicon (`tokscope/web/theme/brand.py`) are a white gauge on an indigo (#4B4FD8) rounded square.
