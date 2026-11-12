@@ -72,6 +72,18 @@ class Fixture(unittest.TestCase):
         return sqlite3.connect(self.db).execute(sql).fetchall()
 
 
+class AgentTitleTest(Fixture):
+
+    def test_title_falls_back_to_the_agent_call_input(self):
+        self.write_main([human("go"), assistant("r1", tools=[("t1", "Agent", {"description": "Review the fixes"}),
+                                                              ("t2", "Agent", {"description": "ignored"})])])
+        self.write_agent("a1", {"agentType": "general-purpose", "toolUseId": "t1"}, [assistant("r2")])
+        self.write_agent("a2", {"agentType": "general-purpose", "toolUseId": "t2", "description": "from meta"}, [assistant("r3")])
+        self.run_ingest()
+        self.assertEqual(self.rows("SELECT agent_id, description FROM subagents ORDER BY agent_id"),
+                         [("a1", "Review the fixes"), ("a2", "from meta")])
+
+
 class ErrorTest(Fixture):
     def test_failed_calls_are_classified_and_a_repeat_needs_the_same_input(self):
         edit = {"file_path": "a.py", "old_string": "x", "new_string": "y"}
