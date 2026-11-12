@@ -15,6 +15,15 @@ class IconsTest(unittest.TestCase):
         self.assertIn('aria-hidden="true"', svg)
         self.assertNotIn("http", svg)
 
+    def test_a_skill_gets_the_same_chip_tint_in_python_and_in_the_page_script(self):
+        from tokscope.web.report.scripts import JS_SESSIONS
+        from tokscope.web.report.widgets import hue, skill_chip
+        # 32-bit FNV-1a over UTF-16 code units, mod 5; the script spells the same two constants
+        self.assertEqual([hue(n) for n in ("factory", "code-review", "xia2", "Explore", "ünï😀")], [0, 2, 1, 3, 2])
+        self.assertIn("0x811c9dc5", JS_SESSIONS)
+        self.assertIn("0x01000193", JS_SESSIONS)
+        self.assertEqual(skill_chip("a<b"), '<span class="skc t%d" title="a&lt;b">a&lt;b</span>' % hue("a<b"))
+
 
 if __name__ == "__main__":
     unittest.main()

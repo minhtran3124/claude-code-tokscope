@@ -429,7 +429,7 @@ class SessionsTableTest(unittest.TestCase):
         picked = re.search(r"#session-list \.srow\.picked\[open\],#session-list \.srow\.picked\[open\]:hover\{([^}]*)\}", block)
         self.assertIsNotNone(picked)
         self.assertIn("inset 6px 0 0 var(--mark)", picked.group(1))        # a wider edge than the plain panel's 4px
-        self.assertIn("var(--tint)", picked.group(1))
+        self.assertIn("var(--on-bg)", picked.group(1))                      # the shared selected-state token
         self.assertNotRegex(picked.group(1), r"#[0-9a-fA-F]{3,8}\b")
         self.assertLess(block.index(rule.group(0)), block.index(picked.group(0)))
         self.assertIn("--tint:", CSS)
@@ -453,7 +453,8 @@ class SessionsTableTest(unittest.TestCase):
         self.assertIn("#session-list{border:var(--line-w) solid var(--line-c);border-radius:var(--r-box)", layout)
         self.assertIn("text-transform:var(--lab-case)", layout)
         self.assertIn("--lab-case:uppercase", CSS)
-        self.assertIn("#sessions .pickbar{background:var(--bar);color:var(--bar-ink);border-radius:12px", CSS)  # the compare tray is a dark bar
+        self.assertIn("#sessions .pickbar{background:var(--bar);color:var(--bar-ink);", CSS)  # the compare tray is a dark bar
+        self.assertNotRegex(CSS, r"#sessions \.pickbar\{[^}]*border-radius")    # its radius is the layout sheet's
 
     def test_a_hostile_session_id_is_escaped_everywhere_the_script_writes_html(self):
         js = JS_SESSIONS
@@ -575,6 +576,8 @@ console.log(JSON.stringify([before,after,old,turn.match(S[2]),turn.whyOf(S[2]),J
         self.assertNotIn(".why", LAYOUT_CSS + LAYOUT_DASH_CSS)
         self.assertIn("#session-list .srow.has-why>summary .t{flex-wrap:wrap", LAYOUT_TOKEN_CSS)
         self.assertNotRegex(LAYOUT_TOKEN_CSS + LAYOUT_DASH_CSS, r"#session-list \.srow>summary \.t\{[^}]*flex-wrap")  # every other row keeps one ellipsised line
+        # the project line wraps below, and the title's 0 basis keeps the rest on the first line
+        self.assertIn("#session-list .srow>summary .t:has(>.pj)>.tt{flex:1 1 0}", LAYOUT_TOKEN_CSS)
         self.assertIn("el.classList.toggle('has-why',!!why)", JS_SESSIONS)
         # a row without a chip keeps its ellipsis: the title and its cell clip, so a long unbroken title cannot push the tokens
         self.assertIn(".srow>summary .tt{overflow:hidden;text-overflow:ellipsis;min-width:0}", LAYOUT_CSS)
@@ -801,7 +804,8 @@ class OverviewTest(unittest.TestCase):
         body = self.page()
         self.assertIn("Biggest cause: <b>new-skill</b> (skill)", body)
         self.assertIn('<table class="movers">', body)
-        self.assertIn('<td class="tagc"><span class="tag">skill</span></td>', body)
+        self.assertIn('<td><span class="skc t', body)                     # the name is a tinted chip
+        self.assertIn('<td class="tagc">skill</td>', body)
 
     def test_a_typical_day_is_the_median_of_the_last_14_active_days(self):
         day = lambda n: date(2026, 10, 1) + timedelta(days=n)             # noqa: E731

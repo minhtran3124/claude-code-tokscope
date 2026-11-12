@@ -14,7 +14,7 @@ a.sk:hover{border-color:var(--on-line);box-shadow:0 8px 30px var(--shadow)}
 table.sbs th{font:600 12px var(--sans)}
 table.sbs td.gap{background:var(--chip)}
 .decide{border:var(--line-w) solid var(--on-line)}
-.btn.danger{color:var(--fail);border-color:var(--fail)}
+.btn.danger{border-color:var(--fail)}
 .btn.danger:hover{background:color-mix(in oklch,var(--fail) 13%,var(--surface));border-color:var(--fail)}
 table.sbs th{font:600 11px/1.45 var(--sans)}
 /* overview: look only (the layout is in layout.py, between "overview" and "end overview") */

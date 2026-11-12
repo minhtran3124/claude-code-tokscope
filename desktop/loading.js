@@ -1,5 +1,5 @@
-// The page the window shows before the dashboard answers: an ink gauge whose needle sweeps, a card with the offset block
-// of the dashboard's hero, and a shimmering line of text. Colours are the dashboard's --page, --ink, --mark and --agent
+// The page the window shows before the dashboard answers: a gauge whose needle sweeps, a white card with a soft
+// shadow, and a shimmering line of text. Colours are the dashboard's --page, --ink, --mark and --agent
 // (light and dark). No script: the page is a data: URL, and its text is escaped here.
 
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };

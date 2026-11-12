@@ -11,6 +11,9 @@ PATHS = {
     "flask": "M9 3h6M10 3v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V3M7.5 15h9",
     "cloud": "M7 18a4 4 0 01-.5-8 6 6 0 0111.5 1.5A3.5 3.5 0 0117.5 18z",
     "sliders": "M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6",
+    "refresh": "M20 12a8 8 0 11-3-6.2M20 4v5h-5",
+    "chart": "M5 20V10M11 20V4M17 20v-7",
+    "gauge": "M4 16a8 8 0 1116 0M12 16l4-5",
 }
 # the icon beside each page in the menu
 PAGE_ICON = {"overview": "home", "sessions": "list", "breakdowns": "pivot", "projects": "folder", "library": "puzzle",
