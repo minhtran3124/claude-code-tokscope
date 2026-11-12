@@ -14,7 +14,7 @@ def hue(name):
     """One of five chip tints for a name, the same on every page and in the page script (report/scripts.py hue):
     32-bit FNV-1a over the UTF-16 code units."""
     h = 0x811C9DC5
-    b = name.encode("utf-16-le")
+    b = name.encode("utf-16-le", "surrogatepass")  # a lone surrogate from a broken transcript still hashes, as in the script
     for k in range(0, len(b), 2):
         h = ((h ^ int.from_bytes(b[k:k + 2], "little")) * 0x01000193) & 0xFFFFFFFF
     return h % 5
