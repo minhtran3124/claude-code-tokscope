@@ -765,6 +765,7 @@ td.l,td.lm,td.calls,.md td{font-family:var(--sans)}
 #session-list .srow>summary .t:has(>.pj)>.tt:not(:empty){flex:1 1 0}
 #session-list .srow>summary .pj{order:9;flex:0 0 100%;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:12px;line-height:1.4;color:var(--muted)}
 #session-list .srow>summary .d{font-family:var(--mono);color:var(--muted)}
+@media (min-width:640px){#session-list .srow>summary .d{font-size:13px}}  /* the phone keeps its 12px */
 #session-list .srow .body .ids{background:var(--track);border-color:transparent}
 #session-list .srow .body .ids .code{background:var(--surface)}
 .ids .cp{flex:none;white-space:nowrap}  /* a narrow screen broke "Copy" letter by letter */

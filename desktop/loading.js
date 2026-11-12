@@ -1,6 +1,6 @@
 // The page the window shows before the dashboard answers: a gauge whose needle sweeps, a card in the surface colour
-// with a soft shadow, and a shimmering line of text. Colours are the dashboard's tokens (--page, --surface, --ink, --muted,
-// --mark, --agent and a shadow tone), light and dark. No script: the page is a data: URL, and its text is escaped here.
+// with a thin border and a soft shadow, and a shimmering line of text. Colours are the dashboard's tokens (--page, --surface,
+// --ink, --muted, --mark, --agent; --shadow is the card's border tone), light and dark. No script: the page is a data: URL, and its text is escaped here.
 
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };
 
