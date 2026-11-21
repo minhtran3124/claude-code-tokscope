@@ -1,19 +1,14 @@
 {
   "permissions": {
-    "deny": ["Read(./.env)", "Edit(./.env)"]
-  },
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "if": "Bash(gh pr create *)",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pr-opened.sh"
-          }
-        ]
-      }
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Edit(./.env)",
+      "Edit(./.env.*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push * main)",
+      "Bash(git push * master)"
     ]
   }
 }
