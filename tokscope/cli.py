@@ -13,7 +13,7 @@ from .core.ingest import connect, ingest, ingest_otel, ingest_session
 from .core import tz
 from .core.pricing import API_EQ_NOTE, unpriced, unpriced_text
 from .core import errors
-from .core.summary import SUMMARY_SQL, rows as summary_rows, to_csv as summary_csv, to_json as summary_json
+from .core.summary import CAUSE_NOTE, NOT_A_CAUSE, SUMMARY_SQL, rows as summary_rows, to_csv as summary_csv, to_json as summary_json
 from .core.privacy import LEVELS
 
 ROOT = paths.home()
@@ -71,6 +71,8 @@ def _summary(args, conn):
     # the notes are not data: with json or csv, stdout holds only the rows
     note_out = sys.stdout if fmt == "table" else sys.stderr
     print(API_EQ_NOTE, file=note_out)
+    if args.by in NOT_A_CAUSE:
+        print(CAUSE_NOTE, file=note_out)
     if note := unpriced_text(unpriced(conn, where, params)):
         print(note, file=note_out)
 

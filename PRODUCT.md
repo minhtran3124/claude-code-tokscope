@@ -34,7 +34,7 @@ The dashboard answers only on `127.0.0.1` and refuses requests from other hosts 
   Optimize (below).
 - **Benchmarks**: benchmark runs and answers.
 - **Breakdowns**: tokens by MCP server, tool, skill, owner, phase and subagent type, each with its finding. Its **Summary** section
-  shows the `tokscope summary` table (group by phase, skill, agent or model) for the filter bar, with Download CSV, Download JSON
+  shows the `tokscope summary` table (group by phase, skill, agent, model, Claude Code version or entrypoint) for the filter bar, with Download CSV, Download JSON
   and Copy. The group-by is `?by=` in the URL. `GET /api/summary?by=&format=json|csv` gives the same rows with the same filters
   (without `by` and `format` it keeps returning the totals). The HTML report has the same section; its downloads are built in the browser.
 - **Managed** (full level only): your Claude Managed Agents, read through the `ant` CLI (below).
@@ -231,7 +231,7 @@ Built-in tool and agent names and phase names do not change.
 | --- | --- |
 | `tokscope ingest [--project TEXT] [--session ID]` | Reads new transcripts into the database (incremental) |
 | `tokscope session ID [--json]` | Ingests one session and shows its tokens |
-| `tokscope summary [--by phase\|skill\|agent\|model] [--format table\|json\|csv] [--since DATE] [--project TEXT] [--limit N]` | Shows a table in the terminal; json and csv print only the rows (keys `key, requests, prompt_tokens, output_tokens, cost_usd, carried_cost_usd`), the notes go to stderr |
+| `tokscope summary [--by phase\|skill\|agent\|model\|version\|entrypoint] [--format table\|json\|csv] [--since DATE] [--project TEXT] [--limit N]` | Shows a table in the terminal; json and csv print only the rows (keys `key, requests, prompt_tokens, output_tokens, cost_usd, carried_cost_usd`), the notes go to stderr |
 | `tokscope patterns [--since DATE] [--format table\|json] [--privacy full\|redacted\|numbers]` | Read-only: shows which kinds of prompts cost the most, what they ran and how they ended. Groups are workflows (keyed by the first skill a prompt loads) and repeated tasks (3 or more prompts in 2 or more sessions), ranked by in-prompt cost (the prompt with its subagents, minus reads inherited from its first request). Reads the last 14 days unless `--since` is given. `redacted` and `numbers` read a redacted copy and show only workflow groups, with no prompt text; their outcomes come from the facets files and only known values are shown. json prints only the groups (keys `kind, key, prompts, sessions, in_prompt_usd, in_prompt_low, in_prompt_median, in_prompt_high, steps_median, subagent_requests, skills, start_context_median, outcomes, example`), the notes go to stderr |
 | `tokscope report [--out FILE] [--privacy LEVEL] [--since DATE] [--project TEXT]` | Writes the HTML report |
 | `tokscope open [same options as report]` | Ingests, writes the report and opens it |

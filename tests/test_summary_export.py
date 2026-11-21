@@ -1,5 +1,6 @@
 """Summary rows as CSV and JSON: the CLI --format, /api/summary, the Summary section and the report's downloads."""
 import contextlib
+import html
 import csv
 import io
 import json
@@ -170,6 +171,68 @@ class CliTest(unittest.TestCase):
                 cli.main()
 
 
+class VersionEntrypointTest(unittest.TestCase):
+    """#265: group the cost by the Claude Code version and the entrypoint that ran each session."""
+
+    def setUp(self):
+        self.db = Path(tempfile.mkdtemp()) / "t.db"
+        conn = connect(self.db)
+        conn.executemany("INSERT INTO sessions (session_id, project, cwd, title, prompts, version, entrypoint) VALUES (?, '-home-u-app', '/home/u/app', 't', 1, ?, ?)",
+                         [("s1", "2.1.310", "cli"), ("s2", "2.1.318", "sdk-cli"), ("s3", None, None)])
+        for key, sid, cost in (("a", "s1", 1.0), ("b", "s1", 2.0), ("c", "s2", 4.0), ("d", "s3", 0.5)):
+            conn.execute("INSERT INTO requests (session_id, request_key, ts, model, prompt_idx, skill, phase, input, output, cache_read, "
+                         "cache_write_5m, cache_write_1h, cost_usd) VALUES (?, ?, ?, 'claude-opus-5-5', 1, NULL, 'plan', 100, 10, 50, 0, 0, ?)",
+                         (sid, key, ts(1), cost))
+        conn.commit()
+        self.conn = conn
+        self.addCleanup(conn.close)
+
+    def run_cli(self, by, fmt="table", limit=25):
+        args = cli.argparse.Namespace(by=by, since=None, until=None, project=None, limit=limit, format=fmt)
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), mock.patch.object(cli, "DB", self.db):
+            cli.summary(args)
+        return out.getvalue(), err.getvalue()
+
+    def test_one_row_per_version_dearest_first_and_unknown_for_none(self):  # AC1
+        rows = summary.rows(self.conn, "version")
+        self.assertEqual([(r["key"], r["requests"], r["cost_usd"]) for r in rows],
+                         [("2.1.318", 1, 4.0), ("2.1.310", 2, 3.0), ("unknown", 1, 0.5)])
+
+    def test_one_row_per_entrypoint(self):  # AC2
+        self.assertEqual([r["key"] for r in summary.rows(self.conn, "entrypoint")], ["sdk-cli", "cli", "unknown"])
+
+    def test_json_csv_and_limit_keep_the_usual_fields(self):  # AC3
+        for by in ("version", "entrypoint"):
+            out, _ = self.run_cli(by, "json")
+            self.assertEqual(set(json.loads(out)[0]), set(summary.FIELDS))
+            out, _ = self.run_cli(by, "csv")
+            self.assertEqual(out.splitlines()[0], ",".join(summary.FIELDS))
+            out, _ = self.run_cli(by, "json", limit=1)
+            self.assertEqual(len(json.loads(out)), 1)
+
+    def test_the_table_carries_the_not_a_cause_note_only_for_these_groups(self):  # Q3
+        out, _ = self.run_cli("version")
+        self.assertIn("2.1.318", out)
+        self.assertIn(summary.CAUSE_NOTE, out)
+        self.assertNotIn(summary.CAUSE_NOTE, self.run_cli("phase")[0])
+        _, err = self.run_cli("entrypoint", "csv")
+        self.assertIn(summary.CAUSE_NOTE, err)  # notes stay off stdout for csv
+
+    def test_totals_match_the_phase_grouping(self):  # AC7
+        total = lambda by: round(sum(r["cost_usd"] for r in summary.rows(self.conn, by)), 6)  # noqa: E731
+        self.assertEqual(total("version"), total("phase"))
+        self.assertEqual(total("entrypoint"), total("phase"))
+
+    def test_the_parser_takes_the_new_group_bys(self):
+        for by in ("version", "entrypoint"):
+            with mock.patch.object(sys, "argv", ["tokscope", "summary", "--by", by, "--format", "json"]), \
+                    mock.patch.object(cli, "DB", self.db), contextlib.redirect_stdout(io.StringIO()) as out, \
+                    contextlib.redirect_stderr(io.StringIO()):
+                cli.main()
+            self.assertTrue(json.loads(out.getvalue()))
+
+
 class ReportTest(unittest.TestCase):
     def test_the_report_holds_all_four_tables_and_builds_its_downloads_in_the_browser(self):
         tmp = Path(tempfile.mkdtemp())
@@ -179,7 +242,11 @@ class ReportTest(unittest.TestCase):
         page = out.read_text()
         for by in summary.SUMMARY_SQL:
             self.assertIn(f'data-by="{by}"', page)
-        self.assertEqual(len(re.findall(r'class="sum-pane"[^>]* hidden>', page)), 3)  # one table shows, three wait for the chips
+        hidden = len(summary.SUMMARY_SQL) - 1
+        self.assertEqual(len(re.findall(r'class="sum-pane"[^>]* hidden>', page)), hidden)  # one table shows, the rest wait for the chips
+        self.assertIn('data-pick="version"', page)
+        self.assertIn('data-pick="entrypoint"', page)
+        self.assertEqual(page.count(html.escape(summary.CAUSE_NOTE)), 2)  # under the version and entrypoint panes only
         self.assertIn('data-dl="csv"', page)
         self.assertIn("new Blob", page)
         self.assertNotIn("/api/summary", page)

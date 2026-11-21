@@ -1,14 +1,14 @@
-"""The Summary section: the CLI's cost table by phase, skill, agent or model, with CSV and JSON downloads and Copy."""
+"""The Summary section: the CLI's cost table by phase, skill, agent, model, version or entrypoint, with CSV and JSON downloads and Copy."""
 
 import html
 import json
 
 from ....core.pricing import API_EQ_NOTE, unpriced, unpriced_text
-from ....core.summary import SUMMARY_SQL, rows
+from ....core.summary import CAUSE_NOTE, NOT_A_CAUSE, SUMMARY_SQL, rows
 from ...theme.icons import icon
 from ..widgets import _more, _table, _tok, _usd, skill_chip
 
-TITLES = {"phase": "Phase", "skill": "Skill", "agent": "Agent", "model": "Model"}
+TITLES = {"phase": "Phase", "skill": "Skill", "agent": "Agent", "model": "Model", "version": "Version", "entrypoint": "Entrypoint"}
 
 
 def _share(x):
@@ -25,6 +25,8 @@ def _pane(found, by, shown, chips=False):
                    [(name(r["key"]), f"{r['requests']:,}", _tok(r["prompt_tokens"]), _share(r["cost_usd"] / total), _tok(r["output_tokens"]),
                      (_usd(r["cost_usd"]), "u")) + ((f"{r['carried_cost_usd'] / (r['cost_usd'] or 1):.0%}",) if carried else ())
                     for r in found], None) if found else '<p class="note">No requests in this range.</p>'
+    if found and by in NOT_A_CAUSE:
+        table += f'<p class="note">{html.escape(CAUSE_NOTE)}</p>'
     return (f'<div class="sum-pane" data-by="{by}" data-rows="{html.escape(json.dumps(found, separators=(",", ":")))}"'
             f'{"" if shown else " hidden"}>{table}</div>')
 
@@ -62,5 +64,5 @@ def summary_view(conn, cond, params, by="phase", api_query=None, link=None):
              f'<span class="seg" role="group" aria-label="Group by">{chips}</span>'
              f'<span class="acts">{dl("csv")}{dl("json")}<button type="button" class="btn" data-copy>Copy</button></span></div>'
              + "".join(_pane(found, b, b == by) for b, found in panes) + notes + "</div>")
-    return _more("Summary", "the cost table by phase, skill, agent or model, as in <code>tokscope summary</code>; "
+    return _more("Summary", "the cost table by phase, skill, agent, model, version or entrypoint, as in <code>tokscope summary</code>; "
                  "download it as CSV or JSON", inner, "summary", is_open=True)

@@ -3,6 +3,12 @@
 Versions follow [semver](https://semver.org). Before 1.0 a minor bump may break things; each break is listed.
 The version lives in `tokscope/__init__.py`; `mod/.claude-plugin/plugin.json` must carry the same number.
 
+## Unreleased
+
+- `tokscope summary --by version` and `--by entrypoint` group the cost by the Claude Code release and by how it ran
+  (`cli`, `sdk-cli`, `claude-desktop`, ...); sessions without one show as `unknown`. The Breakdowns Summary card, the
+  report and `/api/summary?by=` get the same two groupings, with a note that a cost gap is not proof of a regression (#265).
+
 ## 0.2.0 - 2026-10-22
 
 The dashboard redesign (#23). No data, CLI or database changes: the same tokens and costs, on new screens. The

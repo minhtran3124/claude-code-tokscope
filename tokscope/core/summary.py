@@ -12,7 +12,11 @@ SUMMARY_SQL = {
     "skill": "COALESCE(skill, '(none)')",
     "agent": "COALESCE(agent_type, 'main')",
     "model": "model",
+    "version": "COALESCE(s.version, 'unknown')",  # the Claude Code release that ran the session
+    "entrypoint": "COALESCE(s.entrypoint, 'unknown')",  # cli, sdk-cli, claude-desktop, ...
 }
+NOT_A_CAUSE = {"version", "entrypoint"}  # groups that ran different work: a cost gap is not proof of a regression
+CAUSE_NOTE = "A cost gap between groups is not proof of a regression: each group ran different work."
 SOURCE_FIELDS = ("typed_loads", "typed_median_tokens", "tool_loads", "tool_median_tokens")  # by skill, when any load exists
 FIELDS = ("key", "requests", "prompt_tokens", "output_tokens", "cost_usd", "carried_cost_usd")
 DEFAULT_LIMIT = 25

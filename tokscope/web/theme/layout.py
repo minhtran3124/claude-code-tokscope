@@ -499,6 +499,7 @@ details.finding-sec .empty code{overflow-wrap:anywhere}
 @media (max-width:1100px){.bdgrid{grid-template-columns:minmax(0,1fr);grid-template-areas:"rail" "main"}}
 /* Summary by phase: a separate Share bar column */
 .sumview th:nth-child(4),.sumview td:nth-child(4){width:22%}
+.sum-pane>.note{margin:10px 0 0}
 .shr{display:block;height:var(--bar-h);min-width:60px;border-radius:var(--r-bar);background:var(--track);overflow:hidden}
 .shr i{display:block;height:100%;min-width:2px;border-radius:var(--r-bar);background:var(--mark)}
 /* Sections: one card of accordion rows under its heading, a chevron, the title, the finding, a mini bar or an ok/warn pill at the end */
@@ -1156,7 +1157,7 @@ kbd.keypill{font:500 11px var(--mono);padding:2px 10px;border:var(--line-w) soli
 .sumcard .sumhead .note{margin:0;flex:1 1 14em;min-width:0}
 .sumcard .sumhead .acts{display:flex;flex-wrap:wrap;gap:8px}
 .sumcard .btn,.card .btn:has(>.ic){display:inline-flex;align-items:center;gap:6px;border:var(--line-w) solid var(--line-c)}
-.sumtabs{display:flex;gap:2px;margin:0 0 6px;border-bottom:1px solid var(--grid);overflow-x:auto}
+.sumtabs{display:flex;flex-wrap:wrap;gap:2px;margin:0 0 6px;border-bottom:1px solid var(--grid)}
 .sumtabs .chip{flex:none;margin-bottom:-1px;padding:9px 14px;border:0;border-bottom:2px solid transparent;border-radius:0;background:none;color:var(--muted);font-size:14px}
 .sumtabs .chip:hover{background:none;color:var(--ink)}
 .sumtabs .chip.on{background:none;color:var(--on-fg);border-color:var(--mark)}
