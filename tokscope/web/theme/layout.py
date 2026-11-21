@@ -1157,8 +1157,10 @@ kbd.keypill{font:500 11px var(--mono);padding:2px 10px;border:var(--line-w) soli
 .sumcard .sumhead .note{margin:0;flex:1 1 14em;min-width:0}
 .sumcard .sumhead .acts{display:flex;flex-wrap:wrap;gap:8px}
 .sumcard .btn,.card .btn:has(>.ic){display:inline-flex;align-items:center;gap:6px;border:var(--line-w) solid var(--line-c)}
-.sumtabs{display:flex;flex-wrap:wrap;gap:2px;margin:0 0 6px;border-bottom:1px solid var(--grid)}
-.sumtabs .chip{flex:none;margin-bottom:-1px;padding:9px 14px;border:0;border-bottom:2px solid transparent;border-radius:0;background:none;color:var(--muted);font-size:14px}
+/* the tabs wrap on a phone; each tab (and ::after, the rest of the last line) draws its part of the base line */
+.sumtabs{display:flex;flex-wrap:wrap;margin:0 0 7px}
+.sumtabs::after{content:"";flex:1 0 0;box-shadow:0 1px 0 var(--grid)}
+.sumtabs .chip{flex:none;padding:9px 14px;border:0;border-bottom:2px solid transparent;border-radius:0;background:none;color:var(--muted);font-size:14px;box-shadow:0 1px 0 var(--grid)}
 .sumtabs .chip:hover{background:none;color:var(--ink)}
 .sumtabs .chip.on{background:none;color:var(--on-fg);border-color:var(--mark)}
 .bd-secs>h2{margin:4px 0 6px}
