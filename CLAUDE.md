@@ -26,7 +26,8 @@ only `cli` and `web` import `web` (`tests/test_layout.py`). Why: [docs/research-
 Skills, agents and hooks come from the `pd-bot` plugin (`claude plugin install pd-bot@pd-bot`, then `/pd-bot:pd-setup`),
 not from this repo. Skills run as `/pd-bot:<name>` (`pd-intake`, `pd-writing-plans`, `pd-implement`, `pd-review`, `pd-uat`,
 `pd-autopilot`, ...). Its hooks load the behavior rules at session start, guard merges into `main`, and scan for secrets.
-`.claude/settings.json` holds only the `permissions.deny` rules that `pd-setup` adds; `specs/` stays tracked here.
+`.claude/` keeps only `settings.json` (the `permissions.deny` rules that `pd-setup` adds) and `launch.json` (starts the
+dashboard on port 8771 for the desktop Browser pane); `specs/` stays tracked here.
 
 ## Rules
 

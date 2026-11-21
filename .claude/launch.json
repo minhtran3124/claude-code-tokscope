@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "tokscope",
+      "runtimeExecutable": "./bin/tokscope",
+      "runtimeArgs": ["serve", "--port", "8771", "--no-open"],
+      "port": 8771,
+      "cwd": "."
+    }
+  ]
+}
