@@ -2,7 +2,7 @@
 state: active         # active | paused | blocked | done
 progress: 44          # rough estimate, 0-100
 priority: medium     # high | medium | low
-updated: 2026-11-12
+updated: 2026-11-21
 updated_by: claude   # claude | manual
 ---
 
@@ -18,6 +18,7 @@ Owner checks the Indigo redesign (#257) on the real data; then reviews and merge
 - macOS app (#144-#148) cannot be verified without a Mac.
 
 ## Recent
+- 2026-11-21: Replaced the repo's own `.claude/` (factory skill, agents, hooks, rules) with the pd-bot plugin: ran pd-setup (specs/ and docs/solutions/ scaffold, deny rules in `.claude/settings.json`) and updated CLAUDE.md (Run and test, pd-bot workflow section) (PR open).
 - 2026-11-12: Subagent rows with no `description` in `meta.json` (SDK/bridge sessions) now take the title from the parent's Agent call input; parser version 25 re-reads old sessions (PR open). Redesign with the Indigo look (#257), step 1 of 5: new colour tokens in light and dark, bundled Hanken Grotesk and DM Mono, line icons in the left menu, restyled buttons, chips, tabs and the compare tray; the desktop loading screen and icon follow (PR #258, merged). Step 2: Overview gets six stat-tile cards, Needs a look icons, tinted skill chips in Biggest movers and a Share of all tokens card; Sessions rows show the project under the title and a tinted top-skill chip, the sort is one joined control; the opened session gets a sunken id box (PR #260, merged). The 8 small findings from its review are fixed (PR #261, merged). Steps 3 and 4: Breakdowns, Projects, Library, Optimize, Benchmarks, Managed and Settings restyled; Library has no median-tokens column (no per-skill figure exists) (PR #262, merged). Step 5: AA status fills, Indigo design prompt, stale Ink wording removed, README screenshots retaken, report and colour-blind checks (PR open).
 - 2026-11-06: Projects page: List/Cards toggle, find box, sort (tokens, cost, sessions, latest activity, session start, name) and Remove, which only hides the folder in projects.json after a question; "Removed from this list" restores it (PR open).
 - 2026-11-06: Optimize list (#252): decision-first page with a top card (runs needing a decision, Review newest), filter links, runs grouped by skill then decision need, verdict pills, one result line and relative time; the Decision column is gone (PR open).
@@ -27,4 +28,3 @@ Owner checks the Indigo redesign (#257) on the real data; then reviews and merge
 - 2026-11-06: Fixed the header date range overlapping the filters: it now sits on the line under the page title (PR open).
 - 2026-11-06: Overview: the Today card is flat (no offset shadow over the KPI strip) (PR open).
 - 2026-11-06: Sessions got its right rail (This range, Biggest session with a main/subagent split) (PR open). All screens now have a design-match PR merged.
-- 2026-11-06: Settings matches the design: one 760 px column, framed segmented controls, key pills and an About card (PR open). The Sessions rail is next.
