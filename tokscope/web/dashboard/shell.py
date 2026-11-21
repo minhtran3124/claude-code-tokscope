@@ -14,6 +14,7 @@ from ..theme.layout import LAYOUT_CSS, LAYOUT_DASH_CSS, LAYOUT_TOKEN_CSS, LAYOUT
 from ..theme.brand import MARK, favicon_link
 from ..theme.icons import PAGE_ICON, icon
 from ...features.changes import BENCH_PROJECT
+from ..report.sections.rows import TITLES as SUMMARY_TITLES
 from ..report.scripts import JS_BENCH, JS_CORE, JS_SESSIONS, JS_SUMMARY, JS_TREND
 from ..report.styles import CSS
 from .common import Filters, NAV_GROUPS, PAGES, RANGE_TABS, RANGES, _q
@@ -139,14 +140,19 @@ def render(conn, name, qs, stamp, level="full", token=""):
         return (f'<a href="{href}"{" class=on aria-current=page" if p == name else ""}>{icon(PAGE_ICON[p])}{PAGES[p]}'
                 + (f'<span class="cnt" title="All time, not filtered">{counts[p]:,}</span>' if p in counts else "") + "</a>")
     nav = "".join(f'<div class="grp">{group}</div>' + "".join(link(p) for p in pages) for group, pages in NAV_GROUPS)
-    reset = f' <a href="/{name}">clear filters</a>' if (f.project if name == "library" else f.query()) else ""
+    # the Summary tab (?by=) stays when the range or a filter changes: the range links and the form carry it
+    by = (qs.get("by") or [""])[0] if name == "breakdowns" else ""
+    by = by if by in SUMMARY_TITLES and by != "phase" else ""
+    keep_by = f'<input type="hidden" name="by" value="{by}">' if by else ""
+    reset = (f' <a href="/{name}{"?by=" + by if by else ""}">clear filters</a>'
+             if (f.project if name == "library" else f.query()) else "")
     # a skill page or an optimize run has its own header; a ?skill= that matches no skill falls back to the list, with the bar
     bar = ("" if name in ("projects", "managed", "optimize", "settings", "benchmarks") or (name == "library" and 'class="card libhead"' in body) else
            f'<form class="filters" method="get" action="/{name}">{_options(conn, f, "project" if name == "library" else None)}'
-           f'<button type="submit" class="chip">Apply</button>{reset}</form>')
+           f'{keep_by}<button type="submit" class="chip">Apply</button>{reset}</form>')
     # the range is tabs on a wide screen (links, so a click applies at once); the form keeps its Range select for the phone sheet
     tabs = ("" if not bar or name == "library" else '<nav class="range-tabs" aria-label="Range">' + "".join(
-        f'<a href="{f.link(name, range=k)}"{" class=on aria-current=true" if k == f.range else ""}>{t}</a>' for k, t in RANGE_TABS.items()) + "</nav>")
+        f'<a href="{f.link(name, range=k, by=by)}"{" class=on aria-current=true" if k == f.range else ""}>{t}</a>' for k, t in RANGE_TABS.items()) + "</nav>")
     # the title and one line under it start the page body; the header above holds the page name, range and filters
     chip = "" if level == "full" else f'<span class="privacy" role="note" title="Names and text follow the {level} level"><b>{level}</b></span>'
     dates = _range_dates(f) if bar and name != "library" else ""

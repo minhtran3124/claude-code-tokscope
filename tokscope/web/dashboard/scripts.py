@@ -229,9 +229,9 @@ DASH_JS = """
     if(u.origin===location.origin&&u.pathname+u.search!==location.pathname+location.search&&!u.pathname.startsWith('/api/'))on()});
   document.addEventListener('submit',e=>{if(e.target.matches('form.filters'))on()});
   window.tokscopeNavLoad=on})();
-// Apply keeps only the filters set, so the URL reads like the view (range=30 is the default)
+// Apply keeps only the filters set, so the URL reads like the view (range=30 is the default); a hidden field (the Summary tab) rides along
 document.querySelectorAll('form.filters').forEach(fm=>fm.addEventListener('submit',e=>{e.preventDefault();const q=new URLSearchParams();
-  fm.querySelectorAll('select').forEach(x=>{if(x.value&&!(x.name==='range'&&x.value==='30'))q.set(x.name,x.value)});
+  fm.querySelectorAll('select,input[type=hidden]').forEach(x=>{if(x.value&&!(x.name==='range'&&x.value==='30'))q.set(x.name,x.value)});
   location.href=fm.getAttribute('action')+(q.toString()?'?'+q:'')}));
 // a changed select applies at once, so the Apply button is hidden when scripts run
 document.querySelectorAll('form.filters select').forEach(x=>x.addEventListener('change',()=>x.form.requestSubmit()));

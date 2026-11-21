@@ -328,6 +328,18 @@ class ServerTest(unittest.TestCase):
         self.assertIn(">Version</a>", body)
         self.assertIn(html.escape(summary.CAUSE_NOTE), body)
 
+    def test_the_range_tabs_and_the_filter_form_keep_the_summary_tab(self):
+        _, body = self.get("/breakdowns?by=version&project=p1")
+        self.assertIn('href="/breakdowns?range=7&project=p1&by=version"', body)
+        self.assertIn('href="/breakdowns?range=all&project=p1&by=version"', body)
+        self.assertIn('<input type="hidden" name="by" value="version">', body)
+        self.assertIn('href="/breakdowns?by=version">clear filters</a>', body)
+        # phase is the default, an unknown value is dropped, and other pages never carry it
+        for url in ("/breakdowns?by=phase", "/breakdowns?by=zzz", "/overview?by=version"):
+            body = self.get(url)[1]
+            self.assertNotIn('name="by"', body)
+            self.assertNotIn("by=", body.split('class="range-tabs"', 1)[1].split("</nav>", 1)[0])
+
     def test_an_unknown_group_by_falls_back_to_phase(self):
         self.assertIn('data-by="phase"', self.get("/breakdowns?by=zzz")[1])
 
