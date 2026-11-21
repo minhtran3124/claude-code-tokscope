@@ -1,3 +1,4 @@
+import html
 import re
 import json
 import os
@@ -310,6 +311,22 @@ class ServerTest(unittest.TestCase):
         self.assertIn("data-copy", body)
         self.assertIn('data-by="skill"', body)
         self.assertNotIn('data-by="phase"', body)
+
+    def test_version_and_entrypoint_rows_and_tabs(self):  # #265 AC4, AC5
+        code, body = self.get("/api/summary?by=version&format=json&range=all")
+        self.assertEqual(code, 200)
+        self.assertEqual(sum(r["cost_usd"] for r in json.loads(body)),
+                         sum(r["cost_usd"] for r in json.loads(self.get("/api/summary?by=phase&format=json&range=all")[1])))
+        code, body = self.get("/api/summary?by=entrypoint&format=csv&range=all")
+        self.assertEqual((code, body.splitlines()[0]), (200, ",".join(summary.FIELDS)))
+        msg = json.loads(self.get("/api/summary?by=nope")[1])["error"]
+        for by in summary.SUMMARY_SQL:
+            self.assertIn(by, msg)
+        _, body = self.get("/breakdowns?range=7&by=entrypoint")
+        self.assertIn('class="chip on" href="/breakdowns?range=7&amp;by=entrypoint#summary" aria-current=page>Entrypoint', body)
+        self.assertIn('href="/api/summary?range=7&amp;by=entrypoint&amp;format=csv"', body)
+        self.assertIn(">Version</a>", body)
+        self.assertIn(html.escape(summary.CAUSE_NOTE), body)
 
     def test_an_unknown_group_by_falls_back_to_phase(self):
         self.assertIn('data-by="phase"', self.get("/breakdowns?by=zzz")[1])

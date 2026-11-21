@@ -64,7 +64,7 @@ Without the script: `pipx install .` (or `uv tool install .`), then add the full
 
 ```sh
 tokscope ingest              # read your transcripts into the database (see below for other folders)
-tokscope summary --by phase  # a table in the terminal (--by skill | agent | model)
+tokscope summary --by phase  # a table in the terminal (--by skill | agent | model | version | entrypoint)
 tokscope summary --by skill --format csv > skills.csv   # or --format json: only the rows on stdout
 tokscope patterns [--since DATE] [--format json] [--privacy redacted]   # which kinds of prompts cost the most (read-only, last 14 days)
 tokscope skills --format csv > versions.csv   # each skill version: loads, tokens, errors, regression (or --format json)

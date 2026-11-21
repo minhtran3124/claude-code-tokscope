@@ -33,7 +33,7 @@ def summary_rows_response(conn, qs):
     one = lambda k, default: (qs.get(k) or [default])[0].strip()  # noqa: E731
     by, fmt = one("by", "phase"), one("format", "json")
     if by not in summary.SUMMARY_SQL or fmt not in ("json", "csv"):
-        return 400, json.dumps({"error": "by is phase, skill, agent or model; format is json or csv"}), "application/json"
+        return 400, json.dumps({"error": f"by is one of {', '.join(summary.SUMMARY_SQL)}; format is json or csv"}), "application/json"
     try:
         limit = min(max(int(one("limit", str(summary.DEFAULT_LIMIT))), 1), 1000)
     except ValueError:
