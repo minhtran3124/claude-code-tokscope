@@ -2,7 +2,7 @@
 state: active         # active | paused | blocked | done
 progress: 44          # rough estimate, 0-100
 priority: medium     # high | medium | low
-updated: 2026-11-21
+updated: 2026-11-26
 updated_by: claude   # claude | manual
 ---
 
@@ -18,6 +18,7 @@ Review and merge PR #267 (Summary tab keeps the range and filters); then owner c
 - macOS app (#144-#148) cannot be verified without a Mac.
 
 ## Recent
+- 2026-11-26: Sessions take the title from `custom-title` (the last one wins over `ai-title`) and, with no title and no counted prompt, from the first cross-session message; parser version 26 re-reads old sessions (#268, PR #269, reviewed, CI green).
 - 2026-11-21: Replaced the repo's own `.claude/` (factory skill, agents, hooks, rules) with the pd-bot plugin: ran pd-setup (specs/ and docs/solutions/ scaffold, deny rules in `.claude/settings.json`) and updated CLAUDE.md (Run and test, pd-bot workflow section) (PR #264, merged). Market research picked the next feature: `summary --by version|entrypoint` (#265), built on the CLI, API, Breakdowns tabs and report with a not-a-cause note (PR #266, merged). Manual test of #266 on the Mac app passed except one check: the range tabs and filter form dropped the Summary tab (?by=), also true on main; fixed in PR #267 (open, review pending).
 - 2026-11-12: Subagent rows with no `description` in `meta.json` (SDK/bridge sessions) now take the title from the parent's Agent call input; parser version 25 re-reads old sessions (PR open). Redesign with the Indigo look (#257), step 1 of 5: new colour tokens in light and dark, bundled Hanken Grotesk and DM Mono, line icons in the left menu, restyled buttons, chips, tabs and the compare tray; the desktop loading screen and icon follow (PR #258, merged). Step 2: Overview gets six stat-tile cards, Needs a look icons, tinted skill chips in Biggest movers and a Share of all tokens card; Sessions rows show the project under the title and a tinted top-skill chip, the sort is one joined control; the opened session gets a sunken id box (PR #260, merged). The 8 small findings from its review are fixed (PR #261, merged). Steps 3 and 4: Breakdowns, Projects, Library, Optimize, Benchmarks, Managed and Settings restyled; Library has no median-tokens column (no per-skill figure exists) (PR #262, merged). Step 5: AA status fills, Indigo design prompt, stale Ink wording removed, README screenshots retaken, report and colour-blind checks (PR open).
 - 2026-11-06: Projects page: List/Cards toggle, find box, sort (tokens, cost, sessions, latest activity, session start, name) and Remove, which only hides the folder in projects.json after a question; "Removed from this list" restores it (PR open).

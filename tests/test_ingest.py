@@ -84,6 +84,67 @@ class AgentTitleTest(Fixture):
                          [("a1", "Review the fixes"), ("a2", "from meta")])
 
 
+class SessionTitleTest(Fixture):
+    def title(self):
+        return self.rows("SELECT title FROM sessions")[0][0]
+
+    def peer(self, text):
+        return {"type": "user", "isMeta": True, "timestamp": "2026-10-01T00:00:00Z",
+                "origin": {"kind": "peer", "name": "Synthetic #A-01", "body": text},
+                "message": {"role": "user", "content": text}}
+
+    def test_the_last_custom_title_wins_over_an_ai_title(self):
+        self.write_main([human("go"), {"type": "ai-title", "aiTitle": "AI made"},
+                         {"type": "custom-title", "customTitle": "First name"},
+                         {"type": "custom-title", "customTitle": "Second name"},
+                         {"type": "ai-title", "aiTitle": "AI again"}, assistant("r1")])
+        self.run_ingest()
+        self.assertEqual(self.title(), "Second name")
+
+    def test_an_empty_custom_title_clears_the_name(self):
+        self.write_main([human("go"), {"type": "ai-title", "aiTitle": "AI made"},
+                         {"type": "custom-title", "customTitle": "Named"}, {"type": "custom-title", "customTitle": ""},
+                         assistant("r1")])
+        self.run_ingest()
+        self.assertEqual(self.title(), "AI made")
+
+    def test_a_custom_title_record_without_a_name_clears_it_too(self):
+        self.write_main([self.peer("Fix the widget"), {"type": "custom-title", "customTitle": "Named"},
+                         {"type": "custom-title"}, assistant("r1")])
+        self.run_ingest()
+        self.assertEqual(self.title(), "Fix the widget")
+
+    def test_an_ai_title_still_serves_without_a_custom_one(self):
+        self.write_main([human("go"), {"type": "ai-title", "aiTitle": "AI made"}, assistant("r1")])
+        self.run_ingest()
+        self.assertEqual(self.title(), "AI made")
+
+    def test_a_session_started_by_a_peer_message_is_titled_by_it(self):
+        self.write_main([self.peer("Fix the widget\nsecond line"), assistant("r1")])
+        self.run_ingest()
+        self.assertEqual(self.title(), "Fix the widget")
+
+    def test_a_counted_prompt_keeps_the_title_empty(self):
+        self.write_main([self.peer("Fix the widget"), human("go"), assistant("r1")])
+        self.run_ingest()
+        self.assertIsNone(self.title())
+
+    def test_a_counted_prompt_as_the_last_record_keeps_the_title_empty(self):
+        self.write_main([self.peer("Fix the widget"), human("go")])
+        self.run_ingest()
+        self.assertIsNone(self.title())
+
+    def test_an_old_parse_gets_the_new_titles_after_the_version_bump(self):
+        self.write_main([human("go"), {"type": "custom-title", "customTitle": "Named"}, assistant("r1")])
+        self.run_ingest()
+        old = sqlite3.connect(self.db)
+        old.execute("UPDATE sessions SET title = NULL, signature = ?", (f"v{ingest_mod.PARSER_VERSION - 1}:1:1:1",))
+        old.commit()
+        old.close()
+        self.run_ingest()
+        self.assertEqual(self.title(), "Named")
+
+
 class ErrorTest(Fixture):
     def test_failed_calls_are_classified_and_a_repeat_needs_the_same_input(self):
         edit = {"file_path": "a.py", "old_string": "x", "new_string": "y"}
