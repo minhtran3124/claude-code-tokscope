@@ -101,6 +101,19 @@ class SessionTitleTest(Fixture):
         self.run_ingest()
         self.assertEqual(self.title(), "Second name")
 
+    def test_an_empty_custom_title_clears_the_name(self):
+        self.write_main([human("go"), {"type": "ai-title", "aiTitle": "AI made"},
+                         {"type": "custom-title", "customTitle": "Named"}, {"type": "custom-title", "customTitle": ""},
+                         assistant("r1")])
+        self.run_ingest()
+        self.assertEqual(self.title(), "AI made")
+
+    def test_a_custom_title_record_without_a_name_clears_it_too(self):
+        self.write_main([self.peer("Fix the widget"), {"type": "custom-title", "customTitle": "Named"},
+                         {"type": "custom-title"}, assistant("r1")])
+        self.run_ingest()
+        self.assertEqual(self.title(), "Fix the widget")
+
     def test_an_ai_title_still_serves_without_a_custom_one(self):
         self.write_main([human("go"), {"type": "ai-title", "aiTitle": "AI made"}, assistant("r1")])
         self.run_ingest()

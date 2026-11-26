@@ -271,7 +271,7 @@ class SessionParser:
         self.agent_desc = {}  # Agent/Task tool_use_id -> the description its input passed; a title when meta.json has none
         self.headless = {}  # Bash tool_use_id that ran `claude -p` -> {cwd, start_ts, end_ts, child_ids}
         self.mcp_defs = None  # server -> [tools, chars] of the MCP tool definitions in the first main-thread shape; None: no shape yet
-        self.meta = {"title": None, "version": None, "cwd": None, "first_ts": None, "last_ts": None, "prompts": 0,
+        self.meta = {"version": None, "cwd": None, "first_ts": None, "last_ts": None, "prompts": 0,
                      "entrypoint": None}
         self.files = {}  # file name ("" = main) -> {ino, off, tail, state, unresolved}: where the next parse resumes
         self.lines_read = 0
@@ -404,8 +404,9 @@ class SessionParser:
     def _track_meta(self, rec):
         if rec.get("type") == "ai-title" and rec.get("aiTitle"):
             self.meta["ai_title"] = rec["aiTitle"]
-        elif rec.get("type") == "custom-title" and rec.get("customTitle"):
-            self.meta["custom_title"] = rec["customTitle"]  # the person's own name: the last one wins, over any ai-title
+        elif rec.get("type") == "custom-title":
+            # the person's own name: the last one wins, over any ai-title; an empty or missing one clears it
+            self.meta["custom_title"] = rec.get("customTitle") or None
         elif rec.get("isMeta") and "peer_title" not in self.meta:
             origin = rec.get("origin")
             body = origin.get("body") if isinstance(origin, dict) and origin.get("kind") == "peer" else None
