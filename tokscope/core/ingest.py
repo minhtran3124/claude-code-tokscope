@@ -412,8 +412,6 @@ class SessionParser:
             first = next((ln.strip() for ln in body.splitlines() if ln.strip()), None) if isinstance(body, str) else None
             if first:
                 self.meta["peer_title"] = first[:120]  # a cross-session message that started the session
-        self.meta["title"] = (self.meta.get("custom_title") or self.meta.get("ai_title")
-                              or (None if self.meta["prompts"] else self.meta.get("peer_title")))
         ts = rec.get("timestamp")
         if ts:
             self.meta["first_ts"] = min(ts, self.meta["first_ts"] or ts)
@@ -737,10 +735,12 @@ def store(conn, project, parser, signature):
     first_req = min((r["ts"] for r in parser.requests.values() if not r["agent_id"] and r["ts"]), default=None)
     _share_requests(conn, parser)
     m = parser.meta
+    # the person's own name, else the ai one, else (no counted prompt at all) the cross-session message that started it
+    title = m.get("custom_title") or m.get("ai_title") or (None if m["prompts"] else m.get("peer_title"))
     conn.execute(
         "INSERT INTO sessions (session_id, project, cwd, title, version, first_ts, last_ts, prompts, signature, entrypoint, "
         "first_req_ts) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        (sid, project, m["cwd"], m["title"], m["version"], m["first_ts"], m["last_ts"], m["prompts"], signature,
+        (sid, project, m["cwd"], title, m["version"], m["first_ts"], m["last_ts"], m["prompts"], signature,
          m["entrypoint"], first_req),
     )
     conn.execute("INSERT INTO ingest_state VALUES (?,?)", (sid, parser.dump()))

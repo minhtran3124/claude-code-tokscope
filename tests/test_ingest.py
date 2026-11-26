@@ -116,6 +116,11 @@ class SessionTitleTest(Fixture):
         self.run_ingest()
         self.assertIsNone(self.title())
 
+    def test_a_counted_prompt_as_the_last_record_keeps_the_title_empty(self):
+        self.write_main([self.peer("Fix the widget"), human("go")])
+        self.run_ingest()
+        self.assertIsNone(self.title())
+
     def test_an_old_parse_gets_the_new_titles_after_the_version_bump(self):
         self.write_main([human("go"), {"type": "custom-title", "customTitle": "Named"}, assistant("r1")])
         self.run_ingest()
