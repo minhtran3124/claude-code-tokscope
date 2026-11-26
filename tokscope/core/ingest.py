@@ -119,7 +119,7 @@ CREATE INDEX IF NOT EXISTS idx_snapshots_session ON statusline_snapshots (sessio
 """
 TABLES = ("requests", "subagents", "skill_calls", "prompts", "tool_calls", "turn_events", "headless_calls", "mcp_defs", "ingest_state", "sessions")
 # bump when the parser records something new, so unchanged transcripts are parsed again once
-PARSER_VERSION = 25
+PARSER_VERSION = 26
 TAIL_BYTES = 4096  # the bytes before a stored offset that must be unchanged for a file to count as appended to
 # what a resumed parse restores: the parser's state after the last complete line of every file
 STATE_KEYS = ("requests", "subagents", "skill_calls", "prompts", "tool_ctx", "tool_calls", "result_chars",
@@ -403,7 +403,17 @@ class SessionParser:
 
     def _track_meta(self, rec):
         if rec.get("type") == "ai-title" and rec.get("aiTitle"):
-            self.meta["title"] = rec["aiTitle"]
+            self.meta["ai_title"] = rec["aiTitle"]
+        elif rec.get("type") == "custom-title" and rec.get("customTitle"):
+            self.meta["custom_title"] = rec["customTitle"]  # the person's own name: the last one wins, over any ai-title
+        elif rec.get("isMeta") and "peer_title" not in self.meta:
+            origin = rec.get("origin")
+            body = origin.get("body") if isinstance(origin, dict) and origin.get("kind") == "peer" else None
+            first = next((ln.strip() for ln in body.splitlines() if ln.strip()), None) if isinstance(body, str) else None
+            if first:
+                self.meta["peer_title"] = first[:120]  # a cross-session message that started the session
+        self.meta["title"] = (self.meta.get("custom_title") or self.meta.get("ai_title")
+                              or (None if self.meta["prompts"] else self.meta.get("peer_title")))
         ts = rec.get("timestamp")
         if ts:
             self.meta["first_ts"] = min(ts, self.meta["first_ts"] or ts)
