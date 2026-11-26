@@ -277,7 +277,7 @@ table.sbs td.add{background:color-mix(in oklch,var(--pass) 12%,transparent)}
 .runnow .note{grid-column:3;margin:0}
 .dot.off{background:transparent;box-shadow:inset 0 0 0 1.5px var(--muted)}
 .dot.live.busy-now,.srow .live.working i{animation:pulse 1600ms var(--ease) infinite}
-.srow .live{display:inline-flex;align-items:center;gap:6px;flex:none;font-size:11px;padding:1px 8px;border-radius:99px;margin-left:8px;color:var(--muted);box-shadow:inset 0 0 0 1px var(--line,currentColor)}
+.srow .live{display:inline-flex;align-items:center;gap:6px;flex:none;align-self:center;font-size:11px;padding:1px 8px;border-radius:99px;margin-left:8px;color:var(--muted);box-shadow:inset 0 0 0 1px var(--line,currentColor)}
 .srow .live i{--pr:5px;width:7px;height:7px;border-radius:50%;background:var(--muted)}
 .srow .live.working{color:var(--ink)}
 .srow .live.working i{background:var(--pass)}
@@ -764,6 +764,8 @@ td.l,td.lm,td.calls,.md td{font-family:var(--sans)}
 #session-list .srow>summary .t:has(>.pj){flex-wrap:wrap;row-gap:0}
 #session-list .srow>summary .t:has(>.pj)>.tt:not(:empty){flex:1 1 0}
 #session-list .srow>summary .pj{order:9;flex:0 0 100%;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:12px;line-height:1.4;color:var(--muted)}
+/* the tag sits on the title line; the project line below it makes the cell taller, so drop the tag by half of that line (12px*1.4) to the row's centre line (#270) */
+@media (min-width:640px){#session-list .srow>summary .t:has(>.pj)>.live{transform:translateY(8.4px)}}  /* the phone stacks the title line beside the numbers, so no drop */
 #session-list .srow>summary .d{font-family:var(--mono);color:var(--muted)}
 @media (min-width:640px){#session-list .srow>summary .d{font-size:13px}}  /* the phone keeps its 12px */
 #session-list .srow .body .ids{background:var(--track);border-color:transparent}
